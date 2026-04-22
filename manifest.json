@@ -1,8 +1,8 @@
 {
-  "name": "Brain.pka – Second Brain",
+  "name": "Brain.pka \u2013 Second Brain",
   "short_name": "Brain.pka",
-  "description": "Persönliches Wissenssystem – Text & PDFs teilen",
-  "start_url": "/index.html",
+  "description": "Pers\u00f6nliches Wissenssystem \u2013 Text & PDFs teilen",
+  "start_url": "/brain-pka/index.html",
   "display": "standalone",
   "background_color": "#0d0f14",
   "theme_color": "#4c9be8",
@@ -22,7 +22,7 @@
     }
   ],
   "share_target": {
-    "action": "/index.html",
+    "action": "https://aibrain71-art.github.io/brain-pka/index.html",
     "method": "POST",
     "enctype": "multipart/form-data",
     "params": {
@@ -41,5 +41,6 @@
         }
       ]
     }
-  }
+  },
+  "scope": "/brain-pka/"
 }
