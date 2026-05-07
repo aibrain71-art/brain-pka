@@ -1,0 +1,39 @@
+# ── Backend-only data (never deployed) ────────────────────────────
+# SQLite DB used by the agent team backend — contains private journal,
+# CRM, notes, documents tables. Stays on the local machine only.
+mypka.db
+mypka.db-*
+mypka.db.README
+
+# Schemas + seed scripts — backend-only artifacts, no need on the PWA host.
+mypka.db.schema*.sql
+mypka.db.seed*.sql
+
+# PKM system docs that aren't part of the deployed app
+INDEX.md
+SOP/
+
+# Image originals from screenshot ingestion (might be private + bulky)
+Images/
+
+# ── Claude Code temp artifacts (path-concat bugs leak these) ──────
+# Filename starts with "C" and a non-standard char (NTFS alternate stream
+# from a bad path concat); use a broad glob so they never get committed.
+*claude-notify-signals*
+C*UsersUser*
+
+# ── OS / IDE / sync junk ──────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+*.lnk
+~$*
+*.tmp
+*.swp
+.vscode/
+.idea/
+
+# ── Node / build (in case anything appears later) ─────────────────
+node_modules/
+dist/
+build/

@@ -1,0 +1,26 @@
+{
+  "name": "Personal Knowledge Assistant",
+  "short_name": "PKA",
+  "description": "Larry — dein persönlicher Wissens-Assistent (Journal + Garten + Sprachmodus)",
+  "start_url": "./journal-app.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#0d0d0d",
+  "background_color": "#0d0d0d",
+  "lang": "de",
+  "icons": [
+    { "src": "icons/icon-192.png",  "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png",  "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-512.png",  "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "share_target": {
+    "action": "./journal-app.html",
+    "method": "GET",
+    "params": {
+      "title": "share_title",
+      "text":  "share_text",
+      "url":   "share_url"
+    }
+  }
+}

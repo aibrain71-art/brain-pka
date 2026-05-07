@@ -1,0 +1,15 @@
+---
+title: Spezialagent Oso
+tags:
+  - "TV Series"
+createdAt: Fri Mar 14 2025 19:13:56 GMT+0100 (Central European Standard Time)
+updatedAt: Sun Aug 24 2025 04:54:33 GMT+0200 (Central European Summer Time)
+---
+
+
+
+
+
+
+## Sources
+- [wikipedia_page](https://de.wikipedia.org/wiki/Spezialagent_Oso)

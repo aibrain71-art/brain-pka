@@ -1,0 +1,403 @@
+{
+  "https://en.wikipedia.org/wiki/A_Calendar_of_Wisdom": {
+    "authors": [
+      "Lew Nikolajewitsch Tolstoi"
+    ],
+    "language": "Russisch",
+    "publishedDate": "1910-00-00"
+  },
+  "https://en.wikipedia.org/wiki/Aesop's_Fables": {
+    "authors": [
+      "Äsop"
+    ],
+    "language": "Altgriechisch",
+    "genres": [
+      "Fabel"
+    ]
+  },
+  "https://en.wikipedia.org/wiki/All_the_Light_We_Cannot_See": {
+    "authors": [
+      "Anthony Doerr"
+    ],
+    "language": "amerikanisches Englisch",
+    "genres": [
+      "historische Fiktion"
+    ],
+    "publishedDate": "2014-05-06"
+  },
+  "https://en.wikipedia.org/wiki/Bhagavad_Gita": {
+    "authors": [
+      "Vyasa"
+    ],
+    "language": "Sanskrit",
+    "genres": [
+      "religiöse Poesie"
+    ]
+  },
+  "https://en.wikipedia.org/wiki/Ender's_Game": {
+    "authors": [
+      "Orson Scott Card"
+    ],
+    "language": "Englisch",
+    "genres": [
+      "Science-Fiction"
+    ],
+    "publishedDate": "1985-01-00"
+  },
+  "https://en.wikipedia.org/wiki/Fifty_Shades_of_Grey": {
+    "authors": [
+      "E. L. James"
+    ],
+    "language": "Englisch",
+    "genres": [
+      "erotic romance novel",
+      "sadomasochistische Literatur",
+      "Dark Romance"
+    ],
+    "publishedDate": "2011-06-20"
+  },
+  "https://en.wikipedia.org/wiki/How_to_Read_a_Book": {
+    "authors": [
+      "Mortimer Adler",
+      "Charles Van Doren"
+    ],
+    "language": "Englisch",
+    "genres": [
+      "Sachtext"
+    ],
+    "publishedDate": "1940-00-00"
+  },
+  "https://en.wikipedia.org/wiki/How_to_Win_Friends_and_Influence_People": {
+    "authors": [
+      "Dale Carnegie"
+    ],
+    "language": "Englisch",
+    "genres": [
+      "Selbsthilfe"
+    ],
+    "publishedDate": "1936-00-00"
+  },
+  "https://de.wikipedia.org/wiki/Interventionen": {
+    "authors": [
+      "Noam Chomsky"
+    ],
+    "language": "Englisch",
+    "publishedDate": "2007-05-00"
+  },
+  "https://de.wikipedia.org/wiki/Mahabharata": {
+    "authors": [
+      "Vyasa"
+    ],
+    "language": "Sanskrit",
+    "genres": [
+      "Epos"
+    ]
+  },
+  "https://en.wikipedia.org/wiki/Meditations": {
+    "authors": [
+      "Mark Aurel"
+    ],
+    "language": "Koine"
+  },
+  "https://en.wikipedia.org/wiki/Odyssey": {
+    "authors": [
+      "Homer"
+    ],
+    "language": "Homerisches Griechisch",
+    "genres": [
+      "Epos"
+    ]
+  },
+  "https://en.wikipedia.org/wiki/Orlando_Furioso": {
+    "authors": [
+      "Ludovico Ariosto"
+    ],
+    "language": "Italienisch",
+    "genres": [
+      "Ritterroman"
+    ],
+    "publishedDate": "1516-00-00"
+  },
+  "https://en.wikipedia.org/wiki/The_Book_of_the_Courtier": {
+    "authors": [
+      "Baldassare Castiglione"
+    ],
+    "language": "Italienisch",
+    "publishedDate": "1528-00-00"
+  },
+  "https://en.wikipedia.org/wiki/The_Daily_Stoic": {
+    "authors": [
+      "Ryan Holiday"
+    ],
+    "language": "Englisch",
+    "genres": [
+      "Sachtext"
+    ],
+    "publishedDate": "2016-10-18"
+  },
+  "https://en.wikipedia.org/wiki/The_Intelligent_Investor": {
+    "authors": [
+      "Benjamin Graham"
+    ],
+    "language": "Englisch",
+    "genres": [
+      "Sachtext"
+    ],
+    "publishedDate": "1949-00-00"
+  },
+  "https://en.wikipedia.org/wiki/The_Obstacle_Is_the_Way": {
+    "authors": [
+      "Ryan Holiday"
+    ],
+    "language": "Englisch",
+    "publishedDate": "2014-05-01"
+  },
+  "https://de.wikipedia.org/wiki/Zur_Psychopathologie_des_Alltagslebens": {
+    "authors": [
+      "Sigmund Freud"
+    ],
+    "language": "Deutsch",
+    "genres": [
+      "Psychoanalyse"
+    ],
+    "publishedDate": "1901-00-00"
+  },
+  "https://de.wikipedia.org/wiki/Aranyakas": null,
+  "https://en.wikipedia.org/wiki/Bristol_stool_scale": null,
+  "https://de.wikipedia.org/wiki/Dhammapada": {
+    "language": "Pali",
+    "genres": [
+      "religiöse Literatur"
+    ]
+  },
+  "https://de.wikipedia.org/wiki/Die_Bekenntnisse_(Rousseau": null,
+  "https://de.wikipedia.org/wiki/Die_Möglichkeit_einer_Insel": {
+    "authors": [
+      "Michel Houellebecq"
+    ],
+    "language": "Französisch",
+    "genres": [
+      "Science-Fiction"
+    ],
+    "publishedDate": "2005-08-31"
+  },
+  "https://de.wikipedia.org/wiki/Die_Traumdeutung": {
+    "authors": [
+      "Sigmund Freud"
+    ],
+    "language": "Deutsch",
+    "publishedDate": "1900-00-00"
+  },
+  "https://en.wikipedia.org/wiki/Divine_Comedy": {
+    "authors": [
+      "Dante Alighieri"
+    ],
+    "language": "Tuscan",
+    "genres": [
+      "Epos"
+    ]
+  },
+  "https://en.wikipedia.org/wiki/Ego_Is_the_Enemy": {
+    "authors": [
+      "Ryan Holiday"
+    ],
+    "language": "Englisch",
+    "genres": [
+      "Sachtext"
+    ],
+    "publishedDate": "2016-06-14"
+  },
+  "https://de.wikipedia.org/wiki/Einführung_in_die_Psychoanalyse": {
+    "authors": [
+      "Sigmund Freud"
+    ],
+    "language": "Deutsch",
+    "genres": [
+      "Vorlesung"
+    ],
+    "publishedDate": "1916-00-00"
+  },
+  "https://de.wikipedia.org/wiki/Introductio_in_analysin_infinitorum": {
+    "authors": [
+      "Leonhard Euler"
+    ],
+    "language": "Latein",
+    "genres": [
+      "wissenschaftliche Literatur"
+    ],
+    "publishedDate": "1748-00-00"
+  },
+  "https://en.wikipedia.org/wiki/Jerusalem_Delivered": {
+    "authors": [
+      "Torquato Tasso"
+    ],
+    "language": "Italienisch",
+    "genres": [
+      "Epos"
+    ],
+    "publishedDate": "1581-00-00"
+  },
+  "https://en.wikipedia.org/wiki/Julie;_or,_The_New_Heloise": {
+    "authors": [
+      "Jean-Jacques Rousseau"
+    ],
+    "language": "Französisch",
+    "genres": [
+      "Briefroman",
+      "Fiktion"
+    ],
+    "publishedDate": "1761-00-00"
+  },
+  "https://de.wikipedia.org/wiki/Koran": {
+    "language": "koranisches Arabisch",
+    "genres": [
+      "religiöse Literatur"
+    ]
+  },
+  "https://de.wikipedia.org/wiki/Kritik_der_praktischen_Vernunft": {
+    "authors": [
+      "Immanuel Kant"
+    ],
+    "language": "Deutsch",
+    "genres": [
+      "Essay"
+    ],
+    "publishedDate": "1788-01-01"
+  },
+  "https://de.wikipedia.org/wiki/Kritik_der_reinen_Vernunft": {
+    "authors": [
+      "Immanuel Kant"
+    ],
+    "language": "Deutsch",
+    "genres": [
+      "Essay"
+    ],
+    "publishedDate": "1781-01-01"
+  },
+  "https://de.wikipedia.org/wiki/Kritik_der_Urteilskraft": {
+    "authors": [
+      "Immanuel Kant"
+    ],
+    "language": "Deutsch",
+    "genres": [
+      "Essay"
+    ],
+    "publishedDate": "1790-00-00"
+  },
+  "https://en.wikipedia.org/wiki/Lifespan:_Why_We_Age_–_and_Why_We_Don't_Have_To": {
+    "authors": [
+      "David A. Sinclair"
+    ],
+    "genres": [
+      "Sachtext"
+    ],
+    "publishedDate": "2019-09-10"
+  },
+  "https://en.wikipedia.org/wiki/Mastery_(book": null,
+  "https://de.wikipedia.org/wiki/Rigveda": {
+    "authors": [
+      "verschiedene Autoren"
+    ],
+    "language": "Vedisch",
+    "genres": [
+      "religiöse Literatur"
+    ]
+  },
+  "https://en.wikipedia.org/wiki/Robert_Cialdini": null,
+  "https://de.wikipedia.org/wiki/Samhita": {
+    "language": "Vedisch"
+  },
+  "https://de.wikipedia.org/wiki/Schulchan_Aruch": {
+    "authors": [
+      "Josef Karo"
+    ],
+    "language": "Hebräisch",
+    "genres": [
+      "heilige Schrift",
+      "Halachic literature"
+    ],
+    "publishedDate": "1565-00-00"
+  },
+  "https://en.wikipedia.org/wiki/Self-Help_(Smiles_book": null,
+  "https://en.wikipedia.org/wiki/The_48_Laws_of_Power": {
+    "authors": [
+      "Robert Greene"
+    ],
+    "language": "Englisch",
+    "genres": [
+      "Sachtext"
+    ],
+    "publishedDate": "2000-09-01"
+  },
+  "https://en.wikipedia.org/wiki/The_Goal_(novel": null,
+  "https://en.wikipedia.org/wiki/The_Prince": {
+    "authors": [
+      "Niccolò Machiavelli"
+    ],
+    "language": "Italienisch",
+    "genres": [
+      "Essay"
+    ],
+    "publishedDate": "1532-00-00"
+  },
+  "https://en.wikipedia.org/wiki/The_Reason_of_State": {
+    "authors": [
+      "Giovanni Botero"
+    ],
+    "language": "Italienisch",
+    "genres": [
+      "Essay"
+    ],
+    "publishedDate": "1589-00-00"
+  },
+  "https://en.wikipedia.org/wiki/The_Social_Contract": {
+    "authors": [
+      "Jean-Jacques Rousseau"
+    ],
+    "language": "Französisch",
+    "genres": [
+      "politische Philosophie",
+      "Essay"
+    ],
+    "publishedDate": "1762-00-00"
+  },
+  "https://en.wikipedia.org/wiki/The_World_as_Will_and_Representation": {
+    "authors": [
+      "Arthur Schopenhauer"
+    ],
+    "language": "Deutsch",
+    "genres": [
+      "Sachtext"
+    ],
+    "publishedDate": "1819-00-00"
+  },
+  "https://en.wikipedia.org/wiki/Trust_Me,_I'm_Lying": {
+    "authors": [
+      "Ryan Holiday"
+    ],
+    "language": "Englisch",
+    "genres": [
+      "Sachtext"
+    ],
+    "publishedDate": "2012-07-19"
+  },
+  "https://en.wikipedia.org/wiki/Upanishads": {
+    "language": "Sanskrit",
+    "genres": [
+      "religiöse Literatur"
+    ]
+  },
+  "https://en.wikipedia.org/wiki/Why_We_Took_the_Car": {
+    "authors": [
+      "Wolfgang Herrndorf"
+    ],
+    "language": "Deutsch",
+    "genres": [
+      "Bildungsroman",
+      "Coming-of-Age-Geschichte"
+    ],
+    "publishedDate": "2010-00-00"
+  },
+  "https://en.wikipedia.org/wiki/Mediterranean_diet": null,
+  "https://en.wikipedia.org/wiki/The_Expanse_(novel_series": null
+}

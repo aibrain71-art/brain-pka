@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Journal — Übersicht</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f5f4f0;
+      color: #2c2c2c;
+      min-height: 100vh;
+    }
+
+    header {
+      background: #1a1a2e;
+      color: #fff;
+      padding: 28px 40px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    header .icon { font-size: 28px; }
+    header h1 { font-size: 22px; font-weight: 600; letter-spacing: 0.3px; }
+    header p { font-size: 13px; color: #9090b0; margin-top: 2px; }
+
+    .toolbar {
+      background: #fff;
+      border-bottom: 1px solid #e0e0e0;
+      padding: 12px 40px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .toolbar input {
+      padding: 7px 14px;
+      border: 1px solid #d0d0d0;
+      border-radius: 8px;
+      font-size: 13px;
+      width: 240px;
+      outline: none;
+    }
+    .toolbar input:focus { border-color: #5a67d8; }
+    .filter-btn {
+      padding: 6px 14px;
+      border: 1px solid #d0d0d0;
+      border-radius: 20px;
+      background: #fff;
+      font-size: 12px;
+      cursor: pointer;
+      color: #555;
+      transition: all 0.15s;
+    }
+    .filter-btn:hover, .filter-btn.active {
+      background: #1a1a2e;
+      color: #fff;
+      border-color: #1a1a2e;
+    }
+    .entry-count { margin-left: auto; font-size: 12px; color: #888; }
+
+    .timeline {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 36px 24px;
+    }
+
+    .year-group { margin-bottom: 40px; }
+    .year-label {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: #888;
+      margin-bottom: 16px;
+      padding-left: 4px;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 14px;
+      border: 1px solid #e8e8e8;
+      padding: 22px 26px;
+      margin-bottom: 14px;
+      cursor: pointer;
+      transition: box-shadow 0.15s, transform 0.15s;
+      position: relative;
+    }
+    .card:hover { box-shadow: 0 6px 24px rgba(0,0,0,0.09); transform: translateY(-1px); }
+    .card.expanded { box-shadow: 0 8px 32px rgba(0,0,0,0.12); }
+
+    .card-header { display: flex; align-items: flex-start; gap: 14px; }
+    .date-badge {
+      flex-shrink: 0;
+      background: #f0f0f8;
+      border-radius: 10px;
+      padding: 8px 12px;
+      text-align: center;
+      min-width: 56px;
+    }
+    .date-badge .day { font-size: 20px; font-weight: 700; color: #1a1a2e; line-height: 1; }
+    .date-badge .mon { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
+
+    .card-meta { flex: 1; }
+    .card-title { font-size: 16px; font-weight: 600; color: #1a1a2e; margin-bottom: 6px; line-height: 1.3; }
+    .card-preview { font-size: 13px; color: #666; line-height: 1.5; }
+
+    .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+    .tag {
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 500;
+      background: #eef0ff;
+      color: #5a67d8;
+    }
+    .tag.gesundheit { background: #e8f5e9; color: #2e7d32; }
+    .tag.philosophie, .tag.geschichte { background: #fce4ec; color: #ad1457; }
+    .tag.trading, .tag.chartanalyse { background: #fff8e1; color: #f57f17; }
+    .tag.ai, .tag.marktanalyse { background: #e3f2fd; color: #1565c0; }
+    .tag.religionen, .tag.mythologie { background: #f3e5f5; color: #7b1fa2; }
+
+    /* ── Card body (rendered markdown) ───────────────────────── */
+    .card-body {
+      display: none;
+      margin-top: 18px;
+      padding-top: 18px;
+      border-top: 1px solid #f0f0f0;
+    }
+    .card.expanded .card-body { display: block; }
+
+    .card-body-loading {
+      font-size: 13px;
+      color: #aaa;
+      text-align: center;
+      padding: 20px 0;
+    }
+
+    .md-content h1 { font-size: 20px; font-weight: 700; margin: 20px 0 10px; color: #1a1a2e; }
+    .md-content h2 { font-size: 17px; font-weight: 700; margin: 18px 0 8px; color: #1a1a2e; border-bottom: 1px solid #f0f0f0; padding-bottom: 4px; }
+    .md-content h3 { font-size: 15px; font-weight: 600; margin: 14px 0 6px; color: #333; }
+    .md-content p { font-size: 14px; color: #444; line-height: 1.75; margin-bottom: 10px; }
+    .md-content ul, .md-content ol { padding-left: 22px; margin-bottom: 10px; }
+    .md-content li { font-size: 14px; color: #444; line-height: 1.7; margin-bottom: 4px; }
+    .md-content strong { font-weight: 600; color: #222; }
+    .md-content em { font-style: italic; }
+    .md-content a { color: #5a67d8; text-decoration: none; }
+    .md-content a:hover { text-decoration: underline; }
+    .md-content hr { border: none; border-top: 1px solid #eee; margin: 16px 0; }
+
+    /* Tables */
+    .md-content table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
+    .md-content th { background: #f4f5ff; color: #1a1a2e; font-weight: 600; padding: 8px 12px; text-align: left; border: 1px solid #e0e0e0; }
+    .md-content td { padding: 7px 12px; border: 1px solid #e8e8e8; color: #444; vertical-align: top; }
+    .md-content tr:nth-child(even) td { background: #fafafa; }
+
+    /* Images */
+    .md-content img {
+      max-width: 100%;
+      border-radius: 8px;
+      margin: 10px 0;
+      display: block;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .img-caption {
+      font-size: 12px;
+      color: #999;
+      text-align: center;
+      margin-top: -6px;
+      margin-bottom: 12px;
+    }
+
+    /* YouTube embed */
+    .yt-embed {
+      margin: 14px 0;
+      cursor: pointer;
+      border-radius: 10px;
+      overflow: hidden;
+      position: relative;
+      max-width: 480px;
+    }
+    .yt-thumb {
+      width: 100%;
+      display: block;
+      border-radius: 10px;
+    }
+    .yt-play-btn {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0,0,0,0.7);
+      border-radius: 50%;
+      width: 56px; height: 56px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px;
+      color: #fff;
+      transition: background 0.15s;
+      pointer-events: none;
+    }
+    .yt-embed:hover .yt-play-btn { background: rgba(255,0,0,0.85); }
+    .yt-label {
+      font-size: 12px;
+      color: #888;
+      margin-top: 4px;
+      padding-left: 2px;
+    }
+
+    .expand-icon {
+      position: absolute;
+      right: 22px;
+      top: 22px;
+      color: #bbb;
+      font-size: 18px;
+      transition: transform 0.2s;
+      user-select: none;
+    }
+    .card.expanded .expand-icon { transform: rotate(180deg); }
+
+    .empty-state { text-align: center; padding: 60px 20px; color: #aaa; font-size: 14px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="icon">📓</div>
+  <div>
+    <h1>Mein Journal</h1>
+    <p>PKM · mypka.db · journal</p>
+  </div>
+</header>
+
+<div class="toolbar">
+  <input type="text" id="searchInput" placeholder="Suchen…" oninput="filterEntries()">
+  <button class="filter-btn active" onclick="setFilter('all', this)">Alle</button>
+  <button class="filter-btn" onclick="setFilter('2026', this)">2026</button>
+  <button class="filter-btn" onclick="setFilter('2024', this)">2024</button>
+  <button class="filter-btn" onclick="setFilter('gesundheit', this)">Gesundheit</button>
+  <button class="filter-btn" onclick="setFilter('philosophie', this)">Philosophie</button>
+  <button class="filter-btn" onclick="setFilter('trading', this)">Trading</button>
+  <button class="filter-btn" onclick="setFilter('religionen', this)">Religionen</button>
+  <span class="entry-count" id="entryCount"></span>
+</div>
+
+<div class="timeline" id="timeline"></div>
+
+<script>
+// ── Entry metadata — source of truth: the .md files ──────────────
+const entries = [
+  {
+    id: 4, date: "2026-05-07",
+    title: "Note-Taking: Die 5 R's",
+    preview: "Record · Reduce · Recite · Reflect · Review — die Cornell-Methode.",
+    topics: ["note-taking", "lernen", "methoden", "cornell-notes"],
+    mdPath: "Journal/2026/05/2026-05-07-note-taking-5rs.md"
+  },
+  {
+    id: 3, date: "2026-04-24",
+    title: "Real Personal Day",
+    preview: "Morning walk done. Tightened sabbatical budget. Coffee with Jamie. Writing block 600 words.",
+    topics: ["longform-writing"],
+    mdPath: null,
+    body: "Morning walk done. Tightened sabbatical budget. Coffee with Jamie. Writing block 600 words."
+  },
+  {
+    id: 2, date: "2026-04-23",
+    title: "Editing Day",
+    preview: "Full day on the book draft intro. Cut 900 words.",
+    topics: ["longform-writing"],
+    mdPath: null,
+    body: "Full day on the book draft intro. Cut 900 words."
+  },
+  {
+    id: 1, date: "2026-04-22",
+    title: "Morning Reset",
+    preview: "Woke early. Walked 25 minutes before the first meeting. Thinking about the sabbatical plan.",
+    topics: ["longform-writing"],
+    mdPath: null,
+    body: "Woke early. Walked 25 minutes before the first meeting. Thinking about the sabbatical plan."
+  },
+  {
+    id: 9, date: "2024-12-03",
+    title: "Weight Loss: Dr. Paul Mason — Hormone statt Kalorien",
+    preview: "Insulin ist der Hauptfaktor der Fettspeicherung — nicht Kalorien. Dr. Paul Mason erklärt Hormone, Low-Carb und CGM.",
+    topics: ["gesundheit", "ernaehrung", "gewichtsabnahme", "insulin", "hormone", "low-carb"],
+    mdPath: "Journal/2024/12/2024-12-03-weight-loss-dr-mason.md"
+  },
+  {
+    id: 8, date: "2024-11-29",
+    title: "Religionen — Weltüberblick",
+    preview: "Christentum · Buddhismus · Griechische & Römische Götter · Dynastien · Weltreligionen-Karte · Alphabet-Evolution.",
+    topics: ["religionen", "geschichte", "christentum", "buddhismus", "mythologie", "griechenland", "rom"],
+    mdPath: "Journal/2024/11/2024-11-29-religionen.md"
+  },
+  {
+    id: 7, date: "2024-11-20",
+    title: "Geschichte der Philosophie",
+    preview: "Von Thales bis Post-Moderne. Thales ersetzt den Mythos durch den Logos. Alle Epochen mit Diagrammen.",
+    topics: ["philosophie", "geschichte", "thales", "vorsokratiker", "antike"],
+    mdPath: "Journal/2024/11/2024-11-20-philosophie-geschichte.md"
+  },
+  {
+    id: 6, date: "2024-11-08",
+    title: "Chartanalyse für Trading-Anfänger",
+    preview: "Kerzen, Trends, RSI, Fibonacci. Vollständiger Guide mit Quiz, Essay-Fragen, Strategie EMA50+RSI und Glossar.",
+    topics: ["chartanalyse", "trading", "technische-analyse", "rsi", "fibonacci"],
+    mdPath: "Journal/2024/11/2024-11-08-chartanalyse-tutorial.md"
+  },
+  {
+    id: 5, date: "2024-11-07",
+    title: "Marktanalysen: AI-Marktwert",
+    preview: "Fundrise-Analyse: How much will AI be worth?",
+    topics: ["marktanalyse", "ai", "investitionen"],
+    mdPath: "Journal/2024/11/2024-11-07-marktanalysen-ai.md"
+  }
+];
+
+// ── Helpers ───────────────────────────────────────────────────────
+const months = ["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez"];
+function fmtDate(s) {
+  const [y,m,d] = s.split('-');
+  return { day: String(parseInt(d)).padStart(2,'0'), mon: months[parseInt(m)-1], year: y };
+}
+function tagClass(t) {
+  if (["gesundheit","ernaehrung","gewichtsabnahme","low-carb","insulin","hormone"].includes(t)) return "gesundheit";
+  if (["philosophie","vorsokratiker","antike","thales"].includes(t)) return "philosophie";
+  if (["geschichte","mythologie","griechenland","rom"].includes(t)) return "geschichte";
+  if (["trading","chartanalyse","technische-analyse","rsi","fibonacci"].includes(t)) return "trading";
+  if (["ai","marktanalyse","investitionen"].includes(t)) return "ai";
+  if (["religionen","christentum","buddhismus"].includes(t)) return "religionen";
+  return "";
+}
+
+// ── YouTube helpers ───────────────────────────────────────────────
+function ytId(url) {
+  const m = url.match(/(?:youtu\.be\/|v=|\/embed\/)([A-Za-z0-9_-]{11})/);
+  return m ? m[1] : null;
+}
+function ytThumb(id) { return `https://img.youtube.com/vi/${id}/hqdefault.jpg`; }
+function ytUrl(id)   { return `https://www.youtube.com/watch?v=${id}`; }
+
+// ── Simple Markdown → HTML parser ─────────────────────────────────
+function renderMd(md, baseDir) {
+  // Resolve relative image src against baseDir
+  function resolveImg(src) {
+    if (src.startsWith('http')) return src;
+    // baseDir e.g. "Journal/2024/11/"
+    // src e.g. "../assets/image.png"
+    const parts = (baseDir + src).split('/');
+    const resolved = [];
+    for (const p of parts) {
+      if (p === '..') resolved.pop();
+      else if (p && p !== '.') resolved.push(p);
+    }
+    return resolved.join('/');
+  }
+
+  // Replace {{youtube URL}} with a clickable thumbnail
+  md = md.replace(/\{\{youtube\s+(https?:\/\/[^\s}]+)\}\}/g, (_, url) => {
+    const id = ytId(url);
+    if (!id) return `<a href="${url}">${url}</a>`;
+    return `<div class="yt-embed" onclick="window.open('${ytUrl(id)}','_blank')">` +
+      `<img class="yt-thumb" src="${ytThumb(id)}" alt="YouTube Video" onerror="this.style.display='none'">` +
+      `<div class="yt-play-btn">▶</div>` +
+      `</div><div class="yt-label">▶ YouTube ansehen</div>`;
+  });
+
+  // Split into lines and process
+  const lines = md.split('\n');
+  let html = '';
+  let inTable = false;
+  let inUl = false;
+  let tableHeader = false;
+  let i = 0;
+
+  function flushList() {
+    if (inUl) { html += '</ul>'; inUl = false; }
+  }
+  function flushTable() {
+    if (inTable) { html += '</tbody></table>'; inTable = false; tableHeader = false; }
+  }
+
+  while (i < lines.length) {
+    let line = lines[i];
+
+    // Already-rendered HTML blocks (yt-embed etc) — pass through
+    if (line.startsWith('<')) {
+      flushList(); flushTable();
+      html += line + '\n';
+      i++; continue;
+    }
+
+    // Table detection
+    if (line.startsWith('|')) {
+      flushList();
+      if (!inTable) {
+        html += '<table><thead>';
+        inTable = true;
+        tableHeader = true;
+      }
+      const cells = line.split('|').slice(1,-1).map(c => c.trim());
+      // Skip separator row
+      if (cells.every(c => /^[-: ]+$/.test(c))) {
+        html += '</thead><tbody>';
+        tableHeader = false;
+        i++; continue;
+      }
+      const tag = tableHeader ? 'th' : 'td';
+      html += '<tr>' + cells.map(c => `<${tag}>${inlineRender(c)}</${tag}>`).join('') + '</tr>';
+      i++; continue;
+    } else {
+      flushTable();
+    }
+
+    // Headings
+    if (line.startsWith('#### ')) { flushList(); html += `<h4>${inlineRender(line.slice(5))}</h4>`; i++; continue; }
+    if (line.startsWith('### '))  { flushList(); html += `<h3>${inlineRender(line.slice(4))}</h3>`; i++; continue; }
+    if (line.startsWith('## '))   { flushList(); html += `<h2>${inlineRender(line.slice(3))}</h2>`; i++; continue; }
+    if (line.startsWith('# '))    { flushList(); html += `<h1>${inlineRender(line.slice(2))}</h1>`; i++; continue; }
+
+    // HR
+    if (/^---+$/.test(line.trim())) { flushList(); html += '<hr>'; i++; continue; }
+
+    // Images  ![alt](src)
+    if (/^!\[.*\]\(.*\)/.test(line.trim())) {
+      flushList();
+      const m = line.match(/^!\[([^\]]*)\]\(([^)]+)\)/);
+      if (m) {
+        const alt = m[1], src = resolveImg(m[2]);
+        html += `<img src="${src}" alt="${alt}" loading="lazy">`;
+        if (alt && alt !== 'image.png' && alt !== 'image') {
+          html += `<div class="img-caption">${alt}</div>`;
+        }
+      }
+      i++; continue;
+    }
+
+    // Bullet list
+    if (/^[-*] /.test(line)) {
+      if (!inUl) { html += '<ul>'; inUl = true; }
+      html += `<li>${inlineRender(line.replace(/^[-*] /, ''))}</li>`;
+      i++; continue;
+    } else if (inUl && line.trim() === '') {
+      flushList();
+      i++; continue;
+    } else {
+      flushList();
+    }
+
+    // Empty line
+    if (line.trim() === '') { i++; continue; }
+
+    // Default: paragraph
+    html += `<p>${inlineRender(line)}</p>`;
+    i++;
+  }
+  flushList(); flushTable();
+  return html;
+}
+
+function inlineRender(text) {
+  // Bold **text**
+  text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  // Italic *text* or _text_
+  text = text.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+  text = text.replace(/_([^_]+)_/g, '<em>$1</em>');
+  // Inline code `code`
+  text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
+  // Links [text](url)
+  text = text.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>'.replace('$1', '$2').replace('$2', '$1'));
+  text = text.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, (_, t, u) => `<a href="${u}" target="_blank" rel="noopener">${t}</a>`);
+  // Topics tags at end *Topics: ...*
+  text = text.replace(/^\*Topics:.*\*$/, '');
+  return text;
+}
+
+// ── Card rendering ────────────────────────────────────────────────
+const mdCache = {};
+
+async function loadMdContent(card, entry) {
+  const body = card.querySelector('.card-body');
+  if (body.dataset.loaded) return;
+  body.dataset.loaded = '1';
+  body.innerHTML = '<div class="card-body-loading">Wird geladen…</div>';
+
+  if (!entry.mdPath) {
+    body.innerHTML = `<div class="md-content"><p>${entry.body || ''}</p></div>`;
+    return;
+  }
+
+  try {
+    if (!mdCache[entry.mdPath]) {
+      const r = await fetch(entry.mdPath);
+      mdCache[entry.mdPath] = await r.text();
+    }
+    const md = mdCache[entry.mdPath];
+    // Get base dir from path e.g. "Journal/2024/11/"
+    const baseDir = entry.mdPath.substring(0, entry.mdPath.lastIndexOf('/') + 1);
+    body.innerHTML = `<div class="md-content">${renderMd(md, baseDir)}</div>`;
+  } catch(e) {
+    body.innerHTML = `<div class="card-body-loading">Fehler beim Laden.</div>`;
+  }
+}
+
+// ── Build timeline ────────────────────────────────────────────────
+let activeFilter = 'all';
+
+function buildTimeline(list) {
+  const tl = document.getElementById('timeline');
+  tl.innerHTML = '';
+  if (list.length === 0) {
+    tl.innerHTML = '<div class="empty-state">Keine Einträge gefunden.</div>';
+    document.getElementById('entryCount').textContent = '0 Einträge';
+    return;
+  }
+
+  const groups = {};
+  list.forEach(e => {
+    const y = e.date.split('-')[0];
+    if (!groups[y]) groups[y] = [];
+    groups[y].push(e);
+  });
+
+  Object.keys(groups).sort((a,b) => b-a).forEach(year => {
+    const div = document.createElement('div');
+    div.className = 'year-group';
+    div.innerHTML = `<div class="year-label">${year}</div>`;
+
+    groups[year].forEach(entry => {
+      const d = fmtDate(entry.date);
+      const tagsHtml = entry.topics.map(t =>
+        `<span class="tag ${tagClass(t)}">#${t}</span>`
+      ).join('');
+
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = `
+        <span class="expand-icon">▾</span>
+        <div class="card-header">
+          <div class="date-badge">
+            <div class="day">${d.day}</div>
+            <div class="mon">${d.mon}</div>
+          </div>
+          <div class="card-meta">
+            <div class="card-title">${entry.title}</div>
+            <div class="card-preview">${entry.preview}</div>
+            <div class="tags">${tagsHtml}</div>
+          </div>
+        </div>
+        <div class="card-body"></div>
+      `;
+
+      card.addEventListener('click', async () => {
+        const wasExpanded = card.classList.contains('expanded');
+        card.classList.toggle('expanded');
+        if (!wasExpanded) await loadMdContent(card, entry);
+      });
+
+      div.appendChild(card);
+    });
+    tl.appendChild(div);
+  });
+
+  document.getElementById('entryCount').textContent = `${list.length} Einträge`;
+}
+
+function filterEntries() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  const yearFilters = ['all', '2026', '2024'];
+  const topicFilters = ['gesundheit', 'philosophie', 'trading', 'religionen'];
+  const filtered = entries.filter(e => {
+    let matchFilter;
+    if (activeFilter === 'all') matchFilter = true;
+    else if (yearFilters.includes(activeFilter)) matchFilter = e.date.startsWith(activeFilter);
+    else if (topicFilters.includes(activeFilter))
+      matchFilter = e.topics.includes(activeFilter) || e.topics.some(t => tagClass(t) === activeFilter);
+    else matchFilter = true;
+    const searchText = (e.title + ' ' + (e.preview||'') + ' ' + e.topics.join(' ')).toLowerCase();
+    const matchSearch = !q || searchText.includes(q);
+    return matchFilter && matchSearch;
+  });
+  buildTimeline(filtered);
+}
+
+function setFilter(val, btn) {
+  activeFilter = val;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  filterEntries();
+}
+
+buildTimeline(entries);
+</script>
+</body>
+</html>

@@ -1,0 +1,51 @@
+---
+title: 4 Rules of Executive Communication
+tags:
+  - "Business/Presentation"
+createdAt: Sun Jul 20 2025 11:33:06 GMT+0200 (Central European Summer Time)
+updatedAt: Sun Jul 20 2025 11:33:09 GMT+0200 (Central European Summer Time)
+---
+
+
+Detailed summary
+
+
+## 4 Rules of Executive Communication [(00:00:00)](https://www.youtube.com/watch?v=wdgaUOg8l7g&t=0s)
+- Wenn man in seiner Karriere aufsteigt, hat man mehr Gelegenheiten, vor leitenden Teams zu präsentieren, wie zum Beispiel vor VPs und SVPs, um Ideen vorzustellen und Ergebnisse zu präsentieren, aber viele Menschen haben bittere Erinnerungen an solche Gelegenheiten, weil die Zuhörer gelangweilt wirken, wenn man beginnt zu präsentieren [(00:00:00)](https://www.youtube.com/watch?v=wdgaUOg8l7g&t=0s).
+- Die Zuhörer können abgelenkt sein, indem sie auf ihrem Telefon sind oder durch die Präsentation blättern und Fragen stellen, wie zum Beispiel "Können wir zu Seite 25 gehen?" oder "Was ist die Hauptaussage hier?", was zu Verwirrung und Flusterheit führen kann [(00:00:21)](https://www.youtube.com/watch?v=wdgaUOg8l7g&t=21s).
+- Es gibt Rahmenbedingungen, um die Gedanken zu organisieren, damit man mit leitenden Angestellten in ihrer Sprache sprechen kann, da diese schnell denken, neue Ideen schnell erfassen, ungeduldig sind und normalerweise direkt sind [(00:00:50)](https://www.youtube.com/watch?v=wdgaUOg8l7g&t=50s).
+- Um ihre Sprache zu sprechen, müssen vier Dinge beachtet werden, von denen das erste "Wissen, warum man da ist" ist, was bedeutet, dass man einen klaren Zweck und eine klare Botschaft haben muss, um effektiv mit leitenden Angestellten zu kommunizieren [(00:01:05)](https://www.youtube.com/watch?v=wdgaUOg8l7g&t=65s).
+
+## 1/ Why are you there? [(00:01:11)](https://www.youtube.com/watch?v=wdgaUOg8l7g&t=71s)
+- Wenn man zu einem Meeting mit leitenden Angestellten eingeladen wird, gibt es einen Grund dafür, warum man dort ist, möglicherweise aufgrund von Einsichten, Erfahrungen oder der jüngsten Rolle in einem Projekt, und es ist wichtig, dass man weiß, was man beitragen kann, um sinnvoll beizutragen [(00:01:11)](https://www.youtube.com/watch?v=wdgaUOg8l7g&t=71s).
+- Es ist ratsam, die Liste der Teilnehmer zu überprüfen und zu ermitteln, was man einzigartig beitragen kann, wie etwa eine Einsicht, die die anderen nicht haben, oder Fragen, die man stellen kann, die anderen möglicherweise nicht bewusst sind, und wenn man unsicher ist, warum man eingeladen wurde, kann man einfach fragen [(00:01:25)](https://www.youtube.com/watch?v=wdgaUOg8l7g&t=85s).
+- Viele Menschen machen den Fehler, dass sie denken, sie sollten nur zuhören, weil sie nicht so viel wissen wie die anderen, aber es ist wichtig, dass man auch beiträgt, da man sonst möglicherweise nicht wieder eingeladen wird, weil niemand seine Zeit in Meetings verschwenden möchte [(00:01:44)](https://www.youtube.com/watch?v=wdgaUOg8l7g&t=104s).
+- Es ist wichtig, zu wissen, warum man eingeladen wurde und was man beitragen kann, um seine Perspektiven und Einsichten zu teilen, und obwohl es sich vielleicht schwierig anfühlt, in einer hochriskanten Situation zu sprechen, kann es dazu beitragen, dass man seine Arbeit verbessert, selbst wenn man sich nicht sicher ist, ob man etwas Wichtiges beiträgt [(00:02:38)](https://www.youtube.com/watch?v=wdgaUOg8l7g&t=158s).
+- Sogar wenn man den Eindruck hat, dass man etwas Falsches gesagt hat, kann dies dazu beitragen, die Lücke zwischen dem eigenen Verständnis und dem der anderen zu schließen, und letztendlich kann dies dazu führen, dass man seine Arbeit verbessert, was das Schlimmste ist, was passieren kann [(00:03:01)](https://www.youtube.com/watch?v=wdgaUOg8l7g&t=181s).
+
+## 2/ The 3 things execs care about [(00:03:26)](https://www.youtube.com/watch?v=wdgaUOg8l7g&t=206s)
+- Wenn man Ideen teilt, haben Führungskräfte Zugang zu Insider-Informationen, mehr Wissen und Erfahrung über eine Situation, und sie haben spezifische Fragen im Sinn, die sie beantworten möchten, um diese Fragen zu beantworten, sind sie nicht an dem interessiert, was man denkt, sondern an dem, was, warum und was als Ergebnis passiert, [(00:03:26)](https://www.youtube.com/watch?v=wdgaUOg8l7g&t=206s)
+- Es gibt zwei Extremvarianten, die man vermeiden sollte, wenn man seine Meinung äußert, zum einen die sehr konfidente und knappe Antwort, zum anderen die sehr detaillierte und langatmige Antwort, die den Zuhörer verliert, [(00:04:06)](https://www.youtube.com/watch?v=wdgaUOg8l7g&t=246s)
+- Die ideale Antwort liegt dazwischen und besteht aus drei Teilen: dem "Was", dem "Warum" und dem "Was als Ergebnis passiert", wobei das "Was" die Antwort oder das Fazit ist, das "Warum" die Begründung oder den Hintergrund liefert und das "Was als Ergebnis passiert" die Auswirkungen oder den Nutzen der Entscheidung darstellt, [(00:04:38)](https://www.youtube.com/watch?v=wdgaUOg8l7g&t=278s)
+- Ein Beispiel dafür ist die Entscheidung, ob man ein AI-Chatbot-Pilotprojekt ausweiten soll, wobei die Antwort "Ja, ich denke, wir sollten es ausweiten, insbesondere auf den Bereich des guided buying" ist, gefolgt von der Begründung "Ich habe 10.000 Transkripte analysiert und festgestellt, dass fast 50% der Anfragen von Erstkäufern stammen, die unsere Pläne vergleichen möchten", und schließlich dem "Was als Ergebnis passiert", nämlich dass man durch die Ausweitung des Chatbot-Projekts 900.000 Dollar an erhöhtem Umsatz erzielen könnte, [(00:05:13)](https://www.youtube.com/watch?v=wdgaUOg8l7g&t=313s)
+- Diese Art der Kommunikation erhöht die Chance, dass man etwas beiträgt, das die Führungskräfte suchen, und hilft, die Entscheidungsfindung zu erleichtern, indem man den Nutzen und die Auswirkungen der Entscheidung klar darstellt, [(00:06:19)](https://www.youtube.com/watch?v=wdgaUOg8l7g&t=379s)
+
+## 3/ The Ego [(00:06:40)](https://www.youtube.com/watch?v=wdgaUOg8l7g&t=400s)
+- Wenn man versucht, eine perfekte Präsentation zu halten, um einen guten Eindruck zu hinterlassen, kann dies zu einer Konzentration auf die eigene Leistung führen, anstatt sich auf das Team und die gemeinsamen Ziele zu fokussieren, was zu Enttäuschung führen kann, wenn die Ideen nicht angenommen werden [(00:06:40)](https://www.youtube.com/watch?v=wdgaUOg8l7g&t=400s).
+- Es ist wichtig, sich daran zu erinnern, dass es aufgrund von Informationsasymmetrie Situationen geben kann, in denen die Ideen nicht akzeptiert werden, auch wenn sie perfekt sind, weil die Exekutiven mehr über die Zukunft des Unternehmens wissen, wie zum Beispiel geplante Änderungen oder neue Modelle, die noch nicht öffentlich bekannt gegeben wurden [(00:07:06)](https://www.youtube.com/watch?v=wdgaUOg8l7g&t=426s).
+- Anstatt sich von Ablehnung entmutigen zu lassen, sollte man versuchen, die Gründe für die Ablehnung zu verstehen und Fragen stellen, um mehr über die Richtung des Unternehmens zu erfahren, wie zum Beispiel "Kann ich ein paar Nachfolgefragen stellen, was uns dazu bringt, vom guided buying abzuweichen, gibt es etwas, das ich nicht bedacht habe?" [(00:08:00)](https://www.youtube.com/watch?v=wdgaUOg8l7g&t=480s).
+- Es ist auch wichtig, proaktiv zu sein und nach anderen Möglichkeiten zu suchen, wie man zum Unternehmen beitragen kann, anstatt sich auf eine einzige Idee zu konzentrieren, wie zum Beispiel die Analyse von Markenloyalität oder die Erfassung von neuen Feature-Ideen, und sich mit den Exekutiven abzustimmen, um sicherzustellen, dass man in die richtige Richtung arbeitet [(00:08:44)](https://www.youtube.com/watch?v=wdgaUOg8l7g&t=524s).
+- Wenn das Ego im Weg steht, kann man nicht effektiv mit den Exekutiven kommunizieren und die Richtung des Unternehmens verstehen, es ist daher wichtig, ein kollaborativer und bescheidener Ansatz zu wählen, um auf gleicher Ebene mit den Exekutiven zu sprechen und die Richtung des Projekts gemeinsam zu gestalten [(00:09:39)](https://www.youtube.com/watch?v=wdgaUOg8l7g&t=579s).
+
+## 4/ Communicate like an executive every day [(00:09:53)](https://www.youtube.com/watch?v=wdgaUOg8l7g&t=593s)
+- Um auf wichtige Momente wie Meetings vorbereitet zu sein, sollte man bereits im Voraus an der Entwicklung seiner Führungsrolle arbeiten, indem man sich angewöhnt, seine Gedanken und Erfahrungen zu artikulieren, was bedeutet, dass man seine Kenntnisse und Lernerfahrungen klar und verständlich macht, um als Thought Leader wahrgenommen zu werden, jemand, der für sein Wissen bekannt ist [(00:10:05)](https://www.youtube.com/watch?v=wdgaUOg8l7g&t=605s).
+- Ein Thought Leader ist jemand, der in seinem Team oder Unternehmen als Experte auf einem bestimmten Gebiet wahrgenommen wird, wie zum Beispiel die neueste KI-Technologie, und von anderen als Ansprechpartner für Fragen zu diesem Thema gesucht wird, weil er seine Kenntnisse und Erfahrungen erfolgreich kommuniziert hat [(00:10:17)](https://www.youtube.com/watch?v=wdgaUOg8l7g&t=617s).
+- Es ist wichtig, regelmäßig seine Erfahrungen und Lernerfahrungen zu reflektieren und zu artikulieren, um seine Führungsrolle zu stärken und als Experte auf seinem Gebiet wahrgenommen zu werden, was bedeutet, dass man sich bemüht, seine Gedanken und Erfahrungen klar und verständlich zu machen, um anderen zu helfen und sich selbst weiterzuentwickeln [(00:10:40)](https://www.youtube.com/watch?v=wdgaUOg8l7g&t=640s).
+- Viele Menschen haben Schwierigkeiten, ihre Erfahrungen und Lernerfahrungen zu artikulieren, weil sie nie die Zeit genommen haben, ihre Erfahrungen zu reflektieren und zu distillieren, was bedeutet, dass sie ihre Gedanken und Erfahrungen nicht klar und verständlich machen können, wenn sie danach gefragt werden, wie zum Beispiel in einem Vorstellungsgespräch, wenn man nach einem bestimmten Ereignis oder einer bestimmten Erfahrung gefragt wird [(00:11:00)](https://www.youtube.com/watch?v=wdgaUOg8l7g&t=660s).
+- Um seine Führungsrolle zu stärken und als Thought Leader wahrgenommen zu werden, kann man ein einfaches Framework wie "Was, Warum, Was bedeutet das" verwenden, um seine Erfahrungen und Lernerfahrungen zu reflektieren und zu artikulieren, was bedeutet, dass man seine Gedanken und Erfahrungen klar und verständlich macht, um anderen zu helfen und sich selbst weiterzuentwickeln [(00:11:38)](https://www.youtube.com/watch?v=wdgaUOg8l7g&t=698s).
+
+
+
+
+## Sources
+- [website](https://www.youtube.com/watch?v=wdgaUOg8l7g)

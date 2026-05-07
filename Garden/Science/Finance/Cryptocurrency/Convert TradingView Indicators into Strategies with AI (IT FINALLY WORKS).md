@@ -1,0 +1,84 @@
+---
+title: Convert TradingView Indicators into Strategies with AI (IT FINALLY WORKS)
+tags:
+  - "Science/Finance/Cryptocurrency"
+createdAt: Fri Jun 13 2025 16:54:01 GMT+0200 (Central European Summer Time)
+updatedAt: Fri Jun 13 2025 16:54:19 GMT+0200 (Central European Summer Time)
+---
+
+
+Detailed summary
+
+
+## Intro [(00:00:00)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=0s)
+- In diesem Video wird gezeigt, wie man mit künstlicher Intelligenz (KI) ein Indikator in eine Strategie umwandeln kann, was Millionen von Menschen helfen soll, dies zu tun [(00:00:00)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=0s).
+- Nach dem letzten Video, in dem die Top-Fünf-Indikatoren in Strategien umgewandelt wurden, fragten die Zuschauer, wie man Strategien erstellen kann, insbesondere wenn man bereits einen Indikator hat, der gut aussieht [(00:00:14)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=14s).
+- Das Ziel dieses Videos ist es, den Zuschauern zu helfen, eine Strategie aus einem Indikator zu erstellen, und es wird gezeigt, wie man dies mit der richtigen KI und dem richtigen Prompt machen kann [(00:00:33)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=33s).
+- Das Video wird weniger geschnitten und mehr roh sein, um die Zuschauer auch die Probleme sehen zu lassen, die auftreten können, und wie man sie löst [(00:00:46)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=46s).
+- Die Zuschauer werden ermutigt, den Like-Button zu drücken, wenn sie das Video mögen, und das Kanal abonniert, um game-changende Bildungsinhalte zu erhalten, wobei jedoch darauf hingewiesen wird, dass dies keine Finanzberatung ist und Krypto-Risiken birgt [(00:01:05)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=65s).
+- Der Zweck des Kanals ist es, den Zuschauern zu helfen, ihre Chancen auf Erfolg zu erhöhen, indem sie besser als andere Menschen sind, da es ein Spieler-gegen-Spieler-Spiel ist [(00:01:22)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=82s).
+- Das Video wird zeigen, wie man mit KI eine Strategie aus einem Indikator erstellt, und es wird versprochen, dass es awesome sein wird [(00:01:35)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=95s).
+
+## Results [(00:01:40)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=100s)
+- Die Methode ermöglicht es, beliebige Indikatoren in Strategien umzuwandeln und sogar komplett neue Strategien zu erstellen, indem verschiedene Indikatoren zu einer starken Strategie kombiniert werden [(00:01:40)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=100s).
+- Es werden drei Indikatoren in Strategien umgewandelt, und zwar mit Hilfe von Open AI, insbesondere Chat GPT1 Preview, da dies die besten Ergebnisse liefert [(00:01:58)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=118s).
+- Die Ergebnisse der Umwandlung von Indikatoren in Strategien sind beeindruckend, beispielsweise ergab die Umwandlung des Bull Market Support Band-Indikators eine Strategie mit 736% Profit, während die Umwandlung des Super Trend-Indikators eine Strategie mit 53% Profit ergab [(00:02:16)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=136s).
+- Die Verwendung von Chat GPT1 Preview ermöglicht es, Strategien zu erstellen, die identische Ergebnisse wie die ursprünglichen Strategien liefern, wie bei der Umwandlung des Bull Market Support Band- und Super Trend-Indikators gezeigt wurde [(00:02:24)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=144s).
+- Die Ergebnisse zeigen, dass die mit Hilfe von Chat GPT1 Preview erstellten Strategien sehr gute Ergebnisse liefern und es möglich ist, diese Methode selbst anzuwenden, um eigene Strategien zu erstellen [(00:02:59)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=179s).
+
+## Bull Market Support Band with AI [(00:03:03)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=183s)
+- Der Bull Market Support Band ist ein Indikator, der in einem vorherigen Video vorgestellt wurde und ansprechend erscheint, da das Überschreiten der Linien nach oben möglicherweise ein gutes Kaufsignal und das Überschreiten nach unten möglicherweise ein gutes Verkaufssignal darstellt [(00:03:03)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=183s).
+- Um diesen Indikator in eine Strategie umzuwandeln, muss er zunächst der Chart hinzugefügt werden, indem man auf Indikatoren klickt, nach "Bull Market Support Band" sucht und ihn auswählt, woraufhin er auf dem Chart erscheint [(00:03:27)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=207s).
+- Als nächstes muss der Code des Indikators kopiert werden, indem man mit der Maus über den Indikator fährt und auf den Source-Code klickt, um ihn dann an Chat [[Generativer vortrainierter Transformer | GPT]] weiterzugeben, um ihn in eine Strategie umzuwandeln [(00:03:39)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=219s).
+- Der Code muss dann in ein Prompt kopiert werden, das aus drei Abschnitten besteht, wobei der Code in einen dieser Abschnitte eingefügt wird, um die Umwandlung in eine Strategie zu ermöglichen [(00:03:54)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=234s).
+- Bevor der Code in das Prompt eingefügt wird, ist es wichtig, die drei Abschnitte des Prompts zu verstehen, um den Code korrekt einzufügen und die Umwandlung des Indikators in eine Strategie zu ermöglichen [(00:04:00)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=240s).
+
+## AI Prompt [(00:04:02)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=242s)
+- Der Prozess beginnt damit, dass ein Prompt erstellt wird, der dem Chat-GPT mitteilt, was von ihm erwartet wird, und es als professionellen PineScript-Entwickler anspricht, um sicherzustellen, dass es das Richtige tut, und dies wird sorgfältig zusammengefügt, um gemeinsame Probleme zu vermeiden [(00:04:02)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=242s).
+- Der Prompt besteht aus drei Teilen: dem ersten Teil, in dem dem Chat-[[Generativer vortrainierter Transformer | GPT]] mitgeteilt wird, was von ihm erwartet wird, dem zweiten Teil, in dem Anweisungen gegeben werden, wie es in bestimmten Situationen zu verhalten ist, und dem dritten Teil, in dem der Code des Indikators angegeben wird [(00:04:15)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=255s).
+- Der Code des Indikators wird in den Chat-GPT kopiert und dieser wird angewiesen, eine Strategie zu erstellen, wobei die 01-Preview-Version verwendet wird, da diese ein besseres Verhalten zeigt und nach etwa 40-60 Sekunden die erste Version der Strategie liefert [(00:04:41)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=281s).
+- Die erste Version der Strategie wird kopiert und in [[TradingView]] als neue Strategie erstellt, wobei überprüft wird, ob es Fehler gibt, und wenn nicht, wird die Strategie zum Chart hinzugefügt, um die Ergebnisse zu sehen [(00:05:29)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=329s).
+- Die Ergebnisse der Strategie werden überprüft und es wird festgestellt, dass sie nicht genau den gleichen Ergebnissen wie die ursprüngliche Strategie entsprechen, aber dennoch gute Ergebnisse liefert, und es wird beschlossen, die Strategie anzupassen, um die gleichen Ergebnisse wie die ursprüngliche Strategie zu erzielen [(00:06:13)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=373s).
+- Der Chat-GPT wird angewiesen, die Strategie anzupassen, um bei einem Kreuzen der EMAs zu kaufen und zu verkaufen, und es wird auch angewiesen, Lücken zu füllen, um Sprünge in den Linien zu vermeiden, und die neue Version der Strategie wird erstellt und getestet [(00:07:27)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=447s).
+- Die neue Version der Strategie wird getestet und es wird festgestellt, dass sie die gleichen Ergebnisse wie die ursprüngliche Strategie liefert, und es wird beschlossen, zum nächsten Schritt überzugehen, um eine weitere Strategie zu erstellen und zu testen [(00:09:06)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=546s).
+
+## Bollinger Band with AI [(00:09:27)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=567s)
+- Die nächste Strategie, die erstellt werden soll, basiert auf den Ballinger-Bands, da sie in einem vorherigen Video den meisten Profit erzeugt hat, und es daher sinnvoll ist, zu erklären, wie man genau diese Strategie umsetzt [(00:09:27)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=567s).
+- Um die Ballinger-Bands zu verwenden, müssen sie zunächst zum Chart hinzugefügt werden, indem man nach dem "Ballinger Band"-Indikator sucht und auf "Technicals" klickt, um den gewünschten Indikator zu finden und hinzuzufügen [(00:09:38)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=578s).
+- Die Kauf- und Verkaufssignale müssen manuell bestimmt werden, da der Indikator selbst keine solchen Signale liefert, und es wird vorgeschlagen, zu kaufen, wenn der Preis über dem oberen Band liegt, und zu verkaufen, wenn der Preis unter dem unteren Band liegt [(00:10:09)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=609s).
+- Um die Strategie zu testen, wird der Code des Indikators kopiert und in eine Chat-GPT-Chat-Funktion eingefügt, um ihn in eine Strategie umzuwandeln, wobei man jedoch feststellt, dass die resultierende Strategie nicht korrekt ist und Anpassungen benötigt [(00:10:49)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=649s).
+- Die resultierende Strategie muss daher angepasst werden, indem man die Kauf- und Verkaufssignale explizit definiert, wie zum Beispiel "kaufen, wenn der Schlusskurs über dem oberen Band liegt, und verkaufen, wenn der Schlusskurs unter dem unteren Band liegt" [(00:12:33)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=753s).
+- Es wird betont, dass es wichtig ist, freundlich und höflich zu sein, auch gegenüber künstlicher Intelligenz, da dies zu besseren Ergebnissen führen kann [(00:12:53)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=773s).
+- Die Strategie kann durch die Definition von Kauf- und Verkaufsbedingungen erstellt werden, beispielsweise durch den Kauf, wenn der Schlusskurs über dem oberen Band liegt, und den Verkauf, wenn der Schlusskurs unter dem unteren Band liegt, was eine wichtige Überlegung für die Erstellung einer erfolgreichen Strategie ist [(00:13:08)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=788s).
+- Es ist wichtig, einen Plan zu haben und nicht einfach zu hoffen, dass die beste Strategie kostenlos zur Verfügung steht, sondern stattdessen die Chart-Zoom-Funktion zu nutzen, um zu überlegen, wann gekauft und verkauft werden sollte, und dies dann dem [[Generativer vortrainierter Transformer | GPT]] mitzuteilen, um eine Strategie zu erstellen [(00:13:24)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=804s).
+- Ein Indikator allein ist nicht ausreichend, da er zwar optisch ansprechend sein kann, aber bei der tatsächlichen Handhabung möglicherweise nicht so gut funktioniert, was die Notwendigkeit unterstreicht, die Strategie sorgfältig zu evaluieren und zu überprüfen [(00:13:49)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=829s).
+- Durch die Kombination von Kauf- und Verkaufsbedingungen kann eine Strategie erstellt werden, die zu besseren Ergebnissen führt, wie es durch die Erstellung einer Strategie mit einem Gewinn von 187% demonstriert wird, was eine deutliche Verbesserung gegenüber der ursprünglichen Strategie darstellt [(00:14:13)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=853s).
+- Es ist wichtig, die Strategie sorgfältig zu überprüfen, um sicherzustellen, dass sie korrekt funktioniert, wie es durch die Überprüfung der Kauf- und Verkaufssignale und die Bestätigung, dass die Strategie wie erwartet funktioniert, demonstriert wird [(00:14:28)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=868s).
+- Die Verwendung von Candle-Close als Auslöser für Kauf- und Verkaufssignale ist eine gute Praxis, da sie verhindert, dass man in einen Trade hereingelockt oder herausgelockt wird, und es ist wichtig, dies bei der Erstellung einer Strategie zu berücksichtigen [(00:14:50)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=890s).
+- Die erstellte Strategie kann mit anderen Strategien verglichen werden, um ihre Leistung zu bewerten und sicherzustellen, dass sie wie erwartet funktioniert, wie es durch den Vergleich mit einer anderen Strategie demonstriert wird, die dieselben Ergebnisse liefert [(00:15:04)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=904s).
+
+## Supertrend with AI [(00:15:23)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=923s)
+- Der Super-Trend-Indikator wird verwendet, um eine Strategie zu erstellen, indem man den Indikator sucht und auf "[[Super Trend]]" klickt, um die gleiche Ansicht wie im Video zu sehen, und man muss sich immer fragen, wann man kaufen und verkaufen soll, bevor man die Strategie erstellt [(00:15:23)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=923s).
+- Man will kaufen, wenn der Trend grün ist, und verkaufen, wenn der Trend rot ist, und man muss dies dem [[Generativer vortrainierter Transformer | GPT]] mitteilen, um die Strategie zu erstellen, und es gibt viele falsche Trades, die zu Verlusten führen können [(00:15:48)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=948s).
+- Man kopiert den Quellcode des Super-Trend-Indikators und fügt ihn in den GPT-Chat ein, um eine neue Strategie zu erstellen, und man muss sicherstellen, dass man die richtige Version des GPT verwendet, um Fehler zu vermeiden [(00:16:13)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=973s).
+- Der GPT generiert einen Code, der jedoch Fehler enthält, und man muss den Fehler kopieren und dem GPT mitteilen, in welcher Zeile der Fehler auftritt, um ihn zu beheben, und manchmal muss man den Chat von vorne beginnen, um ein besseres Ergebnis zu erzielen [(00:17:07)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=1027s).
+- Der GPT-Chat kann manchmal in die falsche Richtung laufen und nie wieder auf den richtigen Pfad zurückkehren, aber es ist einfach, einen neuen Chat zu starten und von vorne zu beginnen, um ein besseres Ergebnis zu erzielen [(00:17:32)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=1052s).
+- Man erhält einen neuen Code, den man in den Indikator einfügt, und man überprüft, ob die Strategie richtig funktioniert, indem man den Trend und die Kauf- und Verkaufssignale überprüft, und man stellt fest, dass der GPT ursprünglich falsche Signale generiert hat, aber nach der Korrektur der Anweisungen richtig funktioniert [(00:18:04)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=1084s).
+- Die Strategie wird getestet und die Ergebnisse werden mit denen einer vorherigen Version verglichen, um sicherzustellen, dass die neue Strategie richtig funktioniert und die gleichen Ergebnisse wie die vorherige Version erzielt [(00:19:36)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=1176s).
+- Die Super-Trend-Strategie kann erfolgreich erstellt werden, indem man den GPT-Chat verwendet und die richtigen Anweisungen gibt, und man kann auch multiple Indikatoren kombinieren, um eine Strategie zu erstellen, was jedoch ein fortgeschritteneres Thema ist [(00:20:10)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=1210s).
+
+## Conclusion [(00:20:25)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=1225s)
+- Die Methode, um TradingView-Indikatoren in Strategien umzuwandeln, ist sehr einfach, wenn man den richtigen Ansatz verwendet, und es gibt nur wenige mögliche Probleme, die auftreten können [(00:20:25)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=1225s).
+- Um diese Methode anzuwenden, benötigt man ein Abonnement für die Chat-PT-Version, aber sobald man dies hat, kann man beliebige Strategien aus Indikatoren erstellen, ohne auf die Hilfe anderer angewiesen zu sein [(00:20:36)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=1236s).
+- Mit dieser Methode können Anwender nun selbst Strategien aus Indikatoren erstellen, anstatt andere um Hilfe bitten zu müssen, und sie können ihre eigenen Strategien erstellen und frei experimentieren [(00:20:49)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=1249s).
+
+## Automate it with SIGNUM.money [(00:20:57)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=1257s)
+- Um eine Strategie vollständig zu automatisieren, kann man zu SIGNUM.money gehen, da dies eine Software ist, mit der man jede TradingView-Strategie automatisieren kann, ohne spezielle Code-Anpassungen vornehmen zu müssen, und dies ermöglicht es, die Strategie normal zu erstellen und dann mit SIGNUM.money zu automatisieren, um Kauf- und Verkaufsentscheidungen vollautomatisch auf der Börse auszuführen [(00:20:57)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=1257s).
+- Mit SIGNUM.money kann man eine TradingView-Strategie ohne spezielle Anpassungen im Code automatisieren, um Kauf- und Verkaufsentscheidungen auf der Börse auszuführen, und dies ist sehr einfach zu tun [(00:21:11)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=1271s).
+- Um zu erfahren, wie man eine Trading-Strategie automatisieren kann, sollte man als nächstes ein Video über TradingView-Strategien ansehen, um mehr über die Automatisierung von Trading-Strategien zu erfahren [(00:21:24)](https://www.youtube.com/watch?v=ETuIpsL_7Mc&t=1284s).
+
+
+
+
+## Sources
+- [website](https://www.youtube.com/watch?v=ETuIpsL_7Mc)
