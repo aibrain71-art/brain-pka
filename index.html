@@ -370,9 +370,10 @@ body.view-graph #detail-panel.open { transform: translateX(0); }
 #sidebar.collapsed #tag-tree .tag-group-header {
   padding: 8px 0; justify-content: center; gap: 0;
 }
-#sidebar.collapsed #tag-tree .tag-cat-emoji {
-  display: inline-block; font-size: 20px; line-height: 1;
+#sidebar.collapsed #tag-tree .tag-cat-svg-collapsed {
+  display: inline-flex; align-items: center; justify-content: center;
 }
+#sidebar.collapsed #tag-tree .tag-cat-svg-collapsed svg { width: 18px; height: 18px; }
 #sidebar.collapsed #tag-tree .tag-dot,
 #sidebar.collapsed #tag-tree .tag-group-label,
 #sidebar.collapsed #tag-tree .tag-count,
@@ -455,7 +456,11 @@ body.view-graph #detail-panel.open { transform: translateX(0); }
 
 /* Tag tree */
 .tag-group { padding: 2px 0; }
-.tag-cat-emoji { display: none; }  /* Only revealed in collapsed sidebar */
+.tag-cat-emoji { display: none; }  /* Legacy — replaced by tag-cat-svg */
+.tag-cat-svg { display: inline-flex; align-items: center; vertical-align: middle;
+                margin-right: 6px; flex-shrink: 0; }
+.tag-cat-svg svg { display: block; }
+.tag-cat-svg-collapsed { display: none; }  /* Only revealed in collapsed sidebar */
 .tag-group-header { display: flex; align-items: center; gap: 7px; padding: 6px 10px 6px 14px;
                      cursor: pointer; border-radius: 7px; margin: 1px 4px; transition: all .15s;
                      white-space: nowrap; }
@@ -1451,6 +1456,158 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
                       color: var(--text-2); padding: 3px 6px; border-radius: 6px;
                       font-size: 11px; cursor: pointer; }
 .entry-lang-picker:focus { outline: none; border-color: var(--accent); }
+
+/* ── Lernkasten / Flashcards ─────────────────────────────────── */
+#flashcards-view { padding: 24px 32px; max-width: 1200px; margin: 0 auto; width: 100%; }
+.fc-header { display: flex; align-items: baseline; gap: 16px; margin-bottom: 18px; flex-wrap: wrap; }
+.fc-title { font-size: 26px; font-weight: 700; color: var(--text); margin: 0; }
+.fc-header-stats { font-size: 13px; color: var(--text-3); display: flex; gap: 14px; flex-wrap: wrap; }
+.fc-header-stats strong { color: var(--accent); font-weight: 600; }
+.fc-actions { margin-bottom: 22px; }
+.fc-btn { display: inline-flex; align-items: center; gap: 8px; padding: 9px 16px; font-size: 13px;
+           border-radius: 8px; cursor: pointer; transition: all .15s; border: 1px solid transparent;
+           background: var(--surface-2); color: var(--text); font-weight: 500; }
+.fc-btn:hover:not(:disabled) { background: var(--surface-3); }
+.fc-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.fc-btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.fc-btn-primary:hover:not(:disabled) { background: var(--accent); filter: brightness(1.1); }
+.fc-btn-ghost { background: transparent; border-color: var(--border); color: var(--text-2); }
+.fc-btn-ghost:hover:not(:disabled) { background: var(--surface-2); color: var(--text); }
+.fc-btn-success { background: rgba(52,211,153,.12); color: #34d399; border-color: rgba(52,211,153,.4); }
+.fc-btn-success:hover:not(:disabled) { background: #34d399; color: #fff; }
+.fc-btn-fail { background: rgba(239,68,68,.12); color: #ef4444; border-color: rgba(239,68,68,.4); }
+.fc-btn-fail:hover:not(:disabled) { background: #ef4444; color: #fff; }
+.fc-btn-flip { background: var(--surface-3); color: var(--text-2); border-color: var(--border); }
+
+/* Deck cards in the overview grid. Hover lifts slightly. Color tint along
+   the left edge matches the main category the deck was built from. */
+.fc-decks-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+                  gap: 14px; }
+.fc-deck-card { background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px;
+                 padding: 16px; cursor: pointer; transition: all .2s;
+                 border-left: 3px solid var(--cat-color, var(--accent)); }
+.fc-deck-card:hover { background: var(--surface-3); transform: translateY(-2px);
+                      box-shadow: 0 4px 14px rgba(0,0,0,.2); }
+.fc-deck-name { font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+.fc-deck-source { font-size: 11px; color: var(--text-3); margin-bottom: 12px; }
+.fc-deck-stats { display: flex; gap: 14px; font-size: 12px; color: var(--text-2); margin-bottom: 10px; }
+.fc-deck-stats span { display: flex; align-items: center; gap: 4px; }
+.fc-deck-progress-bar { height: 4px; background: var(--surface-3); border-radius: 2px;
+                        overflow: hidden; margin-top: 8px; }
+.fc-deck-progress-fill { height: 100%; background: var(--accent); transition: width .3s; }
+.fc-deck-card .fc-deck-actions { display: flex; gap: 6px; margin-top: 10px; opacity: 0;
+                                  transition: opacity .15s; }
+.fc-deck-card:hover .fc-deck-actions { opacity: 1; }
+.fc-deck-card .fc-deck-actions button { font-size: 11px; padding: 4px 8px; }
+
+/* Mode switching: only one of the three screens visible at a time */
+.fc-decks-screen, .fc-study-screen, .fc-print-screen { display: none; }
+.fc-mode-decks .fc-decks-screen { display: block; }
+.fc-mode-study .fc-study-screen { display: flex; flex-direction: column; align-items: center; gap: 18px; }
+.fc-mode-print .fc-print-screen { display: block; }
+
+/* Study mode */
+.fc-study-top { display: flex; align-items: center; justify-content: space-between;
+                 width: 100%; max-width: 600px; }
+.fc-study-progress { font-size: 13px; color: var(--text-2); }
+.fc-card-stage { perspective: 1400px; width: 100%; max-width: 540px; height: 360px; }
+.fc-card { position: relative; width: 100%; height: 100%; transform-style: preserve-3d;
+           transition: transform .55s cubic-bezier(.4,.2,.2,1); cursor: pointer; }
+.fc-card.flipped { transform: rotateY(180deg); }
+.fc-card-face { position: absolute; inset: 0; backface-visibility: hidden;
+                 border-radius: 14px; padding: 28px;
+                 display: flex; flex-direction: column; gap: 12px;
+                 background: var(--surface-2); border: 1px solid var(--border-2);
+                 box-shadow: 0 6px 22px rgba(0,0,0,.25); overflow: hidden; }
+.fc-card-front { z-index: 2; }
+.fc-card-back  { transform: rotateY(180deg); }
+.fc-card-image { max-width: 140px; max-height: 100px; align-self: center; border-radius: 8px;
+                  object-fit: cover; }
+.fc-card-question { font-size: 18px; font-weight: 600; color: var(--text); flex: 1;
+                     display: flex; align-items: center; justify-content: center; text-align: center;
+                     line-height: 1.4; }
+.fc-card-answer { font-size: 15px; color: var(--text); line-height: 1.6; flex: 1; overflow: auto; }
+.fc-card-source { font-size: 11px; color: var(--text-3); border-top: 1px solid var(--border);
+                   padding-top: 8px; cursor: pointer; transition: color .15s; }
+.fc-card-source:hover { color: var(--accent); }
+.fc-card-related { display: flex; gap: 6px; flex-wrap: wrap; }
+.fc-card-related-chip { font-size: 10px; color: var(--text-2); background: var(--surface-3);
+                          padding: 2px 8px; border-radius: 10px; cursor: pointer;
+                          border: 1px solid var(--border); transition: all .15s; }
+.fc-card-related-chip:hover { background: var(--accent-dim); color: var(--accent);
+                               border-color: var(--accent); }
+.fc-card-flip-hint { position: absolute; bottom: 10px; right: 14px; font-size: 10px;
+                      color: var(--text-3); opacity: 0.6; pointer-events: none; }
+.fc-study-controls { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.fc-study-controls .fc-btn { padding: 11px 22px; }
+
+/* Empty state for the deck grid */
+.fc-empty { text-align: center; padding: 60px 20px; color: var(--text-3); }
+.fc-empty-title { font-size: 16px; color: var(--text-2); margin-bottom: 8px; font-weight: 500; }
+.fc-empty-sub { font-size: 13px; line-height: 1.6; max-width: 420px; margin: 0 auto; }
+
+/* Study session "all done" panel */
+.fc-session-done { background: var(--surface-2); border: 1px solid var(--border-2);
+                    border-radius: 14px; padding: 36px; text-align: center; max-width: 480px; }
+.fc-session-done h2 { font-size: 22px; margin: 0 0 8px; color: var(--accent); }
+.fc-session-done p { font-size: 14px; color: var(--text-2); margin: 0 0 18px; line-height: 1.6; }
+.fc-session-stats { display: flex; gap: 24px; justify-content: center; margin: 20px 0;
+                     padding: 16px; background: var(--surface-1); border-radius: 10px; }
+.fc-session-stat { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.fc-session-stat-num { font-size: 24px; font-weight: 700; color: var(--text); }
+.fc-session-stat-lbl { font-size: 11px; color: var(--text-3); text-transform: uppercase;
+                        letter-spacing: .5px; }
+
+/* Modal for deck creation */
+.fc-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 200;
+                     display: none; align-items: flex-start; justify-content: center;
+                     padding: 80px 20px; backdrop-filter: blur(2px); }
+.fc-modal-overlay.visible { display: flex; }
+.fc-modal { background: var(--surface-1); border: 1px solid var(--border-2); border-radius: 14px;
+             width: 100%; max-width: 540px; box-shadow: 0 20px 60px rgba(0,0,0,.5);
+             display: flex; flex-direction: column; max-height: calc(100vh - 160px); }
+.fc-modal-head { display: flex; align-items: center; justify-content: space-between;
+                  padding: 14px 18px; border-bottom: 1px solid var(--border); }
+.fc-modal-title { font-size: 15px; font-weight: 600; color: var(--text); }
+.fc-modal-body { padding: 16px 18px; overflow-y: auto; }
+.fc-modal-row { margin-bottom: 14px; }
+.fc-modal-label { display: block; font-size: 11px; font-weight: 600; color: var(--text-3);
+                   text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+.fc-modal-input { width: 100%; background: var(--surface-3); border: 1px solid var(--border);
+                   color: var(--text); padding: 9px 12px; border-radius: 8px; font-size: 13px;
+                   font-family: inherit; }
+.fc-modal-input:focus { outline: none; border-color: var(--accent); }
+.fc-modal-hint { font-size: 11px; color: var(--text-3); margin-top: 6px; line-height: 1.5; }
+.fc-modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px;
+                     border-top: 1px solid var(--border); padding-top: 14px; }
+.fc-source-tabs { display: flex; gap: 4px; margin-bottom: 8px; }
+.fc-source-tab { flex: 1; padding: 8px 12px; background: var(--surface-3); border: 1px solid var(--border);
+                  border-radius: 8px; font-size: 12px; color: var(--text-2); cursor: pointer;
+                  transition: all .15s; }
+.fc-source-tab.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+.fc-note-search-results { max-height: 220px; overflow-y: auto; margin-top: 6px;
+                           border: 1px solid var(--border); border-radius: 8px; }
+.fc-note-search-result { padding: 8px 12px; cursor: pointer; font-size: 13px; color: var(--text-2);
+                          border-bottom: 1px solid var(--border); transition: all .15s; }
+.fc-note-search-result:hover { background: var(--surface-2); color: var(--text); }
+.fc-note-search-result.selected { background: var(--accent-dim); color: var(--accent); }
+
+/* Print layout — when window.print() is called from the print view, only
+   the print grid is shown; everything else is hidden. 4 cards per A4 page. */
+.fc-print-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 20px 0; }
+.fc-print-card { border: 2px solid #333; border-radius: 8px; padding: 14px; background: #fff; color: #000;
+                  min-height: 200px; display: flex; flex-direction: column; gap: 8px; page-break-inside: avoid; }
+.fc-print-card .fc-pc-q { font-size: 14px; font-weight: 700; }
+.fc-print-card .fc-pc-a { font-size: 12px; line-height: 1.4; flex: 1; border-top: 1px dashed #999;
+                            padding-top: 8px; margin-top: 8px; }
+.fc-print-card .fc-pc-meta { font-size: 9px; color: #666; }
+@media print {
+  body * { visibility: hidden; }
+  .fc-print-grid, .fc-print-grid * { visibility: visible; }
+  .fc-print-grid { position: absolute; left: 0; top: 0; width: 100%; }
+  .no-print { display: none !important; }
+  .fc-print-card { break-inside: avoid; }
+}
 .detail-meta { display: flex; align-items: center; gap: 10px; }
 
 /* Language toggle in topbar — height matches the search input + mode chip */
@@ -1761,6 +1918,10 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
       <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="19" r="2"/><line x1="12" y1="7" x2="5" y2="17"/><line x1="12" y1="7" x2="19" y2="17"/><line x1="7" y1="19" x2="17" y2="19"/></svg>
       <span>Wissensgraph</span>
     </div>
+    <div class="nav-item" id="nav-flashcards" onclick="setView('flashcards')" title="Lernkasten — Flashcards mit Spaced Repetition">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="3" y="6" width="14" height="14" rx="2"/><path d="M7 2h14v14"/></svg>
+      <span>Lernkasten</span>
+    </div>
     <div class="nav-item" id="nav-chat" onclick="setView('chat')" title="Chat">
       <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2l1.8 4.4L18 8l-4.2 1.6L12 14l-1.8-4.4L6 8l4.2-1.6L12 2z"/><circle cx="18" cy="18" r="2.5"/><path d="M5 17l1 2.5L8 20l-2 1-1 2-1-2-2-1 2-.5L5 17z"/></svg>
       <span>Chat</span>
@@ -2070,6 +2231,118 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
     </div><!-- /graph-settings -->
   </div>
 
+  <!-- Lernkasten / Flashcards view -->
+  <div id="flashcards-view" style="display:none;flex:1;overflow:auto">
+    <!-- Three sub-views switched via class on this wrapper:
+         .fc-mode-decks (default), .fc-mode-study, .fc-mode-print -->
+    <div id="flashcards-host" class="fc-mode-decks">
+      <!-- Deck list (overview) -->
+      <div class="fc-decks-screen">
+        <div class="fc-header">
+          <h1 class="fc-title">Lernkasten</h1>
+          <div class="fc-header-stats" id="fc-global-stats"></div>
+        </div>
+        <div class="fc-actions">
+          <button class="fc-btn fc-btn-primary" onclick="openFcCreateModal()">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Neuer Lernkartenstapel
+          </button>
+        </div>
+        <div class="fc-decks-grid" id="fc-decks-grid"></div>
+      </div>
+
+      <!-- Study mode -->
+      <div class="fc-study-screen">
+        <div class="fc-study-top">
+          <button class="fc-btn fc-btn-ghost" onclick="exitFcStudy()">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+            Zurück
+          </button>
+          <div class="fc-study-progress" id="fc-study-progress"></div>
+          <button class="fc-btn fc-btn-ghost" onclick="openFcPrintView()" title="Stapel drucken">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+            Drucken
+          </button>
+        </div>
+        <div class="fc-card-stage">
+          <div class="fc-card" id="fc-card" onclick="flipFcCard()">
+            <div class="fc-card-face fc-card-front" id="fc-card-front"></div>
+            <div class="fc-card-face fc-card-back" id="fc-card-back"></div>
+          </div>
+        </div>
+        <div class="fc-study-controls">
+          <button class="fc-btn fc-btn-fail" onclick="markFcCard(false)">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            Wusste ich nicht
+          </button>
+          <button class="fc-btn fc-btn-flip" onclick="flipFcCard()">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            Umdrehen
+          </button>
+          <button class="fc-btn fc-btn-success" onclick="markFcCard(true)">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+            Wusste ich
+          </button>
+        </div>
+      </div>
+
+      <!-- Print view (printable layout) -->
+      <div class="fc-print-screen">
+        <div class="fc-print-top no-print">
+          <button class="fc-btn fc-btn-ghost" onclick="exitFcPrintView()">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+            Zurück
+          </button>
+          <button class="fc-btn fc-btn-primary" onclick="window.print()">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+            Drucken
+          </button>
+        </div>
+        <div class="fc-print-grid" id="fc-print-grid"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: deck creation -->
+  <div id="fc-create-modal" class="fc-modal-overlay" onclick="if(event.target===this) closeFcCreateModal()">
+    <div class="fc-modal">
+      <div class="fc-modal-head">
+        <span class="fc-modal-title">Neuer Lernkartenstapel</span>
+        <button class="settings-close" onclick="closeFcCreateModal()">✕</button>
+      </div>
+      <div class="fc-modal-body">
+        <div class="fc-modal-row">
+          <label class="fc-modal-label">Name</label>
+          <input type="text" id="fc-deck-name" class="fc-modal-input" placeholder="z.B. Stoizismus Grundlagen">
+        </div>
+        <div class="fc-modal-row">
+          <label class="fc-modal-label">Quelle</label>
+          <div class="fc-source-tabs">
+            <button class="fc-source-tab active" data-tab="category" onclick="switchFcSourceTab('category')">Hauptordner</button>
+            <button class="fc-source-tab" data-tab="note" onclick="switchFcSourceTab('note')">Einzelne Notiz</button>
+          </div>
+        </div>
+        <div class="fc-modal-row" id="fc-source-category-row">
+          <select id="fc-source-category" class="fc-modal-input"></select>
+          <div class="fc-modal-hint" id="fc-source-category-hint">Claude erstellt aus den Karten in diesem Ordner einen Stapel.</div>
+        </div>
+        <div class="fc-modal-row" id="fc-source-note-row" style="display:none">
+          <input type="text" id="fc-source-note-search" class="fc-modal-input" placeholder="Notiz suchen…" oninput="renderFcNoteSearch(this.value)">
+          <div id="fc-source-note-results" class="fc-note-search-results"></div>
+        </div>
+        <div class="fc-modal-row">
+          <label class="fc-modal-label">Anzahl Karten (Vorgabe)</label>
+          <input type="number" id="fc-deck-count" class="fc-modal-input" min="3" max="40" value="10">
+        </div>
+        <div class="fc-modal-actions">
+          <button class="fc-btn fc-btn-ghost" onclick="closeFcCreateModal()">Abbrechen</button>
+          <button class="fc-btn fc-btn-primary" id="fc-create-btn" onclick="createFcDeck()">Stapel mit Claude erstellen</button>
+        </div>
+        <div id="fc-create-status" class="fc-modal-hint"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- Chat view -->
   <div id="chat-view">
     <div id="chat-content" class="chat-thread">
@@ -2176,12 +2449,30 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
     </div>
     <div class="settings-layout">
       <nav class="settings-sidebar" id="settings-sidebar">
-        <div class="settings-nav-item active" data-target="appearance" onclick="setSettingsSection('appearance')"><span class="settings-nav-icon">🎨</span><span>Erscheinungsbild</span></div>
-        <div class="settings-nav-item" data-target="content" onclick="setSettingsSection('content')"><span class="settings-nav-icon">📄</span><span>Inhalte</span></div>
-        <div class="settings-nav-item" data-target="language" onclick="setSettingsSection('language')"><span class="settings-nav-icon">🌐</span><span>Sprache</span></div>
-        <div class="settings-nav-item" data-target="cloud" onclick="setSettingsSection('cloud')"><span class="settings-nav-icon">☁️</span><span>Cloud-Sync</span></div>
-        <div class="settings-nav-item" data-target="enrichment" onclick="setSettingsSection('enrichment')"><span class="settings-nav-icon">🧬</span><span>Anreicherung</span></div>
-        <div class="settings-nav-item" data-target="voice" onclick="setSettingsSection('voice')"><span class="settings-nav-icon">🎙️</span><span>Stimme &amp; Personas</span></div>
+        <div class="settings-nav-item active" data-target="appearance" onclick="setSettingsSection('appearance')">
+          <svg class="settings-nav-icon" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18"/></svg>
+          <span>Erscheinungsbild</span>
+        </div>
+        <div class="settings-nav-item" data-target="content" onclick="setSettingsSection('content')">
+          <svg class="settings-nav-icon" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
+          <span>Inhalte</span>
+        </div>
+        <div class="settings-nav-item" data-target="language" onclick="setSettingsSection('language')">
+          <svg class="settings-nav-icon" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>
+          <span>Sprache</span>
+        </div>
+        <div class="settings-nav-item" data-target="cloud" onclick="setSettingsSection('cloud')">
+          <svg class="settings-nav-icon" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
+          <span>Cloud-Sync</span>
+        </div>
+        <div class="settings-nav-item" data-target="enrichment" onclick="setSettingsSection('enrichment')">
+          <svg class="settings-nav-icon" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3"/></svg>
+          <span>Anreicherung</span>
+        </div>
+        <div class="settings-nav-item" data-target="voice" onclick="setSettingsSection('voice')">
+          <svg class="settings-nav-icon" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4M8 22h8"/></svg>
+          <span>Stimme &amp; Personas</span>
+        </div>
       </nav>
     <div class="settings-body">
       <!-- Theme -->
@@ -2344,37 +2635,49 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
 // 7 Haupttags. Notizen + Garden-Karten werden über `gardenTypes` eingeordnet.
 // Farben: jede Hauptkategorie hat eine Basisfarbe; Unter-Ebenen erben sie mit
 // abnehmender Sättigung (siehe buildTagTree).
+// Each category gets an SVG icon (stroke-style, currentColor) instead of an
+// emoji — keeps the sidebar visually consistent with the rest of the app's
+// nav icons. The `emoji` field is still kept as a fallback for canvas-based
+// rendering in the graph view (where SVG inlining is impractical).
+const ICON_LERNEN  = '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>';
+const ICON_GESUND  = '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>';
+const ICON_WISSEN  = '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="3"/><rect x="3" y="17" width="18" height="3"/><line x1="6" y1="7" x2="6" y2="17"/><line x1="12" y1="7" x2="12" y2="17"/><line x1="18" y1="7" x2="18" y2="17"/></svg>';
+const ICON_TRADING = '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="14 7 21 7 21 14"/></svg>';
+const ICON_MENSCH  = '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
+const ICON_TECH    = '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>';
+const ICON_KULTUR  = '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>';
+
 const TAG_CATEGORIES = [
-  { id:'lernen',   label:'Lernen & Methoden',     color:'#818cf8', emoji:'📚',
+  { id:'lernen',   label:'Lernen & Methoden',     color:'#818cf8', emoji:'📚', iconSvg: ICON_LERNEN,
     coreLabel:'Methoden',
     tags:['note-taking','lernen','methoden','cornell-notes','longform-writing','5-rs','pyramidenprinzip','scqa'],
     // Business/risk management = topic-focused content → unter Lernen
     gardenTypes:['Methode','Education','Prompt','MasterPromp','Concept','Article','Business','risk management'] },
-  { id:'gesund',   label:'Gesundheit',             color:'#34d399', emoji:'💚',
+  { id:'gesund',   label:'Gesundheit',             color:'#34d399', emoji:'💚', iconSvg: ICON_GESUND,
     coreLabel:'Themen',
     tags:['gesundheit','ernaehrung','gewichtsabnahme','insulin','hormone','low-carb'],
     gardenTypes:['Health','Diet','Disease'] },
-  { id:'wissen',   label:'Geschichte & Wissen',    color:'#f472b6', emoji:'🏛️',
+  { id:'wissen',   label:'Geschichte & Wissen',    color:'#f472b6', emoji:'🏛️', iconSvg: ICON_WISSEN,
     coreLabel:'Themen',
     tags:['philosophie','geschichte','thales','vorsokratiker','antike',
           'religionen','christentum','buddhismus','mythologie','griechenland','rom'],
     gardenTypes:['Place','Religion','Politics','Event','Military','Science'] },
-  { id:'trading',  label:'Trading & Märkte',       color:'#fbbf24', emoji:'📈',
+  { id:'trading',  label:'Trading & Märkte',       color:'#fbbf24', emoji:'📈', iconSvg: ICON_TRADING,
     coreLabel:'Indikatoren',
     tags:['chartanalyse','trading','technische-analyse','rsi','fibonacci',
           'marktanalyse','ai','investitionen'],
     // Elliot Wellen = wave theory → Trading
     gardenTypes:['Elliot Wellen'] },
-  { id:'menschen', label:'Menschen & Organisationen', color:'#60a5fa', emoji:'👥',
+  { id:'menschen', label:'Menschen & Organisationen', color:'#60a5fa', emoji:'👥', iconSvg: ICON_MENSCH,
     coreLabel:'Allgemein',
     tags:[],
     // Person + Persons merge to "Personen"; Jensen Huang is itself a Person → keep under Persons via merge
     gardenTypes:['Person','Persons','Organization','Relationships','Jensen Huang'] },
-  { id:'tech',     label:'Tech & Software',        color:'#a78bfa', emoji:'💻',
+  { id:'tech',     label:'Tech & Software',        color:'#a78bfa', emoji:'💻', iconSvg: ICON_TECH,
     coreLabel:'Allgemein',
     tags:[],
     gardenTypes:['Software Application','Product','Web Site','Index','Work'] },
-  { id:'kultur',   label:'Kultur & Medien',        color:'#fb923c', emoji:'🎬',
+  { id:'kultur',   label:'Kultur & Medien',        color:'#fb923c', emoji:'🎬', iconSvg: ICON_KULTUR,
     coreLabel:'Schreiben & Notizen',
     tags:['longform-writing'],
     gardenTypes:['Book','Book Series','Movie','Movie Series','TV Series','TV Episode',
@@ -3424,8 +3727,8 @@ function buildTagTree() {
     group.innerHTML = `
       <div class="tag-group-header" onclick="toggleTagGroup(this, '${cat.id}')" title="${escapeHtml(cat.label)}">
         <div class="tag-dot" style="background:${cat.color}"></div>
-        <span class="tag-group-label">${cat.emoji} ${escapeHtml(cat.label)}</span>
-        <span class="tag-cat-emoji" aria-hidden="true">${cat.emoji}</span>
+        <span class="tag-group-label"><span class="tag-cat-svg" style="color:${cat.color}">${cat.iconSvg}</span> ${escapeHtml(cat.label)}</span>
+        <span class="tag-cat-svg-collapsed" aria-hidden="true" style="color:${cat.color}">${cat.iconSvg}</span>
         ${tagCountHtml(total, [...allMainTags], cat.gardenTypes)}
         <span class="tag-arrow">›</span>
       </div>
@@ -4014,11 +4317,15 @@ function setView(view, filter) {
   document.getElementById('list-view').style.display = view === 'list' ? 'flex' : 'none';
   document.getElementById('graph-view').style.display = view === 'graph' ? 'flex' : 'none';
   document.getElementById('chat-view').style.display = view === 'chat' ? 'flex' : 'none';
+  const fcv = document.getElementById('flashcards-view');
+  if (fcv) fcv.style.display = view === 'flashcards' ? 'block' : 'none';
   // Topbar view buttons removed — left-sidebar nav owns the active state now.
   document.getElementById('vbtn-list')?.classList.toggle('active', view === 'list');
   document.getElementById('vbtn-graph')?.classList.toggle('active', view === 'graph');
   document.getElementById('vbtn-chat')?.classList.toggle('active', view === 'chat');
-  updateNavActive(view === 'list' ? 'nav-all' : view === 'graph' ? 'nav-graph' : 'nav-chat');
+  const navMap = { list: 'nav-all', graph: 'nav-graph', chat: 'nav-chat', flashcards: 'nav-flashcards' };
+  updateNavActive(navMap[view] || 'nav-all');
+  if (view === 'flashcards' && typeof renderFcDeckList === 'function') renderFcDeckList();
   document.getElementById('vbtn-settings')?.classList.toggle('visible', view === 'graph');
 
   // Sidebar swap: tags in list/graph view, chat history in chat view
@@ -8903,6 +9210,433 @@ for (const id of Object.keys(ENTRY_LANG_OVERRIDES)) {
   const m = opt.getAttribute('onclick').match(/selectModel\('[^']+',\s*'([^']+)'/);
   if (m) document.getElementById('model-label').textContent = m[1];
 })();
+
+// ──────────────────────────────────────────────────────────────
+// Lernkasten / Flashcards
+// ──────────────────────────────────────────────────────────────
+// Decks live in localStorage 'flashDecks'; each deck holds an array of
+// inline card objects (we don't split cards into a separate store because
+// the dataset is small). Per-deck progress is computed on-the-fly from the
+// cards' Leitner-box state.
+//
+// Card schema:
+//   { id, front, back, image?, sourceEntryId?, relatedEntryIds: [],
+//     box: 1..5, seen: 0, correct: 0, incorrect: 0, lastReview: null,
+//     nextReview: null }
+//
+// Leitner intervals (in days): box 1 = today (1d), 2 = 3d, 3 = 7d,
+//   4 = 14d, 5 = 30d. Right answer → +1 box (max 5). Wrong → back to 1.
+
+let FLASH_DECKS = [];
+try { FLASH_DECKS = JSON.parse(localStorage.getItem('flashDecks') || '[]'); } catch(_) {}
+function saveFlashDecks() {
+  try { localStorage.setItem('flashDecks', JSON.stringify(FLASH_DECKS)); } catch(_) {}
+}
+
+const FC_BOX_INTERVAL_DAYS = [0, 1, 3, 7, 14, 30];  // box 0 unused; box 1..5
+
+let _fcSession = null;  // { deckId, queue: [cardId], idx: 0, correct: 0, wrong: 0 }
+let _fcModalSourceTab = 'category';
+let _fcSelectedNoteId = null;
+
+function fcModeSet(mode) {
+  const host = document.getElementById('flashcards-host');
+  if (!host) return;
+  host.classList.remove('fc-mode-decks', 'fc-mode-study', 'fc-mode-print');
+  host.classList.add('fc-mode-' + mode);
+}
+
+// ── Deck list / overview ─────────────────────────────────────
+function renderFcDeckList() {
+  const grid = document.getElementById('fc-decks-grid');
+  const stats = document.getElementById('fc-global-stats');
+  if (!grid || !stats) return;
+  fcModeSet('decks');
+
+  // Global stats: total decks, cards mastered (box 5), accuracy avg
+  let totalCards = 0, masteredCards = 0, totalSeen = 0, totalCorrect = 0;
+  for (const d of FLASH_DECKS) {
+    for (const c of d.cards) {
+      totalCards++;
+      if (c.box >= 5) masteredCards++;
+      totalSeen += c.seen || 0;
+      totalCorrect += c.correct || 0;
+    }
+  }
+  const accuracy = totalSeen ? Math.round((totalCorrect / totalSeen) * 100) : 0;
+  stats.innerHTML = `
+    <span><strong>${FLASH_DECKS.length}</strong> Stapel</span>
+    <span><strong>${totalCards}</strong> Karten</span>
+    <span><strong>${masteredCards}</strong> gemeistert</span>
+    <span><strong>${accuracy}%</strong> Trefferquote</span>`;
+
+  if (!FLASH_DECKS.length) {
+    grid.innerHTML = `
+      <div class="fc-empty" style="grid-column:1/-1">
+        <div class="fc-empty-title">Noch keine Lernkartenstapel</div>
+        <div class="fc-empty-sub">Klick oben auf „Neuer Lernkartenstapel" — wähle einen Hauptordner oder eine Notiz, und Claude erstellt dir einen Stapel mit Q&amp;A-Karten.</div>
+      </div>`;
+    return;
+  }
+
+  grid.innerHTML = FLASH_DECKS.map(d => {
+    const cat = TAG_CATEGORIES.find(c => c.id === d.categoryId);
+    const color = cat ? cat.color : 'var(--accent)';
+    const total = d.cards.length;
+    const mastered = d.cards.filter(c => (c.box || 1) >= 5).length;
+    const seen = d.cards.reduce((s, c) => s + (c.seen || 0), 0);
+    const correct = d.cards.reduce((s, c) => s + (c.correct || 0), 0);
+    const acc = seen ? Math.round((correct / seen) * 100) : 0;
+    const dueNow = d.cards.filter(c => isFcCardDue(c)).length;
+    const pct = total ? Math.round((mastered / total) * 100) : 0;
+    return `<div class="fc-deck-card" style="--cat-color:${color}" onclick="startFcStudy('${d.id}')">
+      <div class="fc-deck-name">${escapeHtml(d.name)}</div>
+      <div class="fc-deck-source">${escapeHtml(d.sourceLabel || '')} · ${escapeHtml(d.lang ? d.lang.toUpperCase() : 'DE')} · ${total} Karten</div>
+      <div class="fc-deck-stats">
+        <span title="Karten heute fällig">📅 ${dueNow} fällig</span>
+        <span title="Karten in Box 5">★ ${mastered}/${total}</span>
+        <span title="Trefferquote">${acc}%</span>
+      </div>
+      <div class="fc-deck-progress-bar"><div class="fc-deck-progress-fill" style="width:${pct}%"></div></div>
+      <div class="fc-deck-actions">
+        <button class="fc-btn fc-btn-ghost" onclick="event.stopPropagation(); openFcPrintViewForDeck('${d.id}')">Drucken</button>
+        <button class="fc-btn fc-btn-ghost" onclick="event.stopPropagation(); deleteFcDeck('${d.id}')">Löschen</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function deleteFcDeck(deckId) {
+  const d = FLASH_DECKS.find(x => x.id === deckId);
+  if (!d) return;
+  if (!confirm(`Stapel „${d.name}" wirklich löschen? Lernfortschritt geht verloren.`)) return;
+  FLASH_DECKS = FLASH_DECKS.filter(x => x.id !== deckId);
+  saveFlashDecks();
+  renderFcDeckList();
+}
+
+function isFcCardDue(card) {
+  if (!card.nextReview) return true;
+  return new Date(card.nextReview) <= new Date();
+}
+
+// ── Deck creation modal ──────────────────────────────────────
+function openFcCreateModal() {
+  document.getElementById('fc-create-modal').classList.add('visible');
+  document.getElementById('fc-deck-name').value = '';
+  document.getElementById('fc-create-status').textContent = '';
+  // Populate the category dropdown
+  const sel = document.getElementById('fc-source-category');
+  sel.innerHTML = TAG_CATEGORIES.map(c => `<option value="${c.id}">${escapeHtml(c.label)}</option>`).join('');
+  switchFcSourceTab('category');
+  setTimeout(() => document.getElementById('fc-deck-name').focus(), 50);
+}
+
+function closeFcCreateModal() {
+  document.getElementById('fc-create-modal').classList.remove('visible');
+  _fcSelectedNoteId = null;
+}
+
+function switchFcSourceTab(tab) {
+  _fcModalSourceTab = tab;
+  document.querySelectorAll('.fc-source-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  document.getElementById('fc-source-category-row').style.display = tab === 'category' ? 'block' : 'none';
+  document.getElementById('fc-source-note-row').style.display = tab === 'note' ? 'block' : 'none';
+  if (tab === 'note') renderFcNoteSearch('');
+}
+
+function renderFcNoteSearch(q) {
+  const wrap = document.getElementById('fc-source-note-results');
+  if (!wrap) return;
+  const ql = (q || '').toLowerCase().trim();
+  const candidates = ENTRIES.filter(e => !ql || (e.title || '').toLowerCase().includes(ql)).slice(0, 30);
+  wrap.innerHTML = candidates.map(e =>
+    `<div class="fc-note-search-result ${_fcSelectedNoteId === e.id ? 'selected' : ''}" onclick="selectFcNote(${e.id})">
+      ${e.icon} ${escapeHtml(e.title)}
+    </div>`
+  ).join('') || '<div class="fc-note-search-result" style="color:var(--text-3)">Keine Treffer.</div>';
+}
+
+function selectFcNote(id) {
+  _fcSelectedNoteId = id;
+  renderFcNoteSearch(document.getElementById('fc-source-note-search').value);
+}
+
+async function createFcDeck() {
+  const name = document.getElementById('fc-deck-name').value.trim();
+  const count = Math.max(3, Math.min(40, parseInt(document.getElementById('fc-deck-count').value, 10) || 10));
+  const status = document.getElementById('fc-create-status');
+  const btn = document.getElementById('fc-create-btn');
+  if (!name) { status.textContent = 'Bitte einen Namen eingeben.'; return; }
+
+  let sourceText = '';
+  let sourceEntries = [];
+  let sourceLabel = '';
+  let categoryId = null;
+  if (_fcModalSourceTab === 'category') {
+    const catId = document.getElementById('fc-source-category').value;
+    const cat = TAG_CATEGORIES.find(c => c.id === catId);
+    if (!cat) { status.textContent = 'Kategorie nicht gefunden.'; return; }
+    categoryId = catId;
+    sourceLabel = '📁 ' + cat.label;
+    sourceEntries = ENTRIES.filter(e =>
+      (e.topics || []).some(t => (cat.tags || []).includes(t))
+      || (cat.gardenTypes || []).includes(e.garden_type)
+    ).slice(0, 30);  // cap so the prompt stays bounded
+  } else {
+    if (!_fcSelectedNoteId) { status.textContent = 'Bitte eine Notiz auswählen.'; return; }
+    const e = ENTRIES.find(x => x.id === _fcSelectedNoteId);
+    if (!e) { status.textContent = 'Notiz nicht gefunden.'; return; }
+    sourceLabel = '📄 ' + e.title;
+    sourceEntries = [e];
+  }
+  if (!sourceEntries.length) { status.textContent = 'Keine Inhalte in der gewählten Quelle.'; return; }
+
+  sourceText = sourceEntries.map(e =>
+    `### ${e.title} (id=${e.id})\n${e.preview || e.detailed || e.body || ''}`
+  ).join('\n\n');
+
+  const lang = getPref('translationLang') || 'de';
+  const langName = LANG_NAMES[lang] || 'Deutsch';
+
+  status.textContent = 'Claude erstellt Karten…';
+  btn.disabled = true;
+
+  try {
+    const sys = [
+      `Du erstellst aus dem unten gegebenen Material einen Lernkartenstapel mit ${count} Q&A-Karten.`,
+      `WICHTIG: Antworte AUSSCHLIESSLICH mit gültigem JSON, KEIN Markdown, kein Einleitungstext.`,
+      `Sprache der Karten: ${langName}.`,
+      `Format: ein JSON-Array mit ${count} Objekten der Form:`,
+      `[{ "front": "Kurze, klare Frage", "back": "Knappe, präzise Antwort (1-3 Sätze)", "sourceId": <id-der-quell-karte> }]`,
+      `Regeln:`,
+      `- Jede Karte testet EINEN Fakt oder ein Konzept`,
+      `- Frage ist konkret (kein "Was weißt du über X?")`,
+      `- Antwort steht IM gegebenen Material`,
+      `- Verwende sourceId aus den (id=…)-Markern, damit das Frontend zur Quell-Karte verlinken kann`,
+      `- Variiere die Schwierigkeit: einfache Definitionen, Anwendungsfragen, Vergleichsfragen`,
+    ].join('\n');
+
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: localStorage.getItem('selectedModel') || 'claude-haiku-4-5',
+        system: sys,
+        messages: [{ role: 'user', content: 'Material:\n\n' + sourceText }],
+        max_tokens: 3000,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error?.message || data.error || `HTTP ${res.status}`);
+    const txt = (data.content || []).filter(c => c.type === 'text').map(c => c.text).join('').trim();
+    // Strip any accidental markdown fences
+    const jsonStr = txt.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
+    let cards;
+    try {
+      cards = JSON.parse(jsonStr);
+    } catch (e) {
+      throw new Error('Claude lieferte kein gültiges JSON: ' + e.message);
+    }
+    if (!Array.isArray(cards) || !cards.length) throw new Error('Leeres Karten-Array');
+
+    const now = new Date().toISOString();
+    const deck = {
+      id: 'deck-' + Date.now(),
+      name,
+      sourceType: _fcModalSourceTab,
+      categoryId,
+      sourceLabel,
+      lang,
+      createdAt: now,
+      cards: cards.map((c, i) => {
+        const sourceId = parseInt(c.sourceId, 10);
+        const sourceEntry = sourceId ? ENTRIES.find(e => e.id === sourceId) : null;
+        // Image: prefer Wikidata thumbnail, then Wikipedia portrait, then null.
+        const image = sourceEntry
+          ? (WIKIDATA_CACHE[sourceEntry.id]?.image || sourceEntry.portraitUrl || GARDEN_ENRICH[sourceEntry.id]?.thumbnail || null)
+          : null;
+        return {
+          id: 'card-' + Date.now() + '-' + i,
+          front: c.front || '',
+          back:  c.back  || '',
+          image,
+          sourceEntryId: sourceEntry ? sourceEntry.id : null,
+          relatedEntryIds: [],
+          box: 1, seen: 0, correct: 0, incorrect: 0,
+          lastReview: null, nextReview: null,
+        };
+      }).filter(c => c.front && c.back),
+    };
+
+    FLASH_DECKS.unshift(deck);
+    saveFlashDecks();
+    closeFcCreateModal();
+    renderFcDeckList();
+  } catch (err) {
+    status.textContent = 'Fehler: ' + (err.message || err);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ── Study mode ────────────────────────────────────────────────
+function startFcStudy(deckId) {
+  const deck = FLASH_DECKS.find(d => d.id === deckId);
+  if (!deck) return;
+  // Build a queue: due cards first (Leitner), then cards never seen, then everything.
+  const due = deck.cards.filter(c => isFcCardDue(c));
+  const queue = due.length ? due : deck.cards.slice();  // if nothing's due, review everything
+  if (!queue.length) return;
+  _fcSession = { deckId, queue: queue.map(c => c.id), idx: 0, correct: 0, wrong: 0, total: queue.length };
+  fcModeSet('study');
+  renderFcStudyCard();
+}
+
+function exitFcStudy() {
+  _fcSession = null;
+  renderFcDeckList();
+}
+
+function getFcCurrentCard() {
+  if (!_fcSession) return null;
+  const deck = FLASH_DECKS.find(d => d.id === _fcSession.deckId);
+  if (!deck) return null;
+  const cardId = _fcSession.queue[_fcSession.idx];
+  return deck.cards.find(c => c.id === cardId);
+}
+
+function renderFcStudyCard() {
+  const card = getFcCurrentCard();
+  const cardEl = document.getElementById('fc-card');
+  const front = document.getElementById('fc-card-front');
+  const back  = document.getElementById('fc-card-back');
+  const prog  = document.getElementById('fc-study-progress');
+  if (!cardEl || !front || !back) return;
+
+  // End of session → show summary instead of a card.
+  if (!card) {
+    const s = _fcSession;
+    const acc = s.total ? Math.round((s.correct / s.total) * 100) : 0;
+    cardEl.parentElement.innerHTML = `
+      <div class="fc-session-done">
+        <h2>Session geschafft!</h2>
+        <p>Du hast ${s.total} Karten durchgearbeitet.</p>
+        <div class="fc-session-stats">
+          <div class="fc-session-stat"><div class="fc-session-stat-num" style="color:#34d399">${s.correct}</div><div class="fc-session-stat-lbl">Richtig</div></div>
+          <div class="fc-session-stat"><div class="fc-session-stat-num" style="color:#ef4444">${s.wrong}</div><div class="fc-session-stat-lbl">Falsch</div></div>
+          <div class="fc-session-stat"><div class="fc-session-stat-num">${acc}%</div><div class="fc-session-stat-lbl">Quote</div></div>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:center">
+          <button class="fc-btn fc-btn-ghost" onclick="exitFcStudy()">Zurück zu den Stapeln</button>
+          <button class="fc-btn fc-btn-primary" onclick="startFcStudy('${s.deckId}')">Nochmal lernen</button>
+        </div>
+      </div>`;
+    document.querySelector('.fc-study-controls').style.display = 'none';
+    return;
+  }
+
+  cardEl.classList.remove('flipped');
+  prog.textContent = `Karte ${_fcSession.idx + 1} von ${_fcSession.total} · Box ${card.box}/5`;
+
+  const img = card.image
+    ? `<img class="fc-card-image" src="${escapeHtml(card.image)}" alt="" onerror="this.style.display='none'">` : '';
+  front.innerHTML = `
+    ${img}
+    <div class="fc-card-question">${escapeHtml(card.front)}</div>
+    <div class="fc-card-flip-hint">Klicken zum Umdrehen</div>`;
+
+  // Source link: clickable to open the source entry. Related entry chips
+  // are derived from the source entry's tags (cards mentioning related
+  // topics get a chip per related entry).
+  const sourceEntry = card.sourceEntryId ? ENTRIES.find(e => e.id === card.sourceEntryId) : null;
+  let related = '';
+  if (sourceEntry) {
+    const relatedEntries = ENTRIES
+      .filter(e => e.id !== sourceEntry.id
+        && (e.topics || []).some(t => (sourceEntry.topics || []).includes(t)))
+      .slice(0, 4);
+    if (relatedEntries.length) {
+      related = `<div class="fc-card-related">${relatedEntries.map(e =>
+        `<span class="fc-card-related-chip" onclick="event.stopPropagation(); setView('list'); setTimeout(()=>openDetail(ENTRIES.find(x=>x.id===${e.id})), 60)" title="${escapeHtml(e.title)}">${e.icon} ${escapeHtml(e.title.slice(0, 22))}${e.title.length > 22 ? '…' : ''}</span>`
+      ).join('')}</div>`;
+    }
+  }
+  const sourceLink = sourceEntry
+    ? `<div class="fc-card-source" onclick="event.stopPropagation(); setView('list'); setTimeout(()=>openDetail(ENTRIES.find(x=>x.id===${sourceEntry.id})), 60)">📎 Quelle: ${escapeHtml(sourceEntry.title)}</div>`
+    : '';
+
+  back.innerHTML = `
+    <div class="fc-card-answer">${escapeHtml(card.back).replace(/\n/g, '<br>')}</div>
+    ${related}
+    ${sourceLink}
+    <div class="fc-card-flip-hint">Klicken zum Umdrehen</div>`;
+
+  document.querySelector('.fc-study-controls').style.display = 'flex';
+}
+
+function flipFcCard() {
+  const cardEl = document.getElementById('fc-card');
+  if (cardEl) cardEl.classList.toggle('flipped');
+}
+
+function markFcCard(correct) {
+  const card = getFcCurrentCard();
+  if (!card) return;
+  const now = new Date();
+  card.seen = (card.seen || 0) + 1;
+  if (correct) {
+    card.correct = (card.correct || 0) + 1;
+    card.box = Math.min(5, (card.box || 1) + 1);
+    _fcSession.correct++;
+  } else {
+    card.incorrect = (card.incorrect || 0) + 1;
+    card.box = 1;  // reset
+    _fcSession.wrong++;
+  }
+  card.lastReview = now.toISOString();
+  const interval = FC_BOX_INTERVAL_DAYS[card.box] || 1;
+  card.nextReview = new Date(now.getTime() + interval * 24 * 60 * 60 * 1000).toISOString();
+  saveFlashDecks();
+  _fcSession.idx++;
+  renderFcStudyCard();
+}
+
+// ── Print view ───────────────────────────────────────────────
+function openFcPrintViewForDeck(deckId) {
+  if (_fcSession) {
+    // Already in study — keep the current deck
+  } else {
+    _fcSession = { deckId };
+  }
+  openFcPrintView();
+}
+
+function openFcPrintView() {
+  const deckId = _fcSession?.deckId;
+  if (!deckId) return;
+  const deck = FLASH_DECKS.find(d => d.id === deckId);
+  if (!deck) return;
+  fcModeSet('print');
+  const grid = document.getElementById('fc-print-grid');
+  grid.innerHTML = deck.cards.map(c => {
+    const src = c.sourceEntryId ? ENTRIES.find(e => e.id === c.sourceEntryId) : null;
+    return `<div class="fc-print-card">
+      <div class="fc-pc-q">${escapeHtml(c.front)}</div>
+      <div class="fc-pc-a">${escapeHtml(c.back).replace(/\n/g, '<br>')}</div>
+      ${src ? `<div class="fc-pc-meta">Quelle: ${escapeHtml(src.title)}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function exitFcPrintView() {
+  if (_fcSession?.queue) {
+    fcModeSet('study');
+  } else {
+    _fcSession = null;
+    renderFcDeckList();
+  }
+}
 
 // ── PWA: register service worker + handle Web Share Target ──────────
 if ('serviceWorker' in navigator) {
