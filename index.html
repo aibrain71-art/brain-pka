@@ -2011,10 +2011,13 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
               <span style="font-size:9px;opacity:.6">▾</span>
             </button>
             <div id="model-menu" class="model-menu">
-              <div class="model-menu-hint">💡 Non-Anthropic models need an API key in your <code>.env</code></div>
-              <div class="model-option active" onclick="selectModel('claude-sonnet-4-6','Sonnet',this)">
-                <span class="model-icon">🤖</span> Claude Sonnet 4.6
+              <div class="model-menu-hint">💡 Claude-Modelle laufen über die /api/chat-Function (ANTHROPIC_API_KEY in Cloudflare-Pages-Settings). Andere brauchen eigenen Key.</div>
+              <div class="model-option active" onclick="selectModel('claude-haiku-4-5','Haiku',this)">
+                <span class="model-icon">⚡</span> Claude Haiku 4.5
                 <span class="model-badge">Default</span>
+              </div>
+              <div class="model-option" onclick="selectModel('claude-sonnet-4-6','Sonnet',this)">
+                <span class="model-icon">🤖</span> Claude Sonnet 4.6
               </div>
               <div class="model-option" onclick="selectModel('claude-opus-4-5','Opus',this)">
                 <span class="model-icon">🧠</span> Claude Opus 4.5
@@ -5663,7 +5666,8 @@ function addContext(id) {
 }
 
 // ── Model Selector ─────────────────────────────────────────────
-let selectedModel = 'claude-sonnet-4-6';
+// Persisted in localStorage so the chosen model survives reloads + cloud-syncs.
+let selectedModel = localStorage.getItem('selectedModel') || 'claude-haiku-4-5';
 
 function toggleModelMenu(evt) {
   if (evt) evt.stopPropagation();
@@ -5672,6 +5676,7 @@ function toggleModelMenu(evt) {
 
 function selectModel(modelId, label, el) {
   selectedModel = modelId;
+  localStorage.setItem('selectedModel', modelId);
   document.getElementById('model-label').textContent = label;
   document.querySelectorAll('.model-option').forEach(o => o.classList.remove('active'));
   el.classList.add('active');
@@ -5727,7 +5732,7 @@ function generateAnswer(question, contextEntries) {
   };
 }
 
-function sendChatMessage() {
+async function sendChatMessage() {
   const input = document.getElementById('chat-input');
   const text = input.value.trim();
   if (!text) return;
@@ -5744,18 +5749,101 @@ function sendChatMessage() {
   chat.messages.push({ role: 'user', content: escapeHtml(text) + ctxLabel });
   if (chat.messages.length === 1) chat.title = text.slice(0, 50);
 
-  // Generate answer
-  const answer = generateAnswer(text, ctxEntries);
-  chat.messages.push({ role: 'ai', content: answer.content, citations: answer.citations });
-
-  // Reset input
+  // Reset input early so the user sees the placeholder immediately.
   input.value = '';
   input.style.height = 'auto';
   chatContextEntries = [];
-  saveChats();
-  renderChatHistory();
-  renderChatThread();
-  renderContextChips();
+
+  // Claude models → real LLM call via /api/chat (Cloudflare Pages Function).
+  // Non-Claude models → still placeholder local search until a key is wired.
+  if (selectedModel.startsWith('claude-')) {
+    chat.messages.push({ role: 'ai', content: '⏳ Denke …', citations: [] });
+    saveChats(); renderChatHistory(); renderChatThread(); renderContextChips();
+    try {
+      const reply = await callClaudeChat(text, ctxEntries, chat);
+      chat.messages[chat.messages.length - 1] = reply;
+    } catch (err) {
+      chat.messages[chat.messages.length - 1] = {
+        role: 'ai',
+        content: `<em style="color:#e11d48">Fehler beim API-Call: ${escapeHtml(err.message || String(err))}</em>`,
+        citations: [],
+      };
+    }
+    saveChats(); renderChatThread();
+    return;
+  }
+
+  // Fallback: existing local-keyword answer
+  const answer = generateAnswer(text, ctxEntries);
+  chat.messages.push({ role: 'ai', content: answer.content, citations: answer.citations });
+  saveChats(); renderChatHistory(); renderChatThread(); renderContextChips();
+}
+
+// Calls the /api/chat Pages Function. Builds a system prompt that grounds
+// Claude in the user's pinned context + top keyword-search hits, so answers
+// stay rooted in the personal knowledge base instead of hallucinating.
+async function callClaudeChat(userText, ctxEntries, chat) {
+  const searched = searchKnowledge(userText, 5);
+  const seen = new Set();
+  const grounding = [...ctxEntries, ...searched]
+    .filter(e => { if (!e || seen.has(e.id)) return false; seen.add(e.id); return true; })
+    .slice(0, 8);
+
+  const groundingText = grounding.length
+    ? grounding.map(e => `### ${e.title} (${e.date})\nTags: ${(e.topics || []).join(', ')}\n${e.preview || e.detailed || e.body || ''}`).join('\n\n')
+    : '(Keine relevanten Einträge im Wissensgarten gefunden.)';
+
+  const systemPrompt = [
+    'Du bist Larry, ein persönlicher Wissens-Assistent für den Nutzer.',
+    'Antworte in der Sprache der Frage (meist Deutsch).',
+    'Stütze dich primär auf die folgenden Notizen und Garden-Karten aus dem persönlichen Wissensgarten.',
+    'Wenn die Notizen die Frage nicht abdecken, sag das klar und gib eine kurze allgemeine Antwort.',
+    'Sei knapp und konkret. Maximal 4 kurze Absätze.',
+    '',
+    '## Wissensgarten-Auszug',
+    '',
+    groundingText,
+  ].join('\n');
+
+  // Reuse the last few turns from THIS chat for follow-up coherence.
+  const history = (chat.messages || [])
+    .filter(m => m.role === 'user' || m.role === 'ai')
+    .slice(-8, -1)  // exclude the just-pushed placeholder
+    .map(m => ({ role: m.role === 'ai' ? 'assistant' : 'user', content: stripHtml(m.content) }));
+
+  const messages = [...history, { role: 'user', content: userText }];
+
+  const res = await fetch('/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: selectedModel,
+      system: systemPrompt,
+      messages,
+      max_tokens: 1024,
+    }),
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.error?.message || data.error || `HTTP ${res.status}`);
+  }
+
+  const reply = (data.content || []).filter(c => c.type === 'text').map(c => c.text).join('\n').trim();
+  return {
+    role: 'ai',
+    content: escapeHtml(reply || '(Leere Antwort)').replace(/\n/g, '<br>'),
+    citations: grounding.map(e => e.id),
+  };
+}
+
+// Strip HTML tags from a stored message so we can replay it as plain text
+// to the LLM (the chat history is rendered with HTML, but the API wants text).
+function stripHtml(s) {
+  if (!s) return '';
+  const tmp = document.createElement('div');
+  tmp.innerHTML = s;
+  return (tmp.textContent || tmp.innerText || '').trim();
 }
 
 function autoGrowChatInput(el) {
@@ -7997,6 +8085,18 @@ applyLanguage();
 loadGarden();
 applyLogo();  // re-run after avatar element exists in topbar
 _initCloudSync();  // restore OneDrive connection if previously signed in
+
+// Sync the model dropdown UI to whatever was loaded from localStorage —
+// otherwise the menu shows "Haiku active" while a different model is selected.
+(() => {
+  const opt = document.querySelector(`.model-option[onclick*="'${selectedModel}'"]`);
+  if (!opt) return;
+  document.querySelectorAll('.model-option').forEach(o => o.classList.remove('active'));
+  opt.classList.add('active');
+  // Pull the visible label from the option's text (e.g. "Haiku", "Sonnet").
+  const m = opt.getAttribute('onclick').match(/selectModel\('[^']+',\s*'([^']+)'/);
+  if (m) document.getElementById('model-label').textContent = m[1];
+})();
 
 // ── PWA: register service worker + handle Web Share Target ──────────
 if ('serviceWorker' in navigator) {
