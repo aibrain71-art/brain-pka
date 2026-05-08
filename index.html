@@ -4540,14 +4540,21 @@ function updateTagsHeaderAnnotation() {
 // ── Filters & Search ──────────────────────────────────────────
 function applyFilters() {
   const q = document.getElementById('search').value.toLowerCase();
+  // When the user is actively searching, ignore the LIST_MODE filter so a
+  // hit in "Garden" still shows up while in "Standard" mode (and vice
+  // versa). Without this the search pretends notes don't exist whenever
+  // they live in a mode the user isn't currently looking at.
+  const activeSearch = !!q.trim();
   let filtered = ENTRIES.filter(e => {
-    // Mode-based type filter:
+    // Mode-based type filter (skipped during search so nothing's hidden):
     //   'standard' → notes only, garden hidden
     //   'garden'   → garden cards only, notes hidden
     //   'all'      → both visible
-    if (LIST_MODE === 'standard' && e.type === 'garden') return false;
-    if (LIST_MODE === 'garden'   && e.type !== 'garden') return false;
-    if (e.type === 'garden' && !GARDEN_VISIBLE) return false;
+    if (!activeSearch) {
+      if (LIST_MODE === 'standard' && e.type === 'garden') return false;
+      if (LIST_MODE === 'garden'   && e.type !== 'garden') return false;
+      if (e.type === 'garden' && !GARDEN_VISIBLE) return false;
+    }
     let match = true;
     if (activeTagFilter) {
       if (activeTagFilter.type === 'tag') match = e.topics.includes(activeTagFilter.tag);
@@ -7928,9 +7935,13 @@ function initGraph() {
   // ── Performance: nur Knoten mit Verbindungen rendern. Garden nur wenn
   // populär (in mehreren Karten erwähnt) ODER explizit gepushed. Das hält
   // den Graph bei ~50 Knoten statt ~1700 → flüssig statt schwerfällig.
-  // Visible entries are only computed/shown at the deepest level (L4).
+  // Visible entries are only computed/shown at the deepest level (L4)
+  // — UNLESS the user is searching, in which case we always inject the
+  // matching entries so the search bar isn't useless at lower depths.
   let visibleEntries = [];
-  if (GRAPH_LEVEL >= 4) {
+  const searchQ = (GRAPH_SETTINGS.filter || '').toLowerCase().trim();
+  const includeEntriesForSearch = !!searchQ && GRAPH_LEVEL < 4;
+  if (GRAPH_LEVEL >= 4 || includeEntriesForSearch) {
     const noteEntries = ENTRIES.filter(e => e.type !== 'garden');
     if (!GARDEN_VISIBLE) {
       visibleEntries = noteEntries;
@@ -7956,6 +7967,25 @@ function initGraph() {
           : TAG_CATEGORIES.find(c => (e.topics||[]).some(t => (c.tags||[]).includes(t)));
         return main && main.id === graphCategoryFilter;
       });
+    }
+    // SEARCH-BOOST mode: when invoked because of a search at level < 4, restrict
+    // the entry set to matches plus a small popularity tail. Keeps the graph
+    // small but always shows what the user is looking for, regardless of slider.
+    if (includeEntriesForSearch) {
+      visibleEntries = visibleEntries.filter(e => {
+        const titleMatch = (e.title || '').toLowerCase().includes(searchQ);
+        const tagMatch = (e.topics || []).some(t => (t||'').toLowerCase().includes(searchQ));
+        return titleMatch || tagMatch;
+      });
+      // Search across the FULL ENTRIES list, even garden cards that were filtered
+      // out for popularity reasons — the user explicitly asked for this title.
+      const extra = ENTRIES.filter(e => {
+        if (visibleEntries.includes(e)) return false;
+        const titleMatch = (e.title || '').toLowerCase().includes(searchQ);
+        const tagMatch = (e.topics || []).some(t => (t||'').toLowerCase().includes(searchQ));
+        return titleMatch || tagMatch;
+      }).slice(0, 60);  // cap to keep things responsive
+      visibleEntries = [...visibleEntries, ...extra];
     }
   }
   const visibleCategories = graphCategoryFilter
