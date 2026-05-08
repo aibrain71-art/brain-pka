@@ -1337,6 +1337,15 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
 .detail-ai-btn:disabled { opacity: 0.7; cursor: wait; }
 .detail-ai-btn.searching svg { animation: detail-ai-spin 1s linear infinite; }
 @keyframes detail-ai-spin { to { transform: rotate(360deg); } }
+/* Undo button (next to the AI search) — same shape but red-tinted on
+   hover to signal "this discards data". Visible only when there's an
+   active manualAiSearch result on the entry. */
+.detail-ai-undo { flex-shrink: 0; width: 32px; height: 32px; border-radius: 8px;
+                   background: var(--surface-2); border: 1px solid var(--border);
+                   color: var(--text-2); cursor: pointer; transition: all .15s;
+                   display: inline-flex; align-items: center; justify-content: center; }
+.detail-ai-undo:hover { background: rgba(239,68,68,.12); color: #ef4444;
+                         border-color: rgba(239,68,68,.4); }
 .detail-meta { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
 .detail-date { font-size: 12px; color: var(--text-3); }
 .detail-tags { display: flex; flex-wrap: wrap; gap: 5px; }
@@ -5621,43 +5630,69 @@ function buildDetailIcon(entry) {
   return escapeHtml(entry.icon || '📄');
 }
 
+// Track what fields manualAiSearch overwrote on the entry, so undo can
+// put them back exactly — including "this entry never had a sourceUrl".
+let WIKI_SEARCH_ORIGINALS = {};
+try { WIKI_SEARCH_ORIGINALS = JSON.parse(localStorage.getItem('wikiSearchOriginals') || '{}'); } catch(_) {}
+function saveWikiSearchOriginals() {
+  try { localStorage.setItem('wikiSearchOriginals', JSON.stringify(WIKI_SEARCH_ORIGINALS)); } catch(_) {}
+}
+
 // Manually trigger an AI-driven Wikipedia lookup for an entry. Works for
 // any entry — personal note OR Garden card. Strategy:
-//   1) If the entry already has a wikipedia.org sourceUrl, refetch via
-//      the existing enrichFromWikipedia path (cache cleared first).
-//   2) Otherwise, search Wikipedia by title in the user's preferred
-//      language; first hit becomes the new sourceUrl, then enrichFromWikipedia
-//      pulls the full extract + thumbnail.
-//   3) When a thumbnail comes back, write it to entry.portraitUrl so the
-//      icon updates everywhere (card list + detail panel + flashcards).
+//   1) Search Wikipedia by title (preferred lang → fallback EN).
+//   2) Show a CONFIRM dialog with the found article title so the user
+//      can accept or reject before anything is written. This prevents
+//      cases like a video clickbait title accidentally getting enriched
+//      with an unrelated Wikipedia entry.
+//   3) On accept: pull the extract + thumbnail, save originals (for undo),
+//      and apply to the entry + GARDEN_ENRICH.
+//   4) clearWikiEnrichment() restores the originals on demand.
 async function manualAiSearch(entryId) {
   const entry = ENTRIES.find(e => e.id === entryId);
   if (!entry) return;
   const btn = document.getElementById('detail-ai-btn-' + entryId);
   if (btn) { btn.classList.add('searching'); btn.disabled = true; }
   try {
-    // Ensure we have a usable Wikipedia URL — search by title if missing.
-    if (!entry.sourceUrl || !entry.sourceUrl.includes('wikipedia.org')) {
-      const lang = (typeof getPref === 'function' ? getPref('translationLang') : null) || (localStorage.getItem('uiLang') || 'de');
-      const q = encodeURIComponent(entry.title);
+    const lang = (typeof getPref === 'function' ? getPref('translationLang') : null) || (localStorage.getItem('uiLang') || 'de');
+    const q = encodeURIComponent(entry.title);
+    let candidateUrl = entry.sourceUrl && entry.sourceUrl.includes('wikipedia.org') ? entry.sourceUrl : null;
+    let candidateTitle = null;
+    let candidateSnippet = null;
+    if (!candidateUrl) {
       const sRes = await fetch(`https://${lang}.wikipedia.org/w/api.php?action=query&list=search&srsearch=${q}&format=json&origin=*&srlimit=1`);
       const sData = await sRes.json();
-      const hit = sData.query?.search?.[0];
+      let hit = sData.query?.search?.[0];
+      let hitLang = lang;
       if (!hit) {
-        // Fall back to English Wikipedia if the user's language has no match
         const sRes2 = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${q}&format=json&origin=*&srlimit=1`);
         const sData2 = await sRes2.json();
-        const hit2 = sData2.query?.search?.[0];
-        if (!hit2) {
-          alert('Kein Wikipedia-Treffer zum Titel „' + entry.title + '" gefunden.');
-          return;
-        }
-        entry.sourceUrl = `https://en.wikipedia.org/wiki/${encodeURIComponent(hit2.title.replace(/ /g, '_'))}`;
-      } else {
-        entry.sourceUrl = `https://${lang}.wikipedia.org/wiki/${encodeURIComponent(hit.title.replace(/ /g, '_'))}`;
+        hit = sData2.query?.search?.[0];
+        hitLang = 'en';
+      }
+      if (!hit) {
+        alert('Kein Wikipedia-Treffer zum Titel „' + entry.title + '" gefunden.');
+        return;
+      }
+      candidateTitle = hit.title;
+      candidateSnippet = (hit.snippet || '').replace(/<[^>]+>/g, '');
+      candidateUrl = `https://${hitLang}.wikipedia.org/wiki/${encodeURIComponent(hit.title.replace(/ /g, '_'))}`;
+      // Confirmation step — let the user reject a poor match BEFORE we save.
+      const msg = `Wikipedia-Treffer:\n\n  „${candidateTitle}"\n\n${candidateSnippet ? candidateSnippet.slice(0, 200) + '…\n\n' : ''}Übernehmen?\n\n(Wenn der Treffer nichts mit deiner Notiz zu tun hat, klick „Abbrechen" — es wird dann NICHTS gespeichert.)`;
+      if (!confirm(msg)) {
+        return;  // user rejected — no writes
       }
     }
-    // Force a fresh fetch (clear cached enrichment so we don't return the stale one)
+    // Save the BEFORE state for undo (only first time we touch this entry).
+    if (!WIKI_SEARCH_ORIGINALS[entry.id]) {
+      WIKI_SEARCH_ORIGINALS[entry.id] = {
+        sourceUrl: entry.sourceUrl || null,
+        portraitUrl: entry.portraitUrl || null,
+      };
+      saveWikiSearchOriginals();
+    }
+    entry.sourceUrl = candidateUrl;
+    // Force a fresh fetch (clear cached enrichment so we don't return a stale one)
     if (typeof GARDEN_ENRICH !== 'undefined' && GARDEN_ENRICH[entry.id]) {
       delete GARDEN_ENRICH[entry.id];
       saveEnrich();
@@ -5665,18 +5700,22 @@ async function manualAiSearch(entryId) {
     const fresh = await enrichFromWikipedia(entry);
     if (!fresh) {
       alert('Wikipedia-Abruf fehlgeschlagen.');
+      // Roll back the sourceUrl override so we don't leave half-applied state
+      entry.sourceUrl = WIKI_SEARCH_ORIGINALS[entry.id].sourceUrl;
+      delete WIKI_SEARCH_ORIGINALS[entry.id];
+      saveWikiSearchOriginals();
       return;
     }
     GARDEN_ENRICH[entry.id] = fresh;
     saveEnrich();
     if (fresh.thumbnail) entry.portraitUrl = fresh.thumbnail;
-    // Refresh the visible icon in the card list AND the detail panel
     if (typeof updateCardIcon === 'function') updateCardIcon(entry);
     const iconEl = document.getElementById('detail-icon-large');
     if (iconEl) iconEl.innerHTML = buildDetailIcon(entry);
-    // Re-render the detail summary so the new Wikipedia block shows up
-    if (selectedEntryId === entry.id) renderSummaryTab(entry);
-    // Also refresh Wikidata cache so the structured-facts block matches
+    // Re-open the entry to refresh ALL parts of the detail panel — the
+    // header (now shows the undo button), the icon, the summary tab, etc.
+    if (selectedEntryId === entry.id) openDetail(entry);
+    // Wikidata cache refresh
     if (typeof fetchWikidataFacts === 'function' && !WIKIDATA_CACHE[entry.id]) {
       fetchWikidataFacts(entry).then(() => { if (selectedEntryId === entry.id) renderSummaryTab(entry); });
     }
@@ -5685,6 +5724,39 @@ async function manualAiSearch(entryId) {
   } finally {
     if (btn) { btn.classList.remove('searching'); btn.disabled = false; }
   }
+}
+
+// Undo a previous manualAiSearch — restores the entry's sourceUrl +
+// portraitUrl to their pre-search values, and clears the cached
+// enrichment + Wikidata data so the summary tab returns to its
+// original look.
+function clearWikiEnrichment(entryId) {
+  const entry = ENTRIES.find(e => e.id === entryId);
+  if (!entry) return;
+  if (!confirm('Wikipedia-Anreicherung verwerfen?\n\nDie Notiz selbst bleibt erhalten — nur die hinzugefügten Wikipedia-Daten und das automatisch gesetzte Bild werden entfernt.')) return;
+  const original = WIKI_SEARCH_ORIGINALS[entry.id];
+  if (original) {
+    if (original.sourceUrl)   entry.sourceUrl   = original.sourceUrl;   else delete entry.sourceUrl;
+    if (original.portraitUrl) entry.portraitUrl = original.portraitUrl; else delete entry.portraitUrl;
+    delete WIKI_SEARCH_ORIGINALS[entry.id];
+    saveWikiSearchOriginals();
+  }
+  if (GARDEN_ENRICH[entry.id]) {
+    delete GARDEN_ENRICH[entry.id];
+    saveEnrich();
+  }
+  if (WIKIDATA_CACHE[entry.id]) {
+    delete WIKIDATA_CACHE[entry.id];
+    saveWikidataCache();
+  }
+  if (typeof updateCardIcon === 'function') updateCardIcon(entry);
+  if (selectedEntryId === entry.id) openDetail(entry);  // re-render header + summary
+}
+
+// Has this entry been touched by the manual AI search? Used by the
+// header to decide whether to show the undo button next to the search.
+function hasManualWikiEnrichment(entryId) {
+  return !!WIKI_SEARCH_ORIGINALS[entryId];
 }
 
 function buildGardenHeader(entry) {
@@ -5710,7 +5782,7 @@ function buildGardenHeader(entry) {
       <div class="garden-video-top">
         ${thumb}
         <div class="garden-video-meta">
-          <h2 class="garden-video-title">${escapeHtml(entry.title)}<button class="detail-ai-btn" id="detail-ai-btn-${entry.id}" onclick="manualAiSearch(${entry.id})" title="AI-Suche: Wikipedia-Daten + Bild aktualisieren" style="margin-left:10px;vertical-align:middle"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><circle cx="11" cy="11" r="2" fill="currentColor"/></svg></button></h2>
+          <h2 class="garden-video-title">${escapeHtml(entry.title)}<button class="detail-ai-btn" id="detail-ai-btn-${entry.id}" onclick="manualAiSearch(${entry.id})" title="AI-Suche: Wikipedia-Daten + Bild aktualisieren (Bestätigung vor dem Speichern)" style="margin-left:10px;vertical-align:middle"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><circle cx="11" cy="11" r="2" fill="currentColor"/></svg></button>${hasManualWikiEnrichment(entry.id) ? `<button class="detail-ai-undo" onclick="clearWikiEnrichment(${entry.id})" title="Wikipedia-Anreicherung verwerfen" style="margin-left:6px;vertical-align:middle"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><polyline points="3 7 8 7 8 12"/><path d="M3 7l3.5 3.5a8 8 0 1 1-1.5 7"/></svg></button>` : ''}</h2>
           ${buildSourceButton(entry)}
         </div>
       </div>
@@ -5802,9 +5874,13 @@ function openDetail(entry) {
       <div class="detail-title-row">
         <div class="detail-icon-large" id="detail-icon-large">${buildDetailIcon(entry)}</div>
         <div class="detail-title" id="detail-title">${escapeHtml(entry.title)}</div>
-        <button class="detail-ai-btn" id="detail-ai-btn-${entry.id}" onclick="manualAiSearch(${entry.id})" title="AI-Suche: Wikipedia-Daten + Bild für diese Notiz holen (oder erneuern)">
+        <button class="detail-ai-btn" id="detail-ai-btn-${entry.id}" onclick="manualAiSearch(${entry.id})" title="AI-Suche: Wikipedia-Daten + Bild für diese Notiz holen (oder erneuern). Vor dem Speichern wirst du um Bestätigung gefragt.">
           <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><circle cx="11" cy="11" r="2" fill="currentColor"/></svg>
         </button>
+        ${hasManualWikiEnrichment(entry.id) ? `
+        <button class="detail-ai-undo" onclick="clearWikiEnrichment(${entry.id})" title="Wikipedia-Anreicherung verwerfen — Original (Bild + Inhalt) wiederherstellen">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><polyline points="3 7 8 7 8 12"/><path d="M3 7l3.5 3.5a8 8 0 1 1-1.5 7"/></svg>
+        </button>` : ''}
       </div>
       <div class="detail-meta" style="flex-wrap:wrap">
         <span class="detail-date" id="detail-date">${fmtDate(entry.date)}</span>
