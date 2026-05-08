@@ -6,9 +6,15 @@
 <title>Larry — Mein Journal</title>
 <!-- PWA: installable on Android (full Web Share Target support) and iOS
      (Add to Home Screen; no share-target on Apple yet). -->
-<link rel="manifest" href="pwa.webmanifest">
+<!-- crossorigin="use-credentials" forces the browser to send the Cloudflare
+     Access auth cookie when fetching the manifest. Without it, Access
+     redirects the manifest fetch to its login page → CORS error → PWA
+     install metadata never reaches the browser. -->
+<link rel="manifest" href="pwa.webmanifest" crossorigin="use-credentials">
 <meta name="theme-color" content="#0d0d0d">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<!-- mobile-web-app-capable replaces the deprecated apple-mobile-web-app-capable -->
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="PKA">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
@@ -2525,13 +2531,28 @@ const CloudSync = {
 };
 
 function _ensureMsal() {
+  // Try multiple CDNs in order — Microsoft's own CDN (alcdn.msauth.net) is
+  // sometimes blocked by ISPs, browser extensions, or corporate firewalls.
+  // jsDelivr / unpkg are reliable backup mirrors of the same npm package.
+  const SOURCES = [
+    'https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.10.0/lib/msal-browser.min.js',
+    'https://unpkg.com/@azure/msal-browser@3.10.0/lib/msal-browser.min.js',
+    'https://alcdn.msauth.net/browser/3.10.0/js/msal-browser.min.js',
+  ];
   return new Promise((resolve, reject) => {
     if (window.msal) return resolve(window.msal);
-    const s = document.createElement('script');
-    s.src = 'https://alcdn.msauth.net/browser/3.10.0/js/msal-browser.min.js';
-    s.onload = () => resolve(window.msal);
-    s.onerror = () => reject(new Error('MSAL.js konnte nicht geladen werden'));
-    document.head.appendChild(s);
+    let i = 0;
+    const tryNext = () => {
+      if (i >= SOURCES.length) {
+        return reject(new Error('MSAL.js konnte von keinem CDN geladen werden (jsDelivr/unpkg/Microsoft alle blockiert?)'));
+      }
+      const s = document.createElement('script');
+      s.src = SOURCES[i++];
+      s.onload = () => window.msal ? resolve(window.msal) : tryNext();
+      s.onerror = () => { console.warn('MSAL CDN failed:', s.src); tryNext(); };
+      document.head.appendChild(s);
+    };
+    tryNext();
   });
 }
 

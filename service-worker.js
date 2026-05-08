@@ -1,7 +1,7 @@
 // PKA Service Worker — gives the app offline-cache + PWA-install capability.
 // Cache-first for our own static files, network-first for everything else
 // (Wikipedia / ElevenLabs / YouTube thumbnails) so live data stays fresh.
-const VERSION = 'pka-v31';
+const VERSION = 'pka-v32';
 const CORE = [
   './index.html',
   './pwa.webmanifest',
@@ -30,7 +30,9 @@ self.addEventListener('fetch', e => {
   // Don't cache POST / share-target submissions or non-GET
   if (e.request.method !== 'GET') return;
   if (sameOrigin) {
-    // Cache-first for our own files
+    // Cache-first for our own files. Always returns a Response — when offline
+    // AND nothing is cached, synthesise a 503 so respondWith() never gets
+    // undefined (which would throw "Failed to convert value to 'Response'").
     e.respondWith(
       caches.match(e.request).then(hit =>
         hit || fetch(e.request).then(res => {
@@ -38,7 +40,10 @@ self.addEventListener('fetch', e => {
           const copy = res.clone();
           caches.open(VERSION).then(c => c.put(e.request, copy)).catch(()=>{});
           return res;
-        }).catch(() => hit /* offline → whatever's in cache */)
+        }).catch(() => hit || new Response('Offline and not cached', {
+          status: 503,
+          headers: { 'Content-Type': 'text/plain' }
+        }))
       )
     );
   }
