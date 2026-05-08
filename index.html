@@ -2929,27 +2929,35 @@ document.getElementById('collapse-btn').addEventListener('click', () => {
   setSidebarCollapsed(!sb.classList.contains('collapsed'));
 });
 
-// Auto-collapse on mouseleave: as soon as the cursor moves outside the sidebar,
-// collapse it. Small delay so brief edge-flickers don't trigger it. Touch
-// devices are excluded — they keep the explicit › button for collapsing.
-(function autoCollapseSidebar() {
+// Default panel state per device:
+//   Desktop (hover: hover, ≥769px): both side panels OPEN by default.
+//     Sidebar starts expanded (already its default), detail panel auto-opens
+//     with the most recent entry. No more auto-collapse on mouseleave —
+//     persistent panels were what the user asked for.
+//   Mobile (touch / narrow viewport): sidebar starts COLLAPSED to save space;
+//     detail panel stays closed (its current default). Both can still be
+//     opened manually via the › button or by tapping a list item.
+(function setupPanelDefaults() {
   const sb = document.getElementById('sidebar');
   if (!sb) return;
-  let leaveTimer = null;
-  sb.addEventListener('mouseleave', () => {
-    if (!window.matchMedia('(hover: hover)').matches) return;  // skip touch
-    if (leaveTimer) clearTimeout(leaveTimer);
-    leaveTimer = setTimeout(() => {
-      if (!sb.classList.contains('collapsed')) setSidebarCollapsed(true);
-    }, 180);
-  });
-  sb.addEventListener('mouseenter', () => {
-    // Cancel pending collapse if cursor re-enters quickly
-    if (leaveTimer) { clearTimeout(leaveTimer); leaveTimer = null; }
-    // Auto-expand on hover so the user doesn't have to click › each time
-    if (!window.matchMedia('(hover: hover)').matches) return;
-    if (sb.classList.contains('collapsed')) setSidebarCollapsed(false);
-  });
+  const isDesktop = window.matchMedia('(min-width: 769px) and (hover: hover)').matches;
+
+  if (!isDesktop) {
+    // Mobile: collapse the sidebar on first paint
+    setSidebarCollapsed(true);
+    return;
+  }
+
+  // Desktop: open the most recent entry in the detail panel after the
+  // ENTRIES list has been populated (Garden manifest loads asynchronously,
+  // so we wait briefly to pick up Garden cards as candidates too).
+  setTimeout(() => {
+    if (typeof ENTRIES === 'undefined' || !ENTRIES.length) return;
+    const recent = [...ENTRIES]
+      .filter(e => e && e.date)
+      .sort((a, b) => (b.date || '').localeCompare(a.date || ''))[0];
+    if (recent && typeof openDetail === 'function') openDetail(recent);
+  }, 800);
 })();
 
 // ── Tag Tree ──────────────────────────────────────────────────
