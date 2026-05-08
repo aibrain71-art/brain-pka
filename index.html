@@ -2200,6 +2200,91 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
 .model-badge { margin-left: auto; font-size: 10px; padding: 1px 6px; border-radius: 8px;
                 background: var(--accent-dim); color: var(--accent); white-space: nowrap; }
 .model-badge.key { background: rgba(251,191,36,.1); color: #fbbf24; }
+
+/* ── Note fullscreen reader (double-click on a non-garden card) ─── */
+.note-fs-overlay { position: fixed; inset: 0; background: var(--bg);
+                   z-index: 1000; display: none; flex-direction: column; overflow: hidden; }
+.note-fs-overlay.open { display: flex; }
+.note-fs-header { display: flex; align-items: center; gap: 14px;
+                   padding: 16px 24px; border-bottom: 1px solid var(--border);
+                   background: var(--surface-1); flex-shrink: 0; }
+.note-fs-icon { font-size: 22px; flex-shrink: 0; width: 32px; height: 32px;
+                 display: flex; align-items: center; justify-content: center; }
+.note-fs-icon img { width: 32px; height: 32px; border-radius: 6px; object-fit: cover; }
+.note-fs-title-wrap { flex: 1; min-width: 0; }
+.note-fs-title { font-size: 18px; font-weight: 600; color: var(--text);
+                  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.note-fs-date { font-size: 11px; color: var(--text-3); margin-top: 2px; }
+.note-fs-close { width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
+                 background: var(--surface-2); border: 1px solid var(--border);
+                 display: flex; align-items: center; justify-content: center;
+                 cursor: pointer; color: var(--text-2); transition: all .15s; }
+.note-fs-close:hover { background: var(--surface-3); color: var(--text); }
+.note-fs-body { flex: 1; overflow-y: auto; padding: 28px; }
+.note-fs-body-inner { max-width: 760px; margin: 0 auto; line-height: 1.7;
+                       font-size: 15px; color: var(--text); white-space: pre-wrap;
+                       word-wrap: break-word; }
+.note-fs-body-inner img { max-width: 100%; height: auto; border-radius: 6px;
+                           cursor: zoom-in; margin: 14px 0; display: block; }
+.note-fs-body-inner p { margin: 0 0 14px; }
+.note-fs-empty-msg { color: var(--text-3); font-style: italic; text-align: center;
+                      padding: 40px 0; }
+@media (max-width: 700px) {
+  .note-fs-header { padding: 12px 14px; gap: 10px; }
+  .note-fs-title { font-size: 15px; }
+  .note-fs-body { padding: 16px; }
+}
+
+/* ── Image lightbox (double-click on any image) ─────────────────── */
+.img-lightbox { position: fixed; inset: 0; background: rgba(0,0,0,.92);
+                 z-index: 1100; display: none; align-items: center;
+                 justify-content: center; padding: 40px; cursor: zoom-out; }
+.img-lightbox.open { display: flex; }
+.img-lightbox img { max-width: 100%; max-height: 100%; object-fit: contain;
+                     box-shadow: 0 8px 40px rgba(0,0,0,.7); cursor: default; }
+.img-lightbox-close { position: absolute; top: 20px; right: 20px;
+                       width: 40px; height: 40px; border-radius: 50%;
+                       background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.3);
+                       display: flex; align-items: center; justify-content: center;
+                       cursor: pointer; color: #fff; transition: all .15s; }
+.img-lightbox-close:hover { background: rgba(255,255,255,.2); }
+.img-lightbox-caption { position: absolute; bottom: 20px; left: 50%;
+                         transform: translateX(-50%); color: #ddd; font-size: 12px;
+                         max-width: 80%; text-align: center; pointer-events: none; }
+@media (max-width: 700px) { .img-lightbox { padding: 20px; } }
+
+/* ── AI-generated descriptions (kurz / detail / full) ──────────────── */
+.ai-desc-meta { font-size: 11px; color: var(--text-3); font-style: italic;
+                 margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+.ai-desc-text { line-height: 1.65; font-size: 14px; color: var(--text); margin-bottom: 18px; }
+.ai-desc-text p { margin: 0 0 12px; }
+.ai-desc-text p:last-child { margin-bottom: 0; }
+.ai-desc-note-block { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border); }
+.ai-desc-section-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px;
+                          color: var(--text-3); margin-bottom: 8px; font-weight: 500; }
+.ai-desc-note-text { line-height: 1.6; font-size: 13px; color: var(--text-2);
+                      white-space: pre-wrap; word-wrap: break-word;
+                      background: var(--surface-2); border-radius: 6px;
+                      padding: 12px 14px; }
+.ai-desc-loading { display: flex; align-items: center; gap: 10px;
+                    color: var(--text-2); font-size: 13px; padding: 14px 0; }
+.ai-desc-loading .spinner { width: 14px; height: 14px; border: 2px solid var(--border-2);
+                             border-top-color: var(--accent); border-radius: 50%;
+                             animation: enrich-spin 0.8s linear infinite; }
+.ai-desc-banner { padding: 10px 14px; color: var(--text-3); font-size: 13px;
+                   background: var(--surface-2); border-radius: 6px;
+                   border: 1px dashed var(--border); margin-bottom: 12px; }
+.ai-desc-banner-err { color: #fca5a5; border-color: #ef4444; background: rgba(239,68,68,.08); }
+.ai-desc-retry { margin-top: 8px; padding: 4px 10px; font-size: 11px;
+                  background: var(--surface-3); color: var(--text); border-radius: 4px;
+                  border: 1px solid var(--border-2); cursor: pointer; }
+.ai-desc-retry:hover { background: var(--accent); border-color: var(--accent); }
+.ai-desc-regen { margin-left: auto; width: 22px; height: 22px; border-radius: 50%;
+                  background: var(--surface-2); border: 1px solid var(--border);
+                  color: var(--text-3); cursor: pointer; font-size: 12px;
+                  display: inline-flex; align-items: center; justify-content: center;
+                  transition: all .15s; line-height: 1; }
+.ai-desc-regen:hover { background: var(--accent); color: #fff; border-color: var(--accent); transform: rotate(180deg); }
 </style>
 </head>
 <body>
@@ -2978,12 +3063,14 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
     <div class="detail-tags" id="detail-tags"></div>
   </div>
   <div class="detail-tabs">
-    <div class="detail-tab active" onclick="switchTab('summary',this)">Zusammenfassung</div>
-    <div class="detail-tab" onclick="switchTab('full',this)">Vollständig</div>
-    <div class="detail-tab" onclick="switchTab('related',this)">Verbindungen</div>
+    <div class="detail-tab active" onclick="switchTab('summary',this)" title="Kurzbeschreibung — Notiztext + Wikipedia-Lead">Kurz</div>
+    <div class="detail-tab" onclick="switchTab('detail',this)" title="Detail-Beschreibung — KI-gemixt aus Notiz + Wikipedia (Phase 3)">Detail</div>
+    <div class="detail-tab" onclick="switchTab('full',this)" title="Volltext — vollständiger Wikipedia-Artikel mit Bildergalerie">Full</div>
+    <div class="detail-tab" onclick="switchTab('related',this)" title="Verbindungen zu anderen Einträgen">Verbindungen</div>
   </div>
   <div class="detail-content">
     <div id="tab-summary"></div>
+    <div id="tab-detail" style="display:none"></div>
     <div id="tab-full" style="display:none"></div>
     <div id="tab-related" style="display:none"></div>
   </div>
@@ -4900,6 +4987,15 @@ function renderCardList(entries) {
           ${additionalTags ? `<div class="card-extra-tags">${additionalTags}</div>` : ''}
         </div>`;
       card.addEventListener('click', () => openDetail(e));
+      // Doppelklick auf Nicht-Garden-Karten → Vollbild-Reader (Notiztext only).
+      // Garden-Karten lassen wir bewusst aus — für die ist das rechte Detail-
+      // Panel die kanonische Vollansicht (mit Wikipedia-Inhalt etc.).
+      if (!isGarden) {
+        card.addEventListener('dblclick', (ev) => {
+          ev.preventDefault();
+          openNoteFullscreen(e.id);
+        });
+      }
       groupEl.appendChild(card);
       rendered++;
     }
@@ -5061,6 +5157,165 @@ function saveNoteEnrich() {
   try { localStorage.setItem('noteEnrich', JSON.stringify(NOTE_ENRICH)); } catch(_) {}
 }
 const _noteEnrichInflight = {};  // key = entryId + ':' + lang
+
+// ── Phase 3a: AI-generated descriptions (kurz / detail / full) ────────
+// One Claude call per entry × language returns a JSON envelope with all
+// three lengths. Cached aggressively (30 days) so repeat views are free.
+// Inputs: user note (if any) + Wikipedia full extract (if available).
+let AI_DESCRIPTIONS = {};
+try { AI_DESCRIPTIONS = JSON.parse(localStorage.getItem('aiDescriptions') || '{}'); } catch(_) {}
+function _saveAiDescriptions() {
+  try { localStorage.setItem('aiDescriptions', JSON.stringify(AI_DESCRIPTIONS)); } catch(_) {}
+}
+const _aiDescInflight = {};  // key: entryId + ':' + lang
+
+function _aiDescLang(entry) {
+  return (typeof effectiveLang === 'function' ? effectiveLang(entry) : null)
+       || (typeof getPref === 'function' ? getPref('translationLang') : null)
+       || (localStorage.getItem('uiLang') || 'de');
+}
+
+function getCachedAiDescriptions(entry, lang) {
+  if (!entry) return null;
+  const targetLang = lang || _aiDescLang(entry);
+  const rec = AI_DESCRIPTIONS[entry.id];
+  return rec?.byLang?.[targetLang] || null;
+}
+
+async function generateAiDescriptions(entry, lang, { force = false } = {}) {
+  if (!entry) return null;
+  const targetLang = lang || _aiDescLang(entry);
+  const inflightKey = entry.id + ':' + targetLang;
+  if (_aiDescInflight[inflightKey]) return _aiDescInflight[inflightKey];
+  if (!force) {
+    const existing = getCachedAiDescriptions(entry, targetLang);
+    if (existing) return existing;
+  }
+
+  const langName = (typeof LANG_NAMES === 'object' && LANG_NAMES) ? (LANG_NAMES[targetLang] || 'Deutsch') : 'Deutsch';
+  const wiki     = (typeof GARDEN_ENRICH !== 'undefined') ? GARDEN_ENRICH[entry.id] : null;
+  const wikiText = wiki?.fullExtract || wiki?.shortExtract || wiki?.description || '';
+  const noteText = (entry.body || entry.detailed || entry.preview || '').trim();
+
+  // Nothing to base descriptions on — write a stable empty record so the
+  // tab renderers don't keep retrying and burning tokens on fabrications.
+  if (!noteText && !wikiText && !entry.title) {
+    const empty = { kurz: '', detail: '', full: '', generatedAt: new Date().toISOString(), empty: true, lang: targetLang };
+    if (!AI_DESCRIPTIONS[entry.id]) AI_DESCRIPTIONS[entry.id] = { byLang: {} };
+    AI_DESCRIPTIONS[entry.id].byLang[targetLang] = empty;
+    _saveAiDescriptions();
+    return empty;
+  }
+
+  const systemPrompt = [
+    `Du bist Larry, ein persönlicher Wissens-Assistent.`,
+    `Erstelle drei Beschreibungen des Themas in drei verschiedenen Längen:`,
+    `- "kurz": 2–3 Sätze (~50 Wörter).`,
+    `- "detail": 1–2 Absätze (~150 Wörter).`,
+    `- "full": 3–5 Absätze (~400 Wörter).`,
+    `Antworte AUSSCHLIESSLICH auf ${langName}, egal in welcher Sprache die Inputs sind.`,
+    `Bleibe FAKTISCH und NEUTRAL — erfinde nichts. Wenn unsicher: kurz halten und sag im Text "(unsicher)".`,
+    `Mische die Notiz-Erkenntnisse des Users (subjektive Sicht, eigene Beobachtungen) mit Wikipedia (Fakten, Kontext) wo hilfreich.`,
+    `Antworte STRICT als JSON-Objekt, ohne Markdown-Fences, ohne Einleitung, ohne Erläuterung:`,
+    `{"kurz": "...", "detail": "...", "full": "..."}`,
+  ].join('\n');
+
+  const userMsg = [
+    `Titel: ${entry.title || '(ohne Titel)'}`,
+    entry.date ? `Datum: ${entry.date}` : null,
+    entry.topics?.length ? `Tags: ${entry.topics.join(', ')}` : null,
+    entry.youtubeId ? `YouTube-ID: ${entry.youtubeId}` : null,
+    entry.garden_type ? `Typ: ${entry.garden_type}` : null,
+    '',
+    `=== User-Notiz (kann leer sein) ===`,
+    noteText || '(leer)',
+    '',
+    `=== Wikipedia-Artikel (kann leer sein) ===`,
+    wikiText || '(leer)',
+  ].filter(l => l !== null).join('\n');
+
+  const promise = (async () => {
+    try {
+      const modelUsed = localStorage.getItem('selectedModel') || 'claude-haiku-4-5';
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: modelUsed,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: userMsg }],
+          max_tokens: 2200,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message || data.error || `HTTP ${res.status}`);
+      const txt = (data.content || []).filter(c => c.type === 'text').map(c => c.text).join('').trim();
+      // Robust JSON extraction — Claude sometimes wraps in fences despite the instruction
+      let jsonStr = txt;
+      const fence = txt.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+      if (fence) jsonStr = fence[1].trim();
+      else {
+        const open = txt.indexOf('{'); const close = txt.lastIndexOf('}');
+        if (open >= 0 && close > open) jsonStr = txt.slice(open, close + 1);
+      }
+      let parsed;
+      try { parsed = JSON.parse(jsonStr); }
+      catch (_) { throw new Error('AI lieferte kein gültiges JSON: ' + txt.slice(0, 200)); }
+      const out = {
+        kurz:   (parsed.kurz   || '').trim(),
+        detail: (parsed.detail || '').trim(),
+        full:   (parsed.full   || '').trim(),
+        generatedAt: new Date().toISOString(),
+        model: modelUsed,
+        lang: targetLang,
+        usage: data.usage || null,
+      };
+      if (!AI_DESCRIPTIONS[entry.id]) AI_DESCRIPTIONS[entry.id] = { byLang: {} };
+      AI_DESCRIPTIONS[entry.id].byLang[targetLang] = out;
+      _saveAiDescriptions();
+      return out;
+    } finally {
+      delete _aiDescInflight[inflightKey];
+    }
+  })();
+  _aiDescInflight[inflightKey] = promise;
+  return promise;
+}
+
+// Sync helper for tab renderers — returns cached if present, else kicks off
+// a background fetch and resolves via onReady. Renderers show a loading
+// state until onReady fires with the fresh result.
+function getOrFetchAiDescriptions(entry, lang, onReady) {
+  const cached = getCachedAiDescriptions(entry, lang);
+  if (cached) return cached;
+  generateAiDescriptions(entry, lang)
+    .then(out => onReady && onReady(out))
+    .catch(err => onReady && onReady({ error: err.message || String(err) }));
+  return null;
+}
+
+// User-triggered: drop the cached AI block for this entry × lang and rerun.
+async function regenerateAiDescriptions(entryId, lang) {
+  const entry = ENTRIES.find(e => e.id === entryId);
+  if (!entry) return;
+  const targetLang = lang || _aiDescLang(entry);
+  if (AI_DESCRIPTIONS[entryId]?.byLang?.[targetLang]) {
+    delete AI_DESCRIPTIONS[entryId].byLang[targetLang];
+    _saveAiDescriptions();
+  }
+  if (selectedEntryId === entryId) {
+    const cat = (typeof entryCategory === 'function') ? entryCategory(entry) : null;
+    const color = cat ? cat.color : (entry.type === 'garden' ? '#34d399' : '#60a5fa');
+    if (activeTab === 'summary') renderSummaryTab(entry, color);
+    else if (activeTab === 'detail') renderDetailTab(entry);
+    else if (activeTab === 'full') {
+      const ft = document.getElementById('tab-full');
+      if (ft) { ft.dataset.loaded = ''; loadFullContent(entry); }
+    }
+  }
+  generateAiDescriptions(entry, targetLang, { force: true });
+}
+// ── End Phase 3a infrastructure ───────────────────────────────────────
 
 // Returns the cached enrichment for the entry in the requested language,
 // or null if nothing cached. `lang` defaults to the effective language of
@@ -5906,11 +6161,17 @@ function openDetail(entry) {
   const color = cat ? cat.color : (entry.type === 'garden' ? '#34d399' : '#60a5fa');
 
   renderSummaryTab(entry, color);
-  document.getElementById('tab-full').innerHTML = '<div class="loading-md">Klicke "Vollständig" um den vollen Inhalt zu laden.</div>';
+  document.getElementById('tab-full').innerHTML = '<div class="loading-md">Klicke "Full" um den vollen Inhalt zu laden.</div>';
   document.getElementById('tab-full').dataset.loaded = '';
+  const detTab = document.getElementById('tab-detail');
+  if (detTab) {
+    detTab.innerHTML = '<div class="loading-md">Klicke "Detail" um die Detail-Beschreibung zu sehen.</div>';
+    detTab.dataset.loaded = '';
+  }
   renderRelatedTab(entry);
 
   document.getElementById('tab-summary').style.display = '';
+  if (detTab) detTab.style.display = 'none';
   document.getElementById('tab-full').style.display = 'none';
   document.getElementById('tab-related').style.display = 'none';
 
@@ -5976,6 +6237,8 @@ function switchTab(name, el) {
   document.querySelectorAll('.detail-tab').forEach(t => t.classList.remove('active'));
   el.classList.add('active');
   document.getElementById('tab-summary').style.display = name === 'summary' ? '' : 'none';
+  const detTab = document.getElementById('tab-detail');
+  if (detTab) detTab.style.display = name === 'detail' ? '' : 'none';
   document.getElementById('tab-full').style.display = name === 'full' ? '' : 'none';
   document.getElementById('tab-related').style.display = name === 'related' ? '' : 'none';
 
@@ -5985,17 +6248,112 @@ function switchTab(name, el) {
       loadFullContent(entry);
     }
   }
+  if (name === 'detail') {
+    const entry = ENTRIES.find(e => e.id === selectedEntryId);
+    if (entry && detTab && detTab.dataset.loaded !== '1') renderDetailTab(entry);
+  }
+}
+
+// Detail tab — KI-gemixte Beschreibung aus Notiz + Wikipedia (Phase 3a).
+// Renders the AI-generated "detail" length (1–2 paragraphs). Note section
+// renders only when the user wrote something themselves (entry.body
+// present). Wikipedia note: even when there is no entry.body we still
+// expose Wikipedia facts via the dedicated Full tab and the Wikidata
+// blocks elsewhere — Detail focuses on the AI-mixed prose.
+function renderDetailTab(entry) {
+  const tab = document.getElementById('tab-detail');
+  if (!tab) return;
+  tab.dataset.loaded = '1';
+  const noteHasUserContent = !!(entry.body && entry.body.trim());
+  const noteBlockHtml = noteHasUserContent
+    ? `<div class="ai-desc-note-block">
+         <div class="ai-desc-section-label">Notiz</div>
+         <div class="ai-desc-note-text">${escapeHtml(entry.body.trim())}</div>
+       </div>`
+    : '';
+  const regenBtnHtml = `<button class="ai-desc-regen" onclick="regenerateAiDescriptions(${entry.id})" title="Beschreibungen neu generieren (verwirft den Cache für diese Sprache)">↻</button>`;
+  const renderResolved = (block) => {
+    if (block && block.error) {
+      tab.innerHTML = `<div class="ai-desc-banner ai-desc-banner-err">⚠️ KI-Generierung fehlgeschlagen: ${escapeHtml(block.error)}<br><button class="ai-desc-retry" onclick="regenerateAiDescriptions(${entry.id})">Erneut versuchen</button></div>` + noteBlockHtml;
+      return;
+    }
+    if (block && block.empty) {
+      tab.innerHTML = `<div class="ai-desc-banner">Keine Inhalte zum Generieren — weder Notiz-Text noch Wikipedia-Daten verfügbar.</div>` + noteBlockHtml;
+      return;
+    }
+    const detail = block?.detail || '';
+    const meta = block?.generatedAt
+      ? `<div class="ai-desc-meta">✨ KI-generiert · ${escapeHtml(block.lang || '?')} · ${new Date(block.generatedAt).toLocaleDateString('de-CH')} ${regenBtnHtml}</div>`
+      : '';
+    const detailHtml = detail
+      ? `<div class="ai-desc-text">${detail.split(/\n\n+/).map(p => `<p>${escapeHtml(p)}</p>`).join('')}</div>`
+      : `<div class="ai-desc-banner">Detail-Beschreibung leer — versuche neu zu generieren.</div>`;
+    tab.innerHTML = meta + detailHtml + noteBlockHtml;
+  };
+  const cached = getCachedAiDescriptions(entry);
+  if (cached) {
+    renderResolved(cached);
+    return;
+  }
+  // Loading state — dispatch background fetch
+  tab.innerHTML = `<div class="ai-desc-loading"><div class="spinner"></div><span>KI generiert die Detail-Beschreibung…</span></div>` + noteBlockHtml;
+  getOrFetchAiDescriptions(entry, null, (out) => {
+    if (selectedEntryId !== entry.id) return;
+    if (activeTab !== 'detail') return;
+    renderResolved(out);
+  });
 }
 
 function renderSummaryTab(entry, color) {
   const tab = document.getElementById('tab-summary');
-  const preview = effectivePreview(entry);
-  const detailed = effectiveDetailed(entry);
-  const previewHtml = linkifyEntities(preview, entry.id);
-  const detailedHtml = detailed.split(/\n\n+/).map(p =>
-    `<p style="margin-bottom:10px">${linkifyEntities(p, entry.id)}</p>`
-  ).join('');
+  // Fallback content (used while AI is generating or if it fails)
+  const fallbackPreview = effectivePreview(entry);
+  const fallbackPreviewHtml = linkifyEntities(fallbackPreview, entry.id);
   const themeTags = effectiveTags(entry);
+
+  // ── Phase 3a: AI-generated kurz description ──────────────────────────
+  // Sits where the old "Kurzfassung" + "Detailzusammenfassung" blocks
+  // used to be. The detailed flavour now lives in the dedicated Detail
+  // tab. Renders with fallback while the call is in flight, transparently
+  // re-renders this tab when the result lands.
+  const aiCached = getCachedAiDescriptions(entry);
+  const regenBtn = `<button class="ai-desc-regen" onclick="regenerateAiDescriptions(${entry.id})" title="Beschreibungen neu generieren">↻</button>`;
+  let aiKurzBlock;
+  if (aiCached && aiCached.kurz) {
+    const meta = `<div class="ai-desc-meta">✨ KI-generiert · ${escapeHtml(aiCached.lang || '?')} · ${new Date(aiCached.generatedAt).toLocaleDateString('de-CH')}${regenBtn}</div>`;
+    aiKurzBlock = `
+      <div class="summary-section">
+        <div class="summary-section-title">Kurzbeschreibung</div>
+        ${meta}
+        <div class="summary-concise">${escapeHtml(aiCached.kurz)}</div>
+      </div>`;
+  } else if (aiCached && aiCached.error) {
+    aiKurzBlock = `
+      <div class="summary-section">
+        <div class="summary-section-title">Kurzbeschreibung</div>
+        <div class="summary-concise">${fallbackPreviewHtml}</div>
+        <div class="ai-desc-banner ai-desc-banner-err" style="margin-top:8px">⚠️ KI-Generierung: ${escapeHtml(aiCached.error)}<br><button class="ai-desc-retry" onclick="regenerateAiDescriptions(${entry.id})">Erneut versuchen</button></div>
+      </div>`;
+  } else if (aiCached && aiCached.empty) {
+    aiKurzBlock = `
+      <div class="summary-section">
+        <div class="summary-section-title">Kurzbeschreibung</div>
+        <div class="summary-concise">${fallbackPreviewHtml}</div>
+      </div>`;
+  } else {
+    aiKurzBlock = `
+      <div class="summary-section">
+        <div class="summary-section-title">Kurzbeschreibung</div>
+        <div class="summary-concise">${fallbackPreviewHtml}</div>
+        <div class="ai-desc-loading" style="margin-top:8px"><div class="spinner"></div><span>KI generiert die Kurzbeschreibung…</span></div>
+      </div>`;
+    // Background fetch — re-render this tab when the result lands
+    getOrFetchAiDescriptions(entry, null, () => {
+      if (selectedEntryId === entry.id && activeTab === 'summary') {
+        renderSummaryTab(entry, color);
+      }
+    });
+  }
 
   // Wikipedia indicator — only show as separate block when card had its own
   // content AND Wikipedia just adds extra. If the preview/detailed ARE Wiki data
@@ -6081,14 +6439,7 @@ function renderSummaryTab(entry, color) {
   }
 
   tab.innerHTML = `
-    <div class="summary-section">
-      <div class="summary-section-title">Kurzfassung</div>
-      <div class="summary-concise">${previewHtml}</div>
-    </div>
-    <div class="summary-section">
-      <div class="summary-section-title">Detailzusammenfassung</div>
-      <div class="summary-detailed visible" style="font-size:13px;color:var(--text-2);line-height:1.7">${detailedHtml}</div>
-    </div>
+    ${aiKurzBlock}
     ${claudeBlock}
     ${wikiBlock}
     ${wikidataBlock}
@@ -9617,44 +9968,81 @@ function toggleVoiceMic() {
   else vaStartListening();
 }
 
-// Mic-button interaction depends on WhisperFlow state:
+// Mic-button interaction:
 //
-// WhisperFlow ON  (latched mode):
-//   • Quick click  → start recording, stays on until clicked again
-//   • Hold-to-talk → walkie-talkie (release stops)
+//   • Hold (≥ 300 ms)            → walkie-talkie (release stops the mic)
+//   • Double-click               → toggle "latched" mode — mic stays on
+//                                  until the user clicks again
+//   • Single click while latched → exit latched mode, stop the mic
+//   • Single click while idle    → starts/stops a short pulse (existing
+//                                  WhisperFlow path is preserved when its
+//                                  toggle is on)
 //
-// WhisperFlow OFF (direct speech-to-speech, push-to-talk only):
-//   • Press        → start recording
-//   • Release      → stop recording (always walkie-talkie)
-//
-// Threshold of 300ms differentiates a quick click from a hold in latched mode.
+// The 300 ms threshold separates a quick click from a hold. A 280 ms
+// timer after a quick release lets us tell single-click from double-click.
 let _vaMicDownAt = 0;
 let _vaMicWasIdleOnDown = false;
+let _vaIsLatched = false;          // Phase: latched-by-doubleclick state
+let _vaMicClickTimer = null;       // pending single-click action (cancellable by dblclick)
 const VA_HOLD_MS = 300;
+
+function _vaCancelClickTimer() {
+  if (_vaMicClickTimer) { clearTimeout(_vaMicClickTimer); _vaMicClickTimer = null; }
+}
+
 function vaMicDown(ev) {
   ev.preventDefault();
   try { ev.target.setPointerCapture?.(ev.pointerId); } catch(_) {}
   _vaMicDownAt = Date.now();
   _vaMicWasIdleOnDown = !_vaIsListening;
+  // Latched mode owns the mic state — don't let pointer presses toggle it.
+  // Exit happens via single-click (queued in vaMicUp) or another dblclick.
+  if (_vaIsLatched) return;
   if (_vaIsListening) {
-    // Already recording (latched) → tap stops it
     vaStopListening();
   } else {
     vaStartListening();
   }
 }
+
 function vaMicUp(ev) {
   if (!_vaMicDownAt) return;
   ev.preventDefault();
   const heldMs = Date.now() - _vaMicDownAt;
   _vaMicDownAt = 0;
-  // Direct mode: ALWAYS stop on release (pure walkie-talkie).
-  // Latched mode: only stop on release if the user actually held it.
-  if (!_vaIsListening) return;       // already stopped (e.g. by tap-to-toggle)
+  // Latched: a quick release MIGHT mean "exit latched". Defer 280 ms so a
+  // following dblclick can cancel us. A long hold while latched is a no-op.
+  if (_vaIsLatched) {
+    if (heldMs < VA_HOLD_MS) {
+      _vaCancelClickTimer();
+      _vaMicClickTimer = setTimeout(() => {
+        _vaMicClickTimer = null;
+        _vaIsLatched = false;
+        if (_vaIsListening) vaStopListening();
+      }, 280);
+    }
+    return;
+  }
+  // Not latched — existing walkie-talkie / WhisperFlow logic
+  if (!_vaIsListening) return;
   if (!_vaWhisperFlow) {
     if (_vaMicWasIdleOnDown) vaStopListening();
   } else if (_vaMicWasIdleOnDown && heldMs > VA_HOLD_MS) {
     vaStopListening();
+  }
+}
+
+// Double-click on the mic toggles latched mode. Cancels any pending
+// single-click "exit latched" timer so the gesture isn't ambiguous.
+function vaMicDoubleClick(ev) {
+  ev.preventDefault();
+  _vaCancelClickTimer();
+  if (_vaIsLatched) {
+    _vaIsLatched = false;
+    if (_vaIsListening) vaStopListening();
+  } else {
+    _vaIsLatched = true;
+    if (!_vaIsListening) vaStartListening();
   }
 }
 
@@ -11406,6 +11794,127 @@ function onSharedContent({ title, text, url }) {
   alert('Geteilt mit PKA:\n\n' + summary
         + '\n\n(In Produktion würde Larry den Link analysieren und einen neuen Eintrag erstellen.)');
 }
+
+// ── Note fullscreen reader (text-only, scrollable, X-close) ───────────
+// Triggered by double-click on a card in the list. Garden cards are
+// excluded — for those, the right-side detail panel is the canonical
+// reader. Non-garden cards open here so a long note can be read in
+// peace without losing the surrounding list state.
+function openNoteFullscreen(entryId) {
+  const entry = (typeof ENTRIES !== 'undefined') ? ENTRIES.find(e => e.id === entryId) : null;
+  if (!entry) return;
+  const overlay = document.getElementById('note-fs-overlay');
+  const iconEl  = document.getElementById('note-fs-icon');
+  const titleEl = document.getElementById('note-fs-title');
+  const dateEl  = document.getElementById('note-fs-date');
+  const bodyEl  = document.getElementById('note-fs-body');
+  if (!overlay || !bodyEl) return;
+  // Header — reuse existing portrait or icon emoji
+  const portrait = entry.portraitUrl
+                || (typeof GARDEN_ENRICH !== 'undefined' && GARDEN_ENRICH[entry.id]?.thumbnail);
+  iconEl.innerHTML = portrait
+    ? `<img src="${escapeHtml(portrait)}" alt="" loading="lazy">`
+    : (entry.icon || '📄');
+  titleEl.textContent = entry.title || '(ohne Titel)';
+  dateEl.textContent  = entry.date || '';
+  // Body — render note text. Use existing renderMd if available so
+  // markdown images and formatting survive, else fall back to plain text.
+  const text = (entry.body || entry.detailed || entry.preview || '').trim();
+  let inner;
+  if (!text) {
+    inner = '<div class="note-fs-empty-msg">Diese Notiz hat keinen Text-Inhalt.</div>';
+  } else if (typeof renderMd === 'function') {
+    try {
+      inner = `<div class="note-fs-body-inner md-content">${renderMd(text, '')}</div>`;
+    } catch (_) {
+      inner = `<div class="note-fs-body-inner">${escapeHtml(text)}</div>`;
+    }
+  } else {
+    inner = `<div class="note-fs-body-inner">${escapeHtml(text)}</div>`;
+  }
+  bodyEl.innerHTML = inner;
+  overlay.classList.add('open');
+  overlay.setAttribute('aria-hidden', 'false');
+  document.body.style.overflow = 'hidden';
+  bodyEl.scrollTop = 0;
+}
+
+function closeNoteFullscreen() {
+  const overlay = document.getElementById('note-fs-overlay');
+  if (!overlay) return;
+  overlay.classList.remove('open');
+  overlay.setAttribute('aria-hidden', 'true');
+  // Only release scroll lock if the image lightbox isn't also open
+  const lb = document.getElementById('img-lightbox');
+  if (!lb || !lb.classList.contains('open')) {
+    document.body.style.overflow = '';
+  }
+}
+
+// ── Image lightbox (double-click on any image in note text or detail) ─
+function openImageLightbox(src, caption) {
+  const lb = document.getElementById('img-lightbox');
+  const img = document.getElementById('img-lightbox-img');
+  const cap = document.getElementById('img-lightbox-caption');
+  if (!lb || !img) return;
+  img.src = src;
+  img.alt = caption || '';
+  if (cap) cap.textContent = caption || '';
+  lb.classList.add('open');
+  lb.setAttribute('aria-hidden', 'false');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeImageLightbox(ev) {
+  // When invoked from backdrop click, only close if the click was on the
+  // backdrop itself (not on the <img> or close button — those have
+  // their own stopPropagation / explicit handlers).
+  if (ev && ev.target && ev.target.tagName === 'IMG') return;
+  const lb = document.getElementById('img-lightbox');
+  if (!lb) return;
+  lb.classList.remove('open');
+  lb.setAttribute('aria-hidden', 'true');
+  const img = document.getElementById('img-lightbox-img');
+  if (img) img.src = '';
+  // Only release scroll lock if the note fullscreen isn't also open
+  const nfs = document.getElementById('note-fs-overlay');
+  if (!nfs || !nfs.classList.contains('open')) {
+    document.body.style.overflow = '';
+  }
+}
+
+// Single ESC handler for both overlays — top one wins (image lightbox
+// takes precedence since it sits on a higher z-index).
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  const lb  = document.getElementById('img-lightbox');
+  const nfs = document.getElementById('note-fs-overlay');
+  if (lb && lb.classList.contains('open')) { closeImageLightbox(); return; }
+  if (nfs && nfs.classList.contains('open')) closeNoteFullscreen();
+});
+
+// Image double-click → open in lightbox. Uses event delegation so it
+// covers images in the note fullscreen reader, the detail panel's
+// markdown content, the Wikipedia gallery, and any other rendered
+// note content. We deliberately ignore tiny icons (<32px) and images
+// inside button/icon controls so the existing UI doesn't break.
+document.addEventListener('dblclick', (e) => {
+  const img = e.target;
+  if (!img || img.tagName !== 'IMG') return;
+  // Skip avatar/icon-sized images (titles, sidebar, etc.)
+  if (img.naturalWidth && img.naturalWidth < 64) return;
+  if (img.width && img.width < 64) return;
+  // Skip images inside known small-icon containers
+  if (img.closest('.title-icon, .topbar-avatar, .va-camera-btn, .model-icon, .note-fs-icon')) return;
+  // Skip the lightbox's own image (would loop)
+  if (img.id === 'img-lightbox-img') return;
+  e.preventDefault();
+  e.stopPropagation();
+  const caption = img.alt || img.title || (img.closest('figure')?.querySelector('figcaption')?.textContent ?? '');
+  // Prefer the fullscreen-quality src if the image is a Wikipedia thumbnail
+  const fullSrc = img.dataset.fullSrc || img.src;
+  openImageLightbox(fullSrc, caption);
+});
 </script>
 
 <!-- ── Voice Assistant overlay (PKA) ─────────────────────────── -->
@@ -11438,7 +11947,8 @@ function onSharedContent({ title, text, url }) {
     <button class="va-mic-btn" id="va-mic-btn"
             onpointerdown="vaMicDown(event)" onpointerup="vaMicUp(event)"
             onpointerleave="vaMicUp(event)" oncontextmenu="event.preventDefault()"
-            title="Klick: an/aus  ·  Halten: Walkie-Talkie (los = stop)">
+            ondblclick="vaMicDoubleClick(event)"
+            title="Halten: Walkie-Talkie (los = stop)  ·  Doppelklick: Mikrofon dauerhaft an  ·  Klick (im latched-Modus): aus">
       <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
     </button>
     <input class="va-text-input" id="va-text-input" type="text" inputmode="text"
@@ -11449,6 +11959,30 @@ function onSharedContent({ title, text, url }) {
       <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
     </button>
   </div>
+</div>
+
+<!-- ── Note fullscreen reader (double-click on a non-garden card) ─── -->
+<div id="note-fs-overlay" class="note-fs-overlay" role="dialog" aria-label="Notiz Vollbild" aria-hidden="true">
+  <div class="note-fs-header">
+    <span class="note-fs-icon" id="note-fs-icon"></span>
+    <div class="note-fs-title-wrap">
+      <div class="note-fs-title" id="note-fs-title"></div>
+      <div class="note-fs-date" id="note-fs-date"></div>
+    </div>
+    <button class="note-fs-close" onclick="closeNoteFullscreen()" title="Schliessen (Esc)" aria-label="Schliessen">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="note-fs-body" id="note-fs-body"></div>
+</div>
+
+<!-- ── Image lightbox (double-click on any image) ─────────────────── -->
+<div id="img-lightbox" class="img-lightbox" role="dialog" aria-label="Bild Vollbild" aria-hidden="true" onclick="closeImageLightbox(event)">
+  <button class="img-lightbox-close" onclick="closeImageLightbox()" title="Schliessen (Esc)" aria-label="Schliessen">
+    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+  </button>
+  <img id="img-lightbox-img" alt="" onclick="event.stopPropagation()">
+  <div id="img-lightbox-caption" class="img-lightbox-caption"></div>
 </div>
 
 </body>
