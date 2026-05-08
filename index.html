@@ -5833,10 +5833,14 @@ function openDetail(entry) {
 
   // Always open expanded — clear any collapsed state from a previous entry
   const panel = document.getElementById('detail-panel');
+  const wasOpen = panel.classList.contains('open');
   panel.classList.remove('collapsed');
   panel.classList.add('open');
   document.body.classList.remove('detail-collapsed');
   document.body.classList.add('has-detail');
+  // If the panel just opened (was closed before), re-fit the graph after
+  // the panel-width transition completes — canvas just got narrower.
+  if (!wasOpen && currentView === 'graph') setTimeout(() => resetZoom(), 460);
 
   // Sparse-note auto-enrichment: if this is a personal note with very
   // little content and no prior enrichment/dismissal, kick off Claude in
@@ -5865,6 +5869,9 @@ function toggleDetailCollapse() {
     btn.textContent = collapsed ? '‹' : '›';
     btn.title = collapsed ? 'Details ausklappen' : 'Details einklappen';
   });
+  // Canvas just got wider/narrower — re-fit the graph after the .4s
+  // CSS width transition settles so the new viewport size is captured.
+  if (currentView === 'graph') setTimeout(() => resetZoom(), 460);
 }
 
 function closeDetail() {
@@ -5877,6 +5884,8 @@ function closeDetail() {
   document.querySelectorAll('.card-item').forEach(c => c.classList.remove('selected'));
   // Release any node pinned via tooltip-click in the graph view
   if (typeof unpinNode === 'function') unpinNode();
+  // Re-fit graph to new wider canvas after the .4s panel close transition
+  if (currentView === 'graph') setTimeout(() => resetZoom(), 460);
 }
 
 function switchTab(name, el) {
@@ -9076,8 +9085,15 @@ function rebuildGraphHidden() {
 
 function resetZoom(opts) {
   if (!graphCanvasState) return;
-  const { canvas, W, H, filteredNodes } = graphCanvasState;
+  const { canvas, filteredNodes } = graphCanvasState;
   if (!filteredNodes.length) return;
+  // IMPORTANT: read the LIVE canvas dimensions instead of the W/H that were
+  // stashed at build time. The visible canvas size changes whenever the
+  // user toggles the left sidebar or the right detail panel — using the
+  // stale W/H would offset the fit and leave nodes off-screen.
+  const rect = canvas.getBoundingClientRect();
+  const W = rect.width, H = rect.height;
+  if (!W || !H) return;
   // Compute bbox of all nodes
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
   for (const n of filteredNodes) {
@@ -9092,6 +9108,10 @@ function resetZoom(opts) {
   const tx = W/2 - scale * (minX + w/2);
   const ty = H/2 - scale * (minY + h/2);
   const target = d3.zoomIdentity.translate(tx, ty).scale(scale);
+  // Keep the cached W/H in sync so other code paths that still use them
+  // (e.g. zoom-to-node transitions) work with the current viewport.
+  graphCanvasState.W = W;
+  graphCanvasState.H = H;
   // `instant: true` skips the 600ms transition — used when the graph is being
   // shown for the first time and we want it already at the correct zoom.
   if (opts && opts.instant) {
