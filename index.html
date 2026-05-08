@@ -1294,7 +1294,27 @@ body.view-graph.has-detail.detail-collapsed .graph-bottom-controls,
 body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px; }
 .detail-type-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-3);
                       margin-bottom: 8px; }
-.detail-title { font-size: 17px; font-weight: 700; color: var(--text); line-height: 1.35; margin-bottom: 10px; padding-right: 30px; }
+.detail-title { font-size: 17px; font-weight: 700; color: var(--text); line-height: 1.35; padding-right: 30px; flex: 1; min-width: 0; word-wrap: break-word; }
+/* Title row: icon + title + AI search button. The icon mirrors what's
+   currently shown on the entry's card (portrait image OR emoji); when
+   the AI search returns an image, this icon updates in place. */
+.detail-title-row { display: flex; align-items: flex-start; gap: 10px;
+                     margin-bottom: 10px; }
+.detail-icon-large { flex-shrink: 0; width: 44px; height: 44px; border-radius: 8px;
+                      background: var(--surface-2); border: 1px solid var(--border);
+                      display: inline-flex; align-items: center; justify-content: center;
+                      font-size: 22px; overflow: hidden; }
+.detail-icon-large img { width: 100%; height: 100%; object-fit: cover; }
+.detail-ai-btn { flex-shrink: 0; width: 32px; height: 32px; border-radius: 8px;
+                  background: var(--surface-2); border: 1px solid var(--border);
+                  color: var(--text-2); cursor: pointer; transition: all .15s;
+                  display: inline-flex; align-items: center; justify-content: center;
+                  position: relative; }
+.detail-ai-btn:hover:not(:disabled) { background: var(--accent-dim); color: var(--accent);
+                                       border-color: var(--accent); }
+.detail-ai-btn:disabled { opacity: 0.7; cursor: wait; }
+.detail-ai-btn.searching svg { animation: detail-ai-spin 1s linear infinite; }
+@keyframes detail-ai-spin { to { transform: rotate(360deg); } }
 .detail-meta { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
 .detail-date { font-size: 12px; color: var(--text-3); }
 .detail-tags { display: flex; flex-wrap: wrap; gap: 5px; }
@@ -5555,6 +5575,85 @@ function buildWikiButton(entry) {
   </button>`;
 }
 
+// Render the icon shown in the detail header (left of the title).
+// Mirrors the card-list logic: portrait image > Wikidata thumbnail >
+// Wikipedia enrichment thumb > emoji. Updates in place when an image
+// arrives via manualAiSearch().
+function buildDetailIcon(entry) {
+  if (!entry) return '';
+  const img = entry.portraitUrl
+    || (typeof WIKIDATA_CACHE !== 'undefined' ? WIKIDATA_CACHE[entry.id]?.image : null)
+    || (typeof GARDEN_ENRICH !== 'undefined' ? GARDEN_ENRICH[entry.id]?.thumbnail : null);
+  if (img) return `<img src="${escapeHtml(img)}" alt="" onerror="this.parentNode.innerHTML='${escapeHtml(entry.icon || '📄')}'">`;
+  return escapeHtml(entry.icon || '📄');
+}
+
+// Manually trigger an AI-driven Wikipedia lookup for an entry. Works for
+// any entry — personal note OR Garden card. Strategy:
+//   1) If the entry already has a wikipedia.org sourceUrl, refetch via
+//      the existing enrichFromWikipedia path (cache cleared first).
+//   2) Otherwise, search Wikipedia by title in the user's preferred
+//      language; first hit becomes the new sourceUrl, then enrichFromWikipedia
+//      pulls the full extract + thumbnail.
+//   3) When a thumbnail comes back, write it to entry.portraitUrl so the
+//      icon updates everywhere (card list + detail panel + flashcards).
+async function manualAiSearch(entryId) {
+  const entry = ENTRIES.find(e => e.id === entryId);
+  if (!entry) return;
+  const btn = document.getElementById('detail-ai-btn-' + entryId);
+  if (btn) { btn.classList.add('searching'); btn.disabled = true; }
+  try {
+    // Ensure we have a usable Wikipedia URL — search by title if missing.
+    if (!entry.sourceUrl || !entry.sourceUrl.includes('wikipedia.org')) {
+      const lang = (typeof getPref === 'function' ? getPref('translationLang') : null) || (localStorage.getItem('uiLang') || 'de');
+      const q = encodeURIComponent(entry.title);
+      const sRes = await fetch(`https://${lang}.wikipedia.org/w/api.php?action=query&list=search&srsearch=${q}&format=json&origin=*&srlimit=1`);
+      const sData = await sRes.json();
+      const hit = sData.query?.search?.[0];
+      if (!hit) {
+        // Fall back to English Wikipedia if the user's language has no match
+        const sRes2 = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${q}&format=json&origin=*&srlimit=1`);
+        const sData2 = await sRes2.json();
+        const hit2 = sData2.query?.search?.[0];
+        if (!hit2) {
+          alert('Kein Wikipedia-Treffer zum Titel „' + entry.title + '" gefunden.');
+          return;
+        }
+        entry.sourceUrl = `https://en.wikipedia.org/wiki/${encodeURIComponent(hit2.title.replace(/ /g, '_'))}`;
+      } else {
+        entry.sourceUrl = `https://${lang}.wikipedia.org/wiki/${encodeURIComponent(hit.title.replace(/ /g, '_'))}`;
+      }
+    }
+    // Force a fresh fetch (clear cached enrichment so we don't return the stale one)
+    if (typeof GARDEN_ENRICH !== 'undefined' && GARDEN_ENRICH[entry.id]) {
+      delete GARDEN_ENRICH[entry.id];
+      saveEnrich();
+    }
+    const fresh = await enrichFromWikipedia(entry);
+    if (!fresh) {
+      alert('Wikipedia-Abruf fehlgeschlagen.');
+      return;
+    }
+    GARDEN_ENRICH[entry.id] = fresh;
+    saveEnrich();
+    if (fresh.thumbnail) entry.portraitUrl = fresh.thumbnail;
+    // Refresh the visible icon in the card list AND the detail panel
+    if (typeof updateCardIcon === 'function') updateCardIcon(entry);
+    const iconEl = document.getElementById('detail-icon-large');
+    if (iconEl) iconEl.innerHTML = buildDetailIcon(entry);
+    // Re-render the detail summary so the new Wikipedia block shows up
+    if (selectedEntryId === entry.id) renderSummaryTab(entry);
+    // Also refresh Wikidata cache so the structured-facts block matches
+    if (typeof fetchWikidataFacts === 'function' && !WIKIDATA_CACHE[entry.id]) {
+      fetchWikidataFacts(entry).then(() => { if (selectedEntryId === entry.id) renderSummaryTab(entry); });
+    }
+  } catch (err) {
+    alert('Fehler bei der AI-Suche: ' + (err.message || err));
+  } finally {
+    if (btn) { btn.classList.remove('searching'); btn.disabled = false; }
+  }
+}
+
 function buildGardenHeader(entry) {
   // Book / Book Series → cover layout with author/date/ISBN + Amazon link
   if ((entry.garden_type === 'Book' || entry.garden_type === 'Book Series')) {
@@ -5578,7 +5677,7 @@ function buildGardenHeader(entry) {
       <div class="garden-video-top">
         ${thumb}
         <div class="garden-video-meta">
-          <h2 class="garden-video-title">${escapeHtml(entry.title)}</h2>
+          <h2 class="garden-video-title">${escapeHtml(entry.title)}<button class="detail-ai-btn" id="detail-ai-btn-${entry.id}" onclick="manualAiSearch(${entry.id})" title="AI-Suche: Wikipedia-Daten + Bild aktualisieren" style="margin-left:10px;vertical-align:middle"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><circle cx="11" cy="11" r="2" fill="currentColor"/></svg></button></h2>
           ${buildSourceButton(entry)}
         </div>
       </div>
@@ -5667,7 +5766,13 @@ function openDetail(entry) {
     header.innerHTML = `
       <button class="detail-close" onclick="closeDetail()" title="Details schliessen">✕</button>
       <div class="detail-type-badge" id="detail-type"><span style="color:${color}">${entry.icon}</span>&nbsp;${entry.type === 'video' ? 'Video' : entry.type === 'article' ? 'Artikel' : 'Notiz'}</div>
-      <div class="detail-title" id="detail-title">${escapeHtml(entry.title)}</div>
+      <div class="detail-title-row">
+        <div class="detail-icon-large" id="detail-icon-large">${buildDetailIcon(entry)}</div>
+        <div class="detail-title" id="detail-title">${escapeHtml(entry.title)}</div>
+        <button class="detail-ai-btn" id="detail-ai-btn-${entry.id}" onclick="manualAiSearch(${entry.id})" title="AI-Suche: Wikipedia-Daten + Bild für diese Notiz holen (oder erneuern)">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><circle cx="11" cy="11" r="2" fill="currentColor"/></svg>
+        </button>
+      </div>
       <div class="detail-meta" style="flex-wrap:wrap">
         <span class="detail-date" id="detail-date">${fmtDate(entry.date)}</span>
         ${langPicker}
