@@ -1592,8 +1592,14 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
 .fc-note-search-result:hover { background: var(--surface-2); color: var(--text); }
 .fc-note-search-result.selected { background: var(--accent-dim); color: var(--accent); }
 
-/* Print layout — when window.print() is called from the print view, only
-   the print grid is shown; everything else is hidden. 4 cards per A4 page. */
+/* Print mode toggle (in the print-top toolbar) */
+.fc-print-mode-toggle { display: flex; gap: 4px; }
+.fc-print-mode-hint { font-size: 12px; color: var(--text-3); padding: 6px 12px;
+                       background: var(--surface-2); border-radius: 6px; margin-bottom: 12px;
+                       line-height: 1.5; }
+
+/* "Kompakt" print: each card has Q + A on the same tile, dashed separator.
+   2-column grid, ~6 cards per A4 page. */
 .fc-print-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 20px 0; }
 .fc-print-card { border: 2px solid #333; border-radius: 8px; padding: 14px; background: #fff; color: #000;
                   min-height: 200px; display: flex; flex-direction: column; gap: 8px; page-break-inside: avoid; }
@@ -1601,12 +1607,44 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
 .fc-print-card .fc-pc-a { font-size: 12px; line-height: 1.4; flex: 1; border-top: 1px dashed #999;
                             padding-top: 8px; margin-top: 8px; }
 .fc-print-card .fc-pc-meta { font-size: 9px; color: #666; }
+
+/* "Doppelseitig" print: 4 cards per A4 page (2×2). Each "page" is its own
+   wrapper that page-breaks. Front pages have only questions; the matching
+   back page has answers with COLUMNS REVERSED, so when the paper is flipped
+   on the long edge during double-sided printing, each answer aligns exactly
+   behind its question.
+   A4 sizing in screen preview is approximated; the @page rule + CSS at print
+   time enforces the actual paper size. */
+.fc-ds-page { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr;
+              gap: 8px; page-break-after: always; padding: 14mm;
+              width: 210mm; height: 297mm; box-sizing: border-box;
+              background: #fff; margin: 0 auto 20px;
+              box-shadow: 0 4px 16px rgba(0,0,0,.2); }
+.fc-ds-page:last-child { page-break-after: auto; }
+.fc-ds-card { border: 2px solid #333; border-radius: 6px; padding: 12mm 10mm; background: #fff; color: #000;
+              display: flex; flex-direction: column; align-items: center; justify-content: center;
+              text-align: center; gap: 8px; page-break-inside: avoid; overflow: hidden; }
+.fc-ds-card .fc-ds-q { font-size: 16pt; font-weight: 700; line-height: 1.35; }
+.fc-ds-card .fc-ds-a { font-size: 12pt; line-height: 1.5; }
+.fc-ds-card .fc-ds-num { position: absolute; font-size: 8pt; color: #999;
+                          margin-top: -8mm; margin-left: -65mm; }
+.fc-ds-card .fc-ds-meta { font-size: 8pt; color: #999; margin-top: auto; padding-top: 4mm; }
+.fc-ds-page-label { position: absolute; font-size: 9pt; color: #666; padding: 4mm 0 0 4mm; }
+
 @media print {
+  @page { size: A4; margin: 0; }
   body * { visibility: hidden; }
-  .fc-print-grid, .fc-print-grid * { visibility: visible; }
-  .fc-print-grid { position: absolute; left: 0; top: 0; width: 100%; }
+  /* Compact mode: only fc-print-grid visible */
+  .fc-print-grid:not([style*="display:none"]),
+  .fc-print-grid:not([style*="display:none"]) * { visibility: visible; }
+  .fc-print-grid:not([style*="display:none"]) { position: absolute; left: 0; top: 0; width: 100%; }
+  /* Double-sided: only fc-print-doublesided visible */
+  .fc-print-doublesided:not([style*="display:none"]),
+  .fc-print-doublesided:not([style*="display:none"]) * { visibility: visible; }
+  .fc-print-doublesided:not([style*="display:none"]) { position: absolute; left: 0; top: 0; width: 100%; }
+  .fc-print-doublesided .fc-ds-page { box-shadow: none; margin: 0; }
   .no-print { display: none !important; }
-  .fc-print-card { break-inside: avoid; }
+  .fc-print-card, .fc-ds-card { break-inside: avoid; }
 }
 .detail-meta { display: flex; align-items: center; gap: 10px; }
 
@@ -2293,12 +2331,20 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
             <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
             Zurück
           </button>
+          <div class="fc-print-mode-toggle">
+            <button class="fc-source-tab active" data-mode="compact" onclick="setFcPrintMode('compact')">Kompakt (Q+A pro Karte)</button>
+            <button class="fc-source-tab" data-mode="doublesided" onclick="setFcPrintMode('doublesided')">Doppelseitig (Q vorne, A hinten)</button>
+          </div>
           <button class="fc-btn fc-btn-primary" onclick="window.print()">
             <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
             Drucken
           </button>
         </div>
+        <div class="fc-print-mode-hint no-print" id="fc-print-mode-hint"></div>
+        <!-- Two distinct print containers: one for compact, one for double-sided.
+             Only the active one is rendered + visible during print. -->
         <div class="fc-print-grid" id="fc-print-grid"></div>
+        <div class="fc-print-doublesided" id="fc-print-doublesided" style="display:none"></div>
       </div>
     </div>
   </div>
@@ -9612,12 +9658,43 @@ function openFcPrintViewForDeck(deckId) {
   openFcPrintView();
 }
 
+// Print mode: 'compact' (Q+A on same tile) or 'doublesided' (Q on page 1,
+// A on page 2 with columns mirrored for long-edge flipping).
+let _fcPrintMode = 'compact';
+
+function setFcPrintMode(mode) {
+  _fcPrintMode = mode;
+  document.querySelectorAll('.fc-print-mode-toggle .fc-source-tab')
+    .forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+  const grid = document.getElementById('fc-print-grid');
+  const ds   = document.getElementById('fc-print-doublesided');
+  if (mode === 'compact') {
+    grid.style.display = '';
+    ds.style.display = 'none';
+    document.getElementById('fc-print-mode-hint').textContent =
+      'Kompakt: 2-Spalten-Layout, Frage + Antwort auf jeder Karte (zum Mitlernen am Schreibtisch).';
+  } else {
+    grid.style.display = 'none';
+    ds.style.display = '';
+    document.getElementById('fc-print-mode-hint').textContent =
+      'Doppelseitig: 4 Karten pro A4-Seite (2×2). Seite 1 = Fragen, Seite 2 = Antworten (Spalten gespiegelt). Drucke beidseitig mit Wendung über die LANGE KANTE — dann landet jede Antwort exakt hinter ihrer Frage.';
+  }
+}
+
+function openFcPrintViewForDeck(deckId) {
+  if (!_fcSession) _fcSession = { deckId };
+  else _fcSession.deckId = deckId;
+  openFcPrintView();
+}
+
 function openFcPrintView() {
   const deckId = _fcSession?.deckId;
   if (!deckId) return;
   const deck = FLASH_DECKS.find(d => d.id === deckId);
   if (!deck) return;
   fcModeSet('print');
+
+  // Compact: 1 grid with Q+A tiles
   const grid = document.getElementById('fc-print-grid');
   grid.innerHTML = deck.cards.map(c => {
     const src = c.sourceEntryId ? ENTRIES.find(e => e.id === c.sourceEntryId) : null;
@@ -9627,6 +9704,48 @@ function openFcPrintView() {
       ${src ? `<div class="fc-pc-meta">Quelle: ${escapeHtml(src.title)}</div>` : ''}
     </div>`;
   }).join('');
+
+  // Double-sided: chunk cards into pages of 4 (2×2 grid). For each page,
+  // emit a "front" page (questions in slots 1,2,3,4) and a "back" page
+  // with the columns SWAPPED (slots 2,1,4,3) so a long-edge flip aligns.
+  // Layout per A4 page (front):       (back, columns mirrored):
+  //   ┌─────┬─────┐                    ┌─────┬─────┐
+  //   │  1  │  2  │                    │  2  │  1  │
+  //   ├─────┼─────┤                    ├─────┼─────┤
+  //   │  3  │  4  │                    │  4  │  3  │
+  //   └─────┴─────┘                    └─────┴─────┘
+  const PAGE_SIZE = 4;
+  const ds = document.getElementById('fc-print-doublesided');
+  let html = '';
+  for (let i = 0; i < deck.cards.length; i += PAGE_SIZE) {
+    const chunk = deck.cards.slice(i, i + PAGE_SIZE);
+    while (chunk.length < PAGE_SIZE) chunk.push(null);  // pad to 4 with empties
+    const pageNum = Math.floor(i / PAGE_SIZE) + 1;
+
+    // Front page: questions in normal order
+    html += `<div class="fc-ds-page">
+      <div class="fc-ds-page-label">Seite ${pageNum}A · Fragen</div>
+      ${chunk.map((c, idx) => c
+        ? `<div class="fc-ds-card"><div class="fc-ds-num">${i + idx + 1}</div><div class="fc-ds-q">${escapeHtml(c.front)}</div></div>`
+        : `<div class="fc-ds-card" style="border-style:dashed;color:#bbb"><div class="fc-ds-q">—</div></div>`
+      ).join('')}
+    </div>`;
+
+    // Back page: answers with columns mirrored (1↔2 swap, 3↔4 swap)
+    const swapped = [chunk[1], chunk[0], chunk[3], chunk[2]];
+    const orig    = [chunk[1] && (i+1+1), chunk[0] && (i+0+1), chunk[3] && (i+3+1), chunk[2] && (i+2+1)];
+    html += `<div class="fc-ds-page">
+      <div class="fc-ds-page-label" style="text-align:right;width:100%">Seite ${pageNum}B · Antworten (gespiegelt für Long-Edge-Flip)</div>
+      ${swapped.map((c, idx) => c
+        ? `<div class="fc-ds-card"><div class="fc-ds-num">${orig[idx]}</div><div class="fc-ds-a">${escapeHtml(c.back).replace(/\n/g, '<br>')}</div>${c.sourceEntryId ? `<div class="fc-ds-meta">${escapeHtml((ENTRIES.find(e => e.id === c.sourceEntryId)||{}).title || '')}</div>` : ''}</div>`
+        : `<div class="fc-ds-card" style="border-style:dashed;color:#bbb"><div class="fc-ds-a">—</div></div>`
+      ).join('')}
+    </div>`;
+  }
+  ds.innerHTML = html;
+
+  // Apply the current mode (default 'compact' on each open)
+  setFcPrintMode(_fcPrintMode);
 }
 
 function exitFcPrintView() {
