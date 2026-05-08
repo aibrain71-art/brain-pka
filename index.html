@@ -1375,6 +1375,18 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
 .push-to-garden-btn:hover { background: rgba(52,211,153,.15); border-color: #34d399; }
 .push-to-garden-btn.pushed { background: var(--surface-3); color: var(--text-3);
                               border-color: var(--border-2); cursor: default; }
+/* "Mit Claude anreichern" — same shape as the push-to-garden chip but
+   in the accent (purple/blue) family. Toggles to a muted state when an
+   enrichment is already on the entry (then it acts as the undo button). */
+.enrich-note-btn { padding: 3px 9px; font-size: 11px; color: var(--accent);
+                    background: var(--accent-dim); border: 1px solid var(--accent);
+                    border-radius: 6px; cursor: pointer; transition: all .15s; }
+.enrich-note-btn:hover:not(:disabled) { background: var(--accent); color: #fff; }
+.enrich-note-btn:disabled { opacity: 0.6; cursor: wait; }
+.enrich-note-btn.enriched { background: var(--surface-3); color: var(--text-3);
+                             border-color: var(--border-2); }
+.enrich-note-btn.enriched:hover { background: var(--surface-2); color: #ef4444;
+                                   border-color: #ef4444; }
 .detail-meta { display: flex; align-items: center; gap: 10px; }
 
 /* Language toggle in topbar — height matches the search input + mode chip */
@@ -3850,6 +3862,217 @@ function saveEnrich() {
   }
 }
 
+// ── Personal-note enrichment via Claude ────────────────────────
+// Schema: NOTE_ENRICH[entryId] = { text, fetchedAt, model, usage }
+// OR { _dismissed: true } if the user clicked the undo button (so we don't
+// auto-retrigger after an explicit dismissal).
+let NOTE_ENRICH = {};
+try { NOTE_ENRICH = JSON.parse(localStorage.getItem('noteEnrich') || '{}'); } catch(_) {}
+function saveNoteEnrich() {
+  try { localStorage.setItem('noteEnrich', JSON.stringify(NOTE_ENRICH)); } catch(_) {}
+}
+const _noteEnrichInflight = {};
+
+async function enrichNoteWithClaude(entryId) {
+  const entry = ENTRIES.find(e => e.id === entryId);
+  if (!entry) return;
+  if (_noteEnrichInflight[entryId]) return;
+  _noteEnrichInflight[entryId] = true;
+  // Re-render so the button shows its loading state
+  if (selectedEntryId === entry.id) renderSummaryTab(entry);
+
+  try {
+    const systemPrompt = [
+      'Du bist Larry, ein persönlicher Wissens-Assistent.',
+      'Erweitere die folgende kurze Notiz mit relevantem Hintergrundkontext: Definitionen, verwandte Konzepte, historischer/sachlicher Kontext, weiterführende Stichworte.',
+      'WICHTIG: Schreibe FAKTISCH und NEUTRAL — keine Spekulationen. Wenn du dir unsicher bist, sag das explizit („möglicherweise…").',
+      'Maximal 4 kurze Absätze. Klare, sachliche Sprache. Kein Markdown, keine Aufzählungen, keine Überschriften.',
+    ].join('\n');
+
+    const userMsg = [
+      `Titel: ${entry.title}`,
+      `Datum: ${entry.date || '–'}`,
+      `Tags: ${(entry.topics || []).join(', ') || '–'}`,
+      ``,
+      `Originaltext der Notiz:`,
+      entry.preview || entry.detailed || entry.body || '(praktisch leer)',
+    ].join('\n');
+
+    const modelUsed = localStorage.getItem('selectedModel') || 'claude-haiku-4-5';
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: modelUsed,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userMsg }],
+        max_tokens: 800,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error?.message || data.error || `HTTP ${res.status}`);
+    const text = (data.content || []).filter(c => c.type === 'text').map(c => c.text).join('\n').trim();
+    if (!text) throw new Error('Leere Antwort von Claude');
+
+    NOTE_ENRICH[entryId] = {
+      text,
+      fetchedAt: new Date().toISOString(),
+      model: modelUsed,
+      usage: data.usage || null,
+    };
+    saveNoteEnrich();
+  } catch (err) {
+    alert('Fehler bei Anreicherung: ' + (err.message || err));
+  } finally {
+    delete _noteEnrichInflight[entryId];
+    const entry2 = ENTRIES.find(e => e.id === entryId);
+    if (entry2 && selectedEntryId === entry2.id) renderSummaryTab(entry2);
+  }
+}
+
+// Mark the entry as "user dismissed" so auto-trigger won't re-run it.
+// User can always click "Anreichern" again to redo.
+function undoNoteEnrichment(entryId) {
+  if (!confirm('Anreicherung wirklich verwerfen? Die ursprüngliche Notiz bleibt erhalten.')) return;
+  NOTE_ENRICH[entryId] = { _dismissed: true, dismissedAt: new Date().toISOString() };
+  saveNoteEnrich();
+  const entry = ENTRIES.find(e => e.id === entryId);
+  if (entry && selectedEntryId === entry.id) renderSummaryTab(entry);
+}
+
+function toggleNoteEnrichment(entryId) {
+  const enr = NOTE_ENRICH[entryId];
+  if (enr && enr.text) {
+    undoNoteEnrichment(entryId);
+  } else {
+    // Either undefined or _dismissed — both mean "no enrichment showing", click runs Claude
+    enrichNoteWithClaude(entryId);
+  }
+}
+
+// Auto-trigger Claude enrichment for sparse notes: if the entry has very
+// little content AND wasn't enriched/dismissed yet, fire one Claude call
+// in the background. The result shows up in the summary tab when ready.
+function maybeAutoEnrichNote(entry) {
+  if (!entry || entry.type === 'garden') return;
+  if (NOTE_ENRICH[entry.id]) return;  // already enriched OR dismissed
+  if (_noteEnrichInflight[entry.id]) return;
+  const content = ((entry.preview || '') + ' ' + (entry.detailed || '') + ' ' + (entry.body || '')).trim();
+  if (content.length >= 150) return;  // not sparse — don't auto-enrich
+  enrichNoteWithClaude(entry.id);
+}
+
+// ── Wikidata structured-facts fetch ───────────────────────────
+// Pulls a small set of useful properties (instance of, dates, occupation,
+// image) for the entry's title. Works for any entry where the title is a
+// recognisable concept/person/work. Cached in localStorage by entry.id.
+let WIKIDATA_CACHE = {};
+try { WIKIDATA_CACHE = JSON.parse(localStorage.getItem('wikidataCache') || '{}'); } catch(_) {}
+function saveWikidataCache() {
+  try { localStorage.setItem('wikidataCache', JSON.stringify(WIKIDATA_CACHE)); } catch(_) {}
+}
+const _wikidataInflight = {};
+
+// Map of Wikidata property IDs we care about → display labels (German).
+// Property IDs reference: https://www.wikidata.org/wiki/Wikidata:List_of_properties/all
+const WD_PROPS = {
+  P31:  'Typ',          // instance of
+  P569: 'Geboren',      // date of birth
+  P570: 'Gestorben',    // date of death
+  P19:  'Geburtsort',   // place of birth
+  P106: 'Beruf',        // occupation
+  P50:  'Autor',        // author
+  P136: 'Genre',        // genre
+  P577: 'Veröffentlicht', // publication date
+  P407: 'Sprache',      // language of work
+};
+
+async function fetchWikidataFacts(entry) {
+  if (!entry || !entry.title) return null;
+  if (WIKIDATA_CACHE[entry.id]) return WIKIDATA_CACHE[entry.id];
+  if (_wikidataInflight[entry.id]) return null;
+  _wikidataInflight[entry.id] = true;
+  try {
+    // 1) Search for the entity
+    const q = encodeURIComponent(entry.title);
+    const sRes = await fetch(`https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${q}&language=de&format=json&origin=*`);
+    const sData = await sRes.json();
+    const top = sData.search?.[0];
+    if (!top) {
+      // Cache the negative result for 24h so we don't keep retrying
+      WIKIDATA_CACHE[entry.id] = { _empty: true, fetchedAt: new Date().toISOString() };
+      saveWikidataCache();
+      return null;
+    }
+    // 2) Fetch the entity data
+    const eRes = await fetch(`https://www.wikidata.org/wiki/Special:EntityData/${top.id}.json`);
+    const eData = await eRes.json();
+    const entity = eData.entities?.[top.id];
+    if (!entity) return null;
+    const claims = entity.claims || {};
+
+    // Extract our chosen properties as plain strings.
+    const facts = {};
+    for (const [pid, label] of Object.entries(WD_PROPS)) {
+      const claim = claims[pid]?.[0];
+      if (!claim) continue;
+      const val = claim.mainsnak?.datavalue?.value;
+      if (val == null) continue;
+      if (typeof val === 'string') {
+        facts[label] = val;
+      } else if (val.time) {
+        // Wikidata times look like "+1817-12-16T00:00:00Z" — drop the leading +
+        const m = String(val.time).match(/([+-]?)(\d{1,4})-(\d{2})-(\d{2})/);
+        if (m) facts[label] = `${parseInt(m[3])}.${parseInt(m[4])}.${m[1] === '-' ? 'v.Chr. ' : ''}${parseInt(m[2])}`.replace(/\.0\./g, '.');
+      } else if (val.id && claims[pid]?.[0]?.mainsnak?.datavalue?.type === 'wikibase-entityid') {
+        // It's a reference to another wikidata item — best-effort label resolution
+        // (we'd need a second fetch; for now use the Q-id which is at least navigable)
+        facts[label] = val.id;  // refined below
+      }
+    }
+
+    // Resolve Wikibase-entity references (P31, P106, P19, P50, P136, P407, P19) to labels.
+    // Collect Q-ids we still need to translate.
+    const qIds = Object.values(facts).filter(v => /^Q\d+$/.test(v));
+    if (qIds.length) {
+      const labelRes = await fetch(`https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${qIds.join('|')}&props=labels&languages=de&format=json&origin=*`);
+      const labelData = await labelRes.json();
+      for (const key of Object.keys(facts)) {
+        const v = facts[key];
+        if (/^Q\d+$/.test(v)) {
+          const lbl = labelData.entities?.[v]?.labels?.de?.value;
+          if (lbl) facts[key] = lbl;
+        }
+      }
+    }
+
+    // Image: P18 is the filename on Commons → construct full URL
+    const imgClaim = claims.P18?.[0]?.mainsnak?.datavalue?.value;
+    let image = null;
+    if (imgClaim) {
+      const enc = encodeURIComponent(imgClaim.replace(/ /g, '_'));
+      image = `https://commons.wikimedia.org/wiki/Special:FilePath/${enc}?width=200`;
+    }
+
+    const result = {
+      id: top.id,
+      label: top.label || entry.title,
+      description: top.description || '',
+      facts,
+      image,
+      fetchedAt: new Date().toISOString(),
+    };
+    WIKIDATA_CACHE[entry.id] = result;
+    saveWikidataCache();
+    return result;
+  } catch (err) {
+    console.warn('Wikidata fetch failed:', err);
+    return null;
+  } finally {
+    delete _wikidataInflight[entry.id];
+  }
+}
+
 // Pending fetches keyed by entry id, so we don't double-fetch
 const _enrichInflight = {};
 
@@ -4270,13 +4493,19 @@ function openDetail(entry) {
     // Standard journal entry: same editable tag row as Garden, plus a "push to Garden" button
     const cat = entryCategory(entry);
     const color = cat ? cat.color : '#60a5fa';
+    const enrichState = NOTE_ENRICH[entry.id];
+    const enrichLabel = (enrichState && enrichState.text) ? '↺ Anreicherung verwerfen'
+      : (_noteEnrichInflight[entry.id] ? '⏳ Wird angereichert…' : '✨ Mit Claude anreichern');
+    const enrichTitle = (enrichState && enrichState.text) ? 'Claude-Anreicherung entfernen, Original bleibt erhalten'
+      : 'Notiz mit Claude um Hintergrundkontext erweitern';
     header.innerHTML = `
       <button class="detail-close" onclick="closeDetail()" title="Details schliessen">✕</button>
       <div class="detail-type-badge" id="detail-type"><span style="color:${color}">${entry.icon}</span>&nbsp;${entry.type === 'video' ? 'Video' : entry.type === 'article' ? 'Artikel' : 'Notiz'}</div>
       <div class="detail-title" id="detail-title">${escapeHtml(entry.title)}</div>
-      <div class="detail-meta">
+      <div class="detail-meta" style="flex-wrap:wrap">
         <span class="detail-date" id="detail-date">${fmtDate(entry.date)}</span>
         <button class="push-to-garden-btn ${GARDEN_PUSHED[entry.id] ? 'pushed' : ''}" onclick="pushNoteToGarden(${entry.id})" title="${GARDEN_PUSHED[entry.id] ? 'Aus Garden entfernen' : 'Diese Notiz als Garten-Karte pushen'}">${GARDEN_PUSHED[entry.id] ? '✓ Im Garden' : '🌱 In Garden pushen'}</button>
+        <button class="enrich-note-btn ${enrichState && enrichState.text ? 'enriched' : ''}" onclick="toggleNoteEnrichment(${entry.id})" title="${enrichTitle}" ${_noteEnrichInflight[entry.id] ? 'disabled' : ''}>${enrichLabel}</button>
       </div>
       ${buildEditableTagsRow(entry)}`;
   }
@@ -4303,6 +4532,19 @@ function openDetail(entry) {
   panel.classList.add('open');
   document.body.classList.remove('detail-collapsed');
   document.body.classList.add('has-detail');
+
+  // Sparse-note auto-enrichment: if this is a personal note with very
+  // little content and no prior enrichment/dismissal, kick off Claude in
+  // the background. Result lands in the summary tab when ready.
+  maybeAutoEnrichNote(entry);
+
+  // Wikidata structured-facts side-fetch (works for both note and garden).
+  // Cached after first call. The summary tab re-renders when data arrives.
+  if (!WIKIDATA_CACHE[entry.id] && !_wikidataInflight[entry.id]) {
+    fetchWikidataFacts(entry).then(fact => {
+      if (fact && selectedEntryId === entry.id) renderSummaryTab(entry);
+    });
+  }
 }
 
 // Toggle the right detail panel between expanded (full width) and collapsed
@@ -4386,6 +4628,54 @@ function renderSummaryTab(entry, color) {
     wikiBlock = `<div class="enrich-banner"><div class="spinner"></div><span>Wikipedia wird abgerufen…</span></div>`;
   }
 
+  // Claude enrichment block (personal notes only) — shows enriched text
+  // OR a loading spinner while the auto-trigger is in flight.
+  const claudeEnr = NOTE_ENRICH[entry.id];
+  let claudeBlock = '';
+  if (entry.type !== 'garden') {
+    if (_noteEnrichInflight[entry.id]) {
+      claudeBlock = `<div class="enrich-banner"><div class="spinner"></div><span>Claude erweitert die Notiz mit Hintergrund…</span></div>`;
+    } else if (claudeEnr && claudeEnr.text) {
+      const claudeHtml = claudeEnr.text.split(/\n\n+/).map(p =>
+        `<p style="margin-bottom:10px">${linkifyEntities(p, entry.id)}</p>`
+      ).join('');
+      const modelShort = (claudeEnr.model || '').replace(/^claude-/, '').replace(/-latest$/, '');
+      claudeBlock = `
+        <div class="summary-section">
+          <div class="summary-section-title" style="display:flex;align-items:center;gap:6px">
+            ✨ KI-Anreicherung
+            <span style="font-size:9px;color:var(--text-3);font-weight:400;text-transform:none;letter-spacing:0">
+              ${escapeHtml(modelShort)} · ${new Date(claudeEnr.fetchedAt).toLocaleDateString('de-CH')}
+            </span>
+          </div>
+          <div style="font-size:13px;color:var(--text-2);line-height:1.7">${claudeHtml}</div>
+        </div>`;
+    }
+  }
+
+  // Wikidata structured-facts box: shows when we have non-empty data.
+  // Renders a compact key:value table (Geboren, Beruf, Genre, etc.) plus
+  // an optional thumbnail image. Subtle styling so it doesn't dominate.
+  const wd = WIKIDATA_CACHE[entry.id];
+  let wikidataBlock = '';
+  if (wd && wd.facts && Object.keys(wd.facts).length) {
+    const rows = Object.entries(wd.facts).map(([k, v]) =>
+      `<div style="display:flex;gap:10px;padding:3px 0;font-size:12px"><span style="color:var(--text-3);min-width:90px">${escapeHtml(k)}</span><span style="color:var(--text-2)">${escapeHtml(String(v))}</span></div>`
+    ).join('');
+    const img = wd.image ? `<img src="${escapeHtml(wd.image)}" alt="" style="max-width:120px;max-height:120px;border-radius:6px;float:right;margin:0 0 8px 12px" onerror="this.remove()">` : '';
+    wikidataBlock = `
+      <div class="summary-section">
+        <div class="summary-section-title" style="display:flex;align-items:center;gap:6px">
+          🧬 Wikidata
+          <span style="font-size:9px;color:var(--text-3);font-weight:400;text-transform:none;letter-spacing:0">
+            <a href="https://www.wikidata.org/wiki/${escapeHtml(wd.id)}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none">${escapeHtml(wd.id)}</a>
+            ${wd.description ? '· ' + escapeHtml(wd.description) : ''}
+          </span>
+        </div>
+        <div style="overflow:hidden">${img}${rows}</div>
+      </div>`;
+  }
+
   tab.innerHTML = `
     <div class="summary-section">
       <div class="summary-section-title">Kurzfassung</div>
@@ -4395,7 +4685,9 @@ function renderSummaryTab(entry, color) {
       <div class="summary-section-title">Detailzusammenfassung</div>
       <div class="summary-detailed visible" style="font-size:13px;color:var(--text-2);line-height:1.7">${detailedHtml}</div>
     </div>
+    ${claudeBlock}
     ${wikiBlock}
+    ${wikidataBlock}
     <div class="summary-section">
       <div class="summary-section-title">Themen</div>
       <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">
