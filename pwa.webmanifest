@@ -2,7 +2,7 @@
   "name": "Personal Knowledge Assistant",
   "short_name": "PKA",
   "description": "Larry — dein persönlicher Wissens-Assistent (Journal + Garten + Sprachmodus)",
-  "start_url": "./index.html",
+  "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
@@ -15,7 +15,7 @@
     { "src": "./icon-512.png",  "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ],
   "share_target": {
-    "action": "./index.html",
+    "action": "./",
     "method": "GET",
     "params": {
       "title": "share_title",
