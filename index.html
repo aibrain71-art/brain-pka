@@ -234,6 +234,56 @@ body.view-graph #detail-panel.open { transform: translateX(0); }
                      border-bottom-right-radius: 4px; }
 .va-msg.assistant { align-self: flex-start; background: var(--surface-2);  color: var(--text);
                      border-bottom-left-radius: 4px; }
+
+/* ── Voice-chat timelines ─────────────────────────────────────
+   Two thin vertical lines down the left and right edges of the chat
+   thread, with a dot rendered next to each message:
+   · LEFT line + white dot for assistant (Larry) messages
+   · RIGHT line + light-blue dot for user messages
+   Toggleable via settings; when off, body.va-no-timeline hides them. */
+.va-chat { position: relative; padding-left: 36px; padding-right: 36px;
+            transition: padding .2s; }
+.va-chat::before, .va-chat::after {
+  content: ''; position: absolute; top: 8px; bottom: 8px; width: 1px;
+  background: linear-gradient(to bottom, transparent 0%, rgba(255,255,255,.18) 10%, rgba(255,255,255,.18) 90%, transparent 100%);
+  pointer-events: none;
+}
+.va-chat::before { left: 14px; }
+.va-chat::after  { right: 14px; }
+.va-msg { position: relative; }
+.va-msg.assistant::before, .va-msg.user::after {
+  content: ''; position: absolute; top: 16px;
+  width: 10px; height: 10px; border-radius: 50%;
+  animation: va-tl-pop .45s cubic-bezier(.4,1.6,.6,1) both;
+}
+/* Assistant (Larry) = blue + pulsating, matching the central bubble. */
+.va-msg.assistant::before {
+  left: -27px;
+  background: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59,130,246,.25), 0 0 14px rgba(59,130,246,.6);
+  animation: va-tl-pop .45s cubic-bezier(.4,1.6,.6,1) both, va-tl-pulse 2.4s ease-in-out infinite;
+}
+.va-msg.user::after {
+  right: -27px;
+  background: #fff;
+  box-shadow: 0 0 0 2px rgba(255,255,255,.18), 0 0 10px rgba(255,255,255,.35);
+}
+@keyframes va-tl-pop {
+  0%   { opacity: 0; transform: scale(0.2); }
+  60%  { opacity: 1; transform: scale(1.25); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes va-tl-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(59,130,246,.25), 0 0 14px rgba(59,130,246,.6); }
+  50%      { box-shadow: 0 0 0 5px rgba(59,130,246,.15), 0 0 22px rgba(59,130,246,.85); }
+}
+/* Setting-controlled visibility: when disabled, drop the lines + dots
+   and reclaim the horizontal padding so the bubbles fill the panel. */
+body.va-no-timeline .va-chat { padding-left: 12px; padding-right: 12px; }
+body.va-no-timeline .va-chat::before,
+body.va-no-timeline .va-chat::after,
+body.va-no-timeline .va-msg.assistant::before,
+body.va-no-timeline .va-msg.user::after { display: none; }
 /* Token + cost footer under assistant voice messages — same data as the
    chat thread, just slightly tighter to fit the bubble layout. */
 .va-msg-meta { display: flex; gap: 10px; margin-top: 6px; font-size: 10px; color: var(--text-3);
@@ -3039,6 +3089,20 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
         <div class="settings-hint">Lädt für jede Person und Organisation eine Kurz-, Detail- und Vollzusammenfassung sowie Bild + Cross-References aus Wikipedia. Bereits angereicherte Einträge werden übersprungen. Mit Pause zwischen Requests, damit Wikipedia uns nicht limitiert.</div>
       </div>
 
+      <!-- Voice-mode chat-thread timelines toggle -->
+      <div class="settings-group" data-section="voice">
+        <div class="settings-label">Sprachmodus — Darstellung</div>
+        <div class="settings-pref-row">
+          <div class="settings-pref-text">
+            <div class="settings-pref-title">Chat-Timelines</div>
+            <div class="settings-pref-sub">Zwei senkrechte Zeitachsen am Rand des Sprach-Chats: blauer pulsierender Punkt für Larry (links), weisser Punkt für deine Nachricht (rechts).</div>
+          </div>
+          <label class="settings-toggle">
+            <input type="checkbox" id="pref-va-timelines" onchange="setPref('vaTimelines', this.checked); applyVaTimelinePref()">
+            <span class="settings-toggle-slider"></span>
+          </label>
+        </div>
+      </div>
       <!-- Voice-mode personas — scoped to the PKA voice assistant only -->
       <div class="settings-group" data-section="voice">
         <div class="settings-label">Sprach-Personas (nur PKA-Sprachmodus)</div>
@@ -3437,7 +3501,14 @@ const PREF_DEFAULTS = {
   autoConnections: true,
   translationLang: (localStorage.getItem('uiLang') || 'de'),
   searchLang:      (localStorage.getItem('uiLang') || 'de'),
+  vaTimelines:     true,         // chat-thread timelines in voice mode
 };
+
+// Apply the voice-chat-timelines visibility preference. Toggles a class
+// on <body> that the CSS picks up to hide/show the timeline rails + dots.
+function applyVaTimelinePref() {
+  document.body.classList.toggle('va-no-timeline', !getPref('vaTimelines'));
+}
 function getPref(key) {
   const raw = localStorage.getItem('pref_' + key);
   if (raw === null) return PREF_DEFAULTS[key];
@@ -3500,6 +3571,7 @@ function syncPreferenceControls() {
   tog('pref-auto-connections', 'autoConnections');
   sel('pref-translation-lang', 'translationLang');
   sel('pref-search-lang',      'searchLang');
+  tog('pref-va-timelines',     'vaTimelines');
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -9690,6 +9762,7 @@ applyLanguage();
 loadGarden();
 applyLogo();  // re-run after avatar element exists in topbar
 _initCloudSync();  // restore OneDrive connection if previously signed in
+applyVaTimelinePref();  // restore the voice-chat timeline visibility from prefs
 
 // Replay per-entry language overrides onto ENTRIES so effectiveLang() finds
 // them on entry.lang directly (faster than re-checking localStorage every call).
