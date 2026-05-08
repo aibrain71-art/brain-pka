@@ -3768,10 +3768,12 @@ function renderCardList(entries) {
 
 // ── Views ─────────────────────────────────────────────────────
 function setView(view, filter) {
-  // Always close the right-side detail panel when switching top-level views.
-  // The user's expectation: a view switch is a fresh start — no leftover entry detail
-  // hanging around from where they were before.
-  closeDetail();
+  // On mobile, close the right-side detail panel on view switches — screen
+  // real-estate is too tight to keep two contexts visible. On desktop, leave
+  // the panel as-is: the user expects both panels to stay open until they
+  // explicitly click the close/collapse button.
+  const isDesktop = window.matchMedia('(min-width: 769px) and (hover: hover)').matches;
+  if (!isDesktop) closeDetail();
   // Leaving graph view → stop the neuron animation loop (saves CPU)
   if (currentView === 'graph' && view !== 'graph') stopNeuronAnim();
   currentView = view;
