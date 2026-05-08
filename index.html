@@ -201,10 +201,12 @@ body.view-graph #detail-panel.open { transform: translateX(0); }
              justify-content: center; gap: 18px; padding: 50px 20px 20px;
              flex-shrink: 0; transition: all .35s ease; cursor: pointer; }
 .va-bubble { width: 200px; height: 200px; border-radius: 50%; position: relative;
-              flex-shrink: 0; transition: width .35s, height .35s;
+              flex-shrink: 0; transition: width .35s, height .35s, filter .15s, box-shadow .15s;
               background: radial-gradient(circle at 35% 35%, #93c5fd 0%, #3b82f6 55%, #1e3a8a 100%);
               box-shadow: 0 0 80px rgba(59, 130, 246, 0.55), inset 0 0 40px rgba(255,255,255,.1);
-              animation: va-idle 3.4s ease-in-out infinite; }
+              animation: va-idle 3.4s ease-in-out infinite; cursor: pointer; }
+.va-bubble:hover { filter: brightness(1.1); box-shadow: 0 0 100px rgba(59, 130, 246, 0.75), inset 0 0 40px rgba(255,255,255,.15); }
+.va-bubble:active { transform: scale(0.97); }
 .va-bubble-core { position: absolute; inset: 12%; border-radius: 50%;
                     background: radial-gradient(circle at 30% 30%, rgba(255,255,255,.55), transparent 70%); }
 .va-bubble-pulse { position: absolute; inset: 0; border-radius: 50%;
@@ -9850,6 +9852,12 @@ let _vaIsSpeaking   = false;
 let _vaWhisperFlow  = (localStorage.getItem('vaWhisperFlow') ?? 'on') === 'on';
 let _vaConvHistory  = [];
 let _vaActiveAudio  = null;  // current ElevenLabs <audio> element so we can stop it
+// Continuous-conversation flag: true between the moment the user activates the
+// mic (via bubble or mic button) and the moment they explicitly cancel by
+// tapping during listening. While true, the mic auto-resumes after each TTS
+// turn so the back-and-forth feels like a phone call (ChatGPT/Gemini style).
+let _vaConvActive   = false;
+let _vaAutoListenTimer = null;
 // ElevenLabs config (set via voice-assistant settings or directly in localStorage)
 let ELEVEN_KEY      = localStorage.getItem('elevenlabsKey') || '';
 let ELEVEN_VOICE_ID = localStorage.getItem('elevenlabsVoiceId') || '';
@@ -9865,10 +9873,12 @@ function openVoiceAssistant() {
   if (btn) btn.classList.toggle('active', _vaWhisperFlow);
   const persona = getActivePersona();
   vaSetStatus(persona ? `Persona: ${persona.name} · ${_vaWhisperFlow ? 'WhisperFlow aktiv' : 'direkter Modus'}`
-                       : 'Bereit. Klick auf Mikrofon zum Sprechen.');
+                       : 'Bereit. Klick auf die Bubble zum Sprechen.');
   setTimeout(() => document.getElementById('va-text-input')?.focus(), 80);
 }
 function closeVoiceAssistant() {
+  _vaConvActive = false;
+  if (_vaAutoListenTimer) { clearTimeout(_vaAutoListenTimer); _vaAutoListenTimer = null; }
   vaStopListening();
   vaStopSpeaking();
   document.getElementById('voice-assistant').classList.remove('visible');
@@ -9968,6 +9978,58 @@ function toggleVoiceMic() {
   else vaStartListening();
 }
 
+// ── Blue-bubble interaction (standard AI voice-assistant pattern) ─
+// Single tap on the bubble:
+//   • minimized          → restore the assistant (no mic action yet)
+//   • idle               → start listening (enter conversation)
+//   • listening          → cancel listening (exit conversation, no auto-resume)
+//   • speaking           → barge-in: stop TTS and start listening immediately
+// After each assistant reply the mic auto-resumes for the next turn until
+// the user taps to cancel. This mirrors ChatGPT voice / Gemini Live / Siri.
+function vaBubbleClick(ev) {
+  if (ev) ev.stopPropagation();
+  const va = document.getElementById('voice-assistant');
+  if (va && va.classList.contains('minimized')) {
+    va.classList.remove('minimized');
+    return;
+  }
+  if (_vaAutoListenTimer) { clearTimeout(_vaAutoListenTimer); _vaAutoListenTimer = null; }
+  // Bubble click overrides any in-flight mic-button gestures: cancel a
+  // pending exit-latched timer and clear latched mode so state stays coherent.
+  _vaCancelClickTimer();
+  _vaIsLatched = false;
+  if (_vaIsSpeaking) {
+    vaStopSpeaking();
+    _vaConvActive = true;
+    vaStartListening();
+    return;
+  }
+  if (_vaIsListening) {
+    _vaConvActive = false;
+    vaStopListening();
+    vaSetStatus('Bereit. Klick auf die Bubble, um wieder zu sprechen.');
+    return;
+  }
+  _vaConvActive = true;
+  vaStartListening();
+}
+
+// Re-open the mic after the assistant finishes speaking, but only if the
+// conversation is still active (user hasn't cancelled) and nothing else is
+// going on. The short delay gives the user a beat to interrupt.
+function vaMaybeAutoListen() {
+  if (!_vaConvActive) return;
+  if (_vaIsListening || _vaIsSpeaking) return;
+  if (_vaAutoListenTimer) clearTimeout(_vaAutoListenTimer);
+  _vaAutoListenTimer = setTimeout(() => {
+    _vaAutoListenTimer = null;
+    if (!_vaConvActive || _vaIsListening || _vaIsSpeaking) return;
+    const va = document.getElementById('voice-assistant');
+    if (!va || !va.classList.contains('visible')) return;
+    vaStartListening();
+  }, 450);
+}
+
 // Mic-button interaction:
 //
 //   • Hold (≥ 300 ms)            → walkie-talkie (release stops the mic)
@@ -9998,9 +10060,13 @@ function vaMicDown(ev) {
   // Latched mode owns the mic state — don't let pointer presses toggle it.
   // Exit happens via single-click (queued in vaMicUp) or another dblclick.
   if (_vaIsLatched) return;
+  if (_vaAutoListenTimer) { clearTimeout(_vaAutoListenTimer); _vaAutoListenTimer = null; }
   if (_vaIsListening) {
+    // Already recording → tap stops it; treat as explicit cancel
+    _vaConvActive = false;
     vaStopListening();
   } else {
+    _vaConvActive = true;
     vaStartListening();
   }
 }
@@ -10352,7 +10418,7 @@ function vaSpeakBrowser(text) {
   u.lang = lang === 'de' ? 'de-DE' : (lang === 'fr' ? 'fr-FR' : 'en-US');
   u.rate = 1.02; u.pitch = 1;
   u.onstart = () => { _vaIsSpeaking = true; vaSetBubbleState('speaking'); vaSetStatus('Spricht…'); };
-  u.onend   = () => { _vaIsSpeaking = false; vaSetBubbleState(null); vaSetStatus('Bereit'); };
+  u.onend   = () => { _vaIsSpeaking = false; vaSetBubbleState(null); vaSetStatus('Bereit'); vaMaybeAutoListen(); };
   speechSynthesis.speak(u);
 }
 async function vaSpeakElevenLabs(text, voiceIdOverride) {
@@ -10383,7 +10449,8 @@ async function vaSpeakElevenLabs(text, voiceIdOverride) {
     _vaActiveAudio = a;
     a.onplay  = () => { _vaIsSpeaking = true; vaSetBubbleState('speaking'); vaSetStatus('Spricht…'); };
     a.onended = () => { _vaIsSpeaking = false; vaSetBubbleState(null); vaSetStatus('Bereit');
-                         URL.revokeObjectURL(url); if (_vaActiveAudio === a) _vaActiveAudio = null; };
+                         URL.revokeObjectURL(url); if (_vaActiveAudio === a) _vaActiveAudio = null;
+                         vaMaybeAutoListen(); };
     a.onerror = () => { _vaIsSpeaking = false; vaSetBubbleState(null);
                          URL.revokeObjectURL(url); if (_vaActiveAudio === a) _vaActiveAudio = null; };
     await a.play();
@@ -11923,8 +11990,13 @@ document.addEventListener('dblclick', (e) => {
     <select id="va-persona-select" onchange="setActivePersona(this.value)" title="Sprach-Persona wechseln (nur dieses Sprachfenster)"></select>
   </div>
   <button class="va-close" onclick="closeVoiceAssistant()" title="Schliessen (Esc)">✕</button>
-  <div class="va-stage" onclick="toggleVoiceBubble()" title="Klick: Bubble verkleinern / vergrössern">
-    <div class="va-bubble" id="va-bubble">
+  <div class="va-stage" onclick="toggleVoiceBubble()" title="Klick neben die Bubble: verkleinern / vergrössern">
+    <div class="va-bubble" id="va-bubble"
+         onclick="vaBubbleClick(event)"
+         role="button" tabindex="0"
+         aria-label="Mikrofon ein/aus"
+         onkeydown="if(event.key===' '||event.key==='Enter'){event.preventDefault();vaBubbleClick(event);}"
+         title="Klick: Mikrofon ein/aus  ·  Während Larry spricht: unterbrechen">
       <div class="va-bubble-core"></div>
       <div class="va-bubble-pulse"></div>
       <div class="va-bubble-pulse va-bubble-pulse-2"></div>
