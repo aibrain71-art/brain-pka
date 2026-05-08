@@ -724,7 +724,7 @@ body:has(#sidebar:not(.collapsed)) .list-subtitle .ls-count::after  { content: "
                      padding: 80px 20px; backdrop-filter: blur(2px); }
 .settings-overlay.visible { display: flex; }
 .settings-modal { background: var(--surface-1); border: 1px solid var(--border-2);
-                   border-radius: 14px; width: 100%; max-width: 520px;
+                   border-radius: 14px; width: 100%; max-width: 820px;
                    box-shadow: 0 20px 60px rgba(0,0,0,.5);
                    display: flex; flex-direction: column; max-height: calc(100vh - 160px); }
 .settings-head { display: flex; align-items: center; justify-content: space-between;
@@ -734,9 +734,37 @@ body:has(#sidebar:not(.collapsed)) .list-subtitle .ls-count::after  { content: "
                    font-size: 16px; display: inline-flex; align-items: center; justify-content: center;
                    transition: all .15s; }
 .settings-close:hover { background: var(--surface-3); color: var(--text); }
-.settings-body { padding: 16px 18px; overflow-y: auto; }
-.settings-group { padding: 12px 0; border-bottom: 1px solid var(--border); }
+/* Two-pane layout: sidebar with categories on the left, scrollable body
+   on the right. Sidebar items act like radio buttons — exactly one is
+   active and toggles which group of settings is rendered. */
+.settings-layout { display: flex; flex: 1; overflow: hidden; }
+.settings-sidebar { width: 200px; flex-shrink: 0; border-right: 1px solid var(--border);
+                     padding: 12px 8px; overflow-y: auto; background: var(--surface-2); }
+.settings-nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px;
+                      border-radius: 8px; font-size: 13px; color: var(--text-2); cursor: pointer;
+                      transition: all .15s; margin-bottom: 2px; }
+.settings-nav-item:hover { background: var(--surface-3); color: var(--text); }
+.settings-nav-item.active { background: var(--accent-dim); color: var(--accent); font-weight: 600; }
+.settings-nav-icon { font-size: 16px; flex-shrink: 0; width: 18px; text-align: center; }
+.settings-body { padding: 16px 22px; overflow-y: auto; flex: 1; }
+.settings-group { padding: 4px 0 12px; }
 .settings-group:last-child { border-bottom: none; }
+/* When the sidebar drives section switching, only the .active section is
+   shown in the body. We use data-section attributes on each group + JS
+   to flip them. */
+.settings-group[data-section] { display: none; }
+.settings-group[data-section].section-active { display: block; }
+@media (max-width: 768px) {
+  /* On narrow screens, flip the sidebar to a horizontal scrollable strip
+     above the body — keeps the menu visible without eating width. */
+  .settings-modal { max-width: 100%; }
+  .settings-layout { flex-direction: column; }
+  .settings-sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border);
+                       padding: 8px; display: flex; gap: 4px; overflow-x: auto;
+                       white-space: nowrap; }
+  .settings-nav-item { flex-shrink: 0; padding: 6px 12px; font-size: 12px; margin-bottom: 0; }
+  .settings-nav-item span:not(.settings-nav-icon) { display: inline; }
+}
 .settings-label { font-size: 12px; font-weight: 600; color: var(--text-2);
                    text-transform: uppercase; letter-spacing: .5px; margin-bottom: 10px; }
 .settings-hint { font-size: 11px; color: var(--text-3); margin-top: 8px; line-height: 1.4; }
@@ -747,6 +775,35 @@ body:has(#sidebar:not(.collapsed)) .list-subtitle .ls-count::after  { content: "
 .settings-radio:hover { background: var(--surface-2); border-color: var(--border-2); }
 .settings-radio input { accent-color: var(--accent); }
 .settings-radio:has(input:checked) { background: var(--accent-dim); border-color: var(--accent); }
+/* Two-column "label + control" preference rows.
+   Used by the Content & Language settings group (auto-summarisation,
+   auto-tagging, translation language, etc.). Matches the layout style
+   shown in modern Preferences panels (left: title + sub-label, right: control). */
+.settings-pref-row { display: flex; align-items: center; justify-content: space-between;
+                     gap: 12px; padding: 10px 0; }
+.settings-pref-row + .settings-pref-row { border-top: 1px solid var(--border); }
+.settings-pref-text { flex: 1; min-width: 0; }
+.settings-pref-title { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 2px; }
+.settings-pref-sub   { font-size: 12px; color: var(--text-3); line-height: 1.4; }
+.settings-pref-select { background: var(--surface-3); border: 1px solid var(--border);
+                         color: var(--text); padding: 8px 12px; border-radius: 8px;
+                         font-size: 13px; cursor: pointer; min-width: 140px; }
+.settings-pref-select:focus { outline: none; border-color: var(--accent); }
+/* iOS-style toggle switch: hidden checkbox + a styled label that toggles
+   visually based on :checked. Accent colour from the app's --accent. */
+.settings-toggle { position: relative; display: inline-block; width: 44px; height: 24px;
+                    flex-shrink: 0; }
+.settings-toggle input { opacity: 0; width: 0; height: 0; }
+.settings-toggle-slider { position: absolute; cursor: pointer; inset: 0;
+                           background: var(--surface-3); border: 1px solid var(--border);
+                           border-radius: 24px; transition: .2s; }
+.settings-toggle-slider::before { content: ''; position: absolute; height: 18px; width: 18px;
+                                   left: 2px; top: 2px; background: var(--text-2);
+                                   border-radius: 50%; transition: .2s; }
+.settings-toggle input:checked + .settings-toggle-slider { background: var(--accent);
+                                                            border-color: var(--accent); }
+.settings-toggle input:checked + .settings-toggle-slider::before { transform: translateX(20px);
+                                                                    background: #fff; }
 .settings-logo-row { display: flex; align-items: center; gap: 14px; }
 .settings-logo-preview { width: 56px; height: 56px; border-radius: 10px; background: var(--surface-2);
                           border: 1px solid var(--border); display: flex; align-items: center;
@@ -1387,6 +1444,13 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
                              border-color: var(--border-2); }
 .enrich-note-btn.enriched:hover { background: var(--surface-2); color: #ef4444;
                                    border-color: #ef4444; }
+/* Compact language picker in the detail header — sits between the date
+   and the action buttons. "Auto" (empty) means inherit from the global
+   Translation preference; an explicit DE/EN/FR locks the entry to that. */
+.entry-lang-picker { background: var(--surface-3); border: 1px solid var(--border);
+                      color: var(--text-2); padding: 3px 6px; border-radius: 6px;
+                      font-size: 11px; cursor: pointer; }
+.entry-lang-picker:focus { outline: none; border-color: var(--accent); }
 .detail-meta { display: flex; align-items: center; gap: 10px; }
 
 /* Language toggle in topbar — height matches the search input + mode chip */
@@ -2110,9 +2174,18 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
       <span class="settings-title" id="settings-title">Einstellungen</span>
       <button class="settings-close" onclick="closeSettings()" title="Schliessen">✕</button>
     </div>
+    <div class="settings-layout">
+      <nav class="settings-sidebar" id="settings-sidebar">
+        <div class="settings-nav-item active" data-target="appearance" onclick="setSettingsSection('appearance')"><span class="settings-nav-icon">🎨</span><span>Erscheinungsbild</span></div>
+        <div class="settings-nav-item" data-target="content" onclick="setSettingsSection('content')"><span class="settings-nav-icon">📄</span><span>Inhalte</span></div>
+        <div class="settings-nav-item" data-target="language" onclick="setSettingsSection('language')"><span class="settings-nav-icon">🌐</span><span>Sprache</span></div>
+        <div class="settings-nav-item" data-target="cloud" onclick="setSettingsSection('cloud')"><span class="settings-nav-icon">☁️</span><span>Cloud-Sync</span></div>
+        <div class="settings-nav-item" data-target="enrichment" onclick="setSettingsSection('enrichment')"><span class="settings-nav-icon">🧬</span><span>Anreicherung</span></div>
+        <div class="settings-nav-item" data-target="voice" onclick="setSettingsSection('voice')"><span class="settings-nav-icon">🎙️</span><span>Stimme &amp; Personas</span></div>
+      </nav>
     <div class="settings-body">
       <!-- Theme -->
-      <div class="settings-group">
+      <div class="settings-group" data-section="appearance">
         <div class="settings-label">Erscheinungsbild</div>
         <div class="settings-row">
           <label class="settings-radio">
@@ -2129,8 +2202,70 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
           </label>
         </div>
       </div>
+      <!-- Inhalte: Auto-Verhalten + Sprachen -->
+      <div class="settings-group" data-section="content">
+        <div class="settings-label">Inhalte</div>
+        <div class="settings-pref-row">
+          <div class="settings-pref-text">
+            <div class="settings-pref-title">Auto-Zusammenfassung</div>
+            <div class="settings-pref-sub">Wie ausführlich neue Karten zusammengefasst werden</div>
+          </div>
+          <select class="settings-pref-select" id="pref-auto-summary" onchange="setPref('autoSummary', this.value)">
+            <option value="none">📄 Aus</option>
+            <option value="short">📝 Kurz</option>
+            <option value="detailed" selected>📑 Detailliert</option>
+            <option value="full">📚 Vollständig</option>
+          </select>
+        </div>
+        <div class="settings-pref-row">
+          <div class="settings-pref-text">
+            <div class="settings-pref-title">Auto-Tagging</div>
+            <div class="settings-pref-sub">Neue Karten automatisch verschlagworten</div>
+          </div>
+          <label class="settings-toggle">
+            <input type="checkbox" id="pref-auto-tagging" onchange="setPref('autoTagging', this.checked)">
+            <span class="settings-toggle-slider"></span>
+          </label>
+        </div>
+        <div class="settings-pref-row">
+          <div class="settings-pref-text">
+            <div class="settings-pref-title">Auto-Verbindungen</div>
+            <div class="settings-pref-sub">Neue Inhalte mit verwandten Karten verlinken</div>
+          </div>
+          <label class="settings-toggle">
+            <input type="checkbox" id="pref-auto-connections" onchange="setPref('autoConnections', this.checked)">
+            <span class="settings-toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+      <!-- Sprache: dominante Ausgabesprache + Suchsprache -->
+      <div class="settings-group" data-section="language">
+        <div class="settings-label">Sprache</div>
+        <div class="settings-pref-row">
+          <div class="settings-pref-text">
+            <div class="settings-pref-title">Übersetzung</div>
+            <div class="settings-pref-sub">Dominante Ausgabesprache für Kurz-, Detail- &amp; Vollzusammenfassungen. Pro Notiz übersteuerbar.</div>
+          </div>
+          <select class="settings-pref-select" id="pref-translation-lang" onchange="setPref('translationLang', this.value)">
+            <option value="de">🇩🇪 Deutsch</option>
+            <option value="en">🇬🇧 English</option>
+            <option value="fr">🇫🇷 Français</option>
+          </select>
+        </div>
+        <div class="settings-pref-row">
+          <div class="settings-pref-text">
+            <div class="settings-pref-title">Such-Sprache</div>
+            <div class="settings-pref-sub">Sprache für die Suche in Notizen und im Wissensgarten</div>
+          </div>
+          <select class="settings-pref-select" id="pref-search-lang" onchange="setPref('searchLang', this.value)">
+            <option value="de">🇩🇪 Deutsch</option>
+            <option value="en">🇬🇧 English</option>
+            <option value="fr">🇫🇷 Français</option>
+          </select>
+        </div>
+      </div>
       <!-- Logo -->
-      <div class="settings-group">
+      <div class="settings-group" data-section="appearance">
         <div class="settings-label">Logo</div>
         <div class="settings-logo-row">
           <div class="settings-logo-preview" id="settings-logo-preview">🧠</div>
@@ -2144,7 +2279,7 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
       </div>
 
       <!-- Cloud-Sync: OneDrive (Microsoft Graph App Folder) -->
-      <div class="settings-group">
+      <div class="settings-group" data-section="cloud">
         <div class="settings-label">Cloud-Sync (OneDrive)</div>
         <div style="display:flex;gap:8px;margin-bottom:8px">
           <input type="text" id="settings-msft-client-id" class="settings-input"
@@ -2165,7 +2300,7 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
       </div>
 
       <!-- Batch data enrichment for Persons / Organizations -->
-      <div class="settings-group">
+      <div class="settings-group" data-section="enrichment">
         <div class="settings-label">Daten-Anreicherung (Personen & Organisationen)</div>
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
           <button class="settings-btn" id="enrich-run-btn" onclick="enrichAllEntities()">Anreicherung starten</button>
@@ -2176,7 +2311,7 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
       </div>
 
       <!-- Voice-mode personas — scoped to the PKA voice assistant only -->
-      <div class="settings-group">
+      <div class="settings-group" data-section="voice">
         <div class="settings-label">Sprach-Personas (nur PKA-Sprachmodus)</div>
         <div id="settings-personas-list" class="personas-list"></div>
         <button class="settings-btn" onclick="addPersona()">+ Neue Persona</button>
@@ -2184,7 +2319,7 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
       </div>
 
       <!-- ElevenLabs voice -->
-      <div class="settings-group">
+      <div class="settings-group" data-section="voice">
         <div class="settings-label">PKA-Stimme (ElevenLabs)</div>
         <div style="display:flex;gap:8px;margin-bottom:8px">
           <input type="password" id="settings-eleven-key" class="settings-input" placeholder="ElevenLabs API-Key (sk-…)" style="flex:1">
@@ -2199,7 +2334,8 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
         </div>
         <div class="settings-hint">Mit ElevenLabs bekommt PKA eine natürlichere Stimme. Kostenlose Tier: ~10k Zeichen/Monat. Key wird nur lokal im Browser gespeichert (localStorage). Ohne Key wird die eingebaute Browser-TTS verwendet.</div>
       </div>
-    </div>
+    </div><!-- /settings-body -->
+    </div><!-- /settings-layout -->
   </div>
 </div>
 
@@ -2550,6 +2686,81 @@ function updateThemeButton() {
   });
 }
 
+// ── User preferences (Inhalte & Sprache) ────────────────────────
+// Defaults: detailed summary, auto-tagging on, auto-connections on,
+// translation/search language = current UI language. All persisted in
+// localStorage individually so they sync via OneDrive cloud-sync.
+const PREF_DEFAULTS = {
+  autoSummary:     'detailed',  // 'none' | 'short' | 'detailed' | 'full'
+  autoTagging:     true,
+  autoConnections: true,
+  translationLang: (localStorage.getItem('uiLang') || 'de'),
+  searchLang:      (localStorage.getItem('uiLang') || 'de'),
+};
+function getPref(key) {
+  const raw = localStorage.getItem('pref_' + key);
+  if (raw === null) return PREF_DEFAULTS[key];
+  if (raw === 'true')  return true;
+  if (raw === 'false') return false;
+  return raw;
+}
+function setPref(key, value) {
+  localStorage.setItem('pref_' + key, String(value));
+  // No re-render needed for most prefs — they're read on-demand. The
+  // language pref is the exception, but Claude only reads it on the
+  // next /api/chat call, so no immediate UI update either.
+}
+// Map ISO codes to human-readable language names for Claude system prompts.
+const LANG_NAMES = { de: 'Deutsch', en: 'English', fr: 'Français', it: 'Italiano', es: 'Español' };
+// Per-entry language overrides — keyed by entry.id, persisted in localStorage.
+// Picked up by effectiveLang() so each note can show its enrichment in a
+// different language than the global Translation preference.
+let ENTRY_LANG_OVERRIDES = {};
+try { ENTRY_LANG_OVERRIDES = JSON.parse(localStorage.getItem('entryLangOverrides') || '{}'); } catch(_) {}
+function saveEntryLangOverrides() {
+  try { localStorage.setItem('entryLangOverrides', JSON.stringify(ENTRY_LANG_OVERRIDES)); } catch(_) {}
+}
+function setEntryLang(entryId, lang) {
+  const entry = ENTRIES.find(e => e.id === entryId);
+  if (!entry) return;
+  if (!lang || lang === '') {
+    delete ENTRY_LANG_OVERRIDES[entryId];
+    delete entry.lang;
+  } else if (LANG_NAMES[lang]) {
+    ENTRY_LANG_OVERRIDES[entryId] = lang;
+    entry.lang = lang;
+  }
+  saveEntryLangOverrides();
+  // Re-open the entry so the header picker, enrichment block, and any
+  // pending Claude trigger pick up the new language.
+  if (selectedEntryId === entryId) openDetail(entry);
+}
+
+// Effective output language for an entry: per-entry override (entry.lang OR
+// localStorage entryLangOverrides) wins over the global Translation pref.
+// Falls back to UI_LANG, then to 'de'.
+function effectiveLang(entry) {
+  if (!entry) return getPref('translationLang') || 'de';
+  const override = entry.lang || ENTRY_LANG_OVERRIDES[entry.id];
+  if (override && LANG_NAMES[override]) return override;
+  return getPref('translationLang') || (localStorage.getItem('uiLang') || 'de');
+}
+function effectiveLangName(entry) {
+  return LANG_NAMES[effectiveLang(entry)] || 'Deutsch';
+}
+
+// Sync the Settings UI controls to the current pref values. Called when
+// the Settings panel opens so the controls reflect what's stored.
+function syncPreferenceControls() {
+  const sel = (id, key) => { const el = document.getElementById(id); if (el) el.value = getPref(key); };
+  const tog = (id, key) => { const el = document.getElementById(id); if (el) el.checked = !!getPref(key); };
+  sel('pref-auto-summary',     'autoSummary');
+  tog('pref-auto-tagging',     'autoTagging');
+  tog('pref-auto-connections', 'autoConnections');
+  sel('pref-translation-lang', 'translationLang');
+  sel('pref-search-lang',      'searchLang');
+}
+
 // ──────────────────────────────────────────────────────────────
 // Cloud-Sync via OneDrive (Microsoft Graph App Folder)
 // ──────────────────────────────────────────────────────────────
@@ -2811,7 +3022,26 @@ function openSettings() {
   updateElevenSettings();
   renderPersonasList();
   updateCloudStatusUI();
+  syncPreferenceControls();
+  // Restore the last-active section (or default to appearance on first open).
+  setSettingsSection(localStorage.getItem('settingsActiveSection') || 'appearance');
   document.getElementById('settings-overlay').classList.add('visible');
+}
+
+// Switch which settings section is visible. The sidebar nav-item gets the
+// .active class; every .settings-group with a matching data-section attr
+// becomes .section-active (only the active one is displayed by CSS).
+function setSettingsSection(section) {
+  localStorage.setItem('settingsActiveSection', section);
+  document.querySelectorAll('.settings-nav-item').forEach(it => {
+    it.classList.toggle('active', it.dataset.target === section);
+  });
+  document.querySelectorAll('.settings-group[data-section]').forEach(g => {
+    g.classList.toggle('section-active', g.dataset.section === section);
+  });
+  // Scroll the body back to top whenever you flip sections.
+  const body = document.querySelector('.settings-body');
+  if (body) body.scrollTop = 0;
 }
 // Sync the ElevenLabs API-key + voice dropdown with persisted values
 function updateElevenSettings() {
@@ -3864,31 +4094,62 @@ function saveEnrich() {
   }
 }
 
-// ── Personal-note enrichment via Claude ────────────────────────
-// Schema: NOTE_ENRICH[entryId] = { text, fetchedAt, model, usage }
-// OR { _dismissed: true } if the user clicked the undo button (so we don't
-// auto-retrigger after an explicit dismissal).
+// ── Personal-note enrichment via Claude (multi-language cache) ───
+// Schema: NOTE_ENRICH[entryId] = {
+//   byLang: { de: { text, model, fetchedAt, usage }, en: {...}, fr: {...} },
+//   _dismissed: true | false
+// }
+// Caching per language means switching the global Translation pref (or a
+// per-note override) hits Claude only once per language, not on every view.
+// Migrates the v1 shape ({ text, model, ... } at top level) into byLang['de']
+// on first read, since the previous version was always German.
 let NOTE_ENRICH = {};
 try { NOTE_ENRICH = JSON.parse(localStorage.getItem('noteEnrich') || '{}'); } catch(_) {}
+// Migrate v1 → v2 (single-text → byLang)
+for (const id of Object.keys(NOTE_ENRICH)) {
+  const v = NOTE_ENRICH[id];
+  if (v && v.text && !v.byLang) {
+    NOTE_ENRICH[id] = {
+      byLang: { de: { text: v.text, model: v.model, fetchedAt: v.fetchedAt, usage: v.usage } },
+      _dismissed: false,
+    };
+  } else if (v && v._dismissed && !v.byLang) {
+    NOTE_ENRICH[id] = { byLang: {}, _dismissed: true, dismissedAt: v.dismissedAt };
+  }
+}
 function saveNoteEnrich() {
   try { localStorage.setItem('noteEnrich', JSON.stringify(NOTE_ENRICH)); } catch(_) {}
 }
-const _noteEnrichInflight = {};
+const _noteEnrichInflight = {};  // key = entryId + ':' + lang
 
-async function enrichNoteWithClaude(entryId) {
+// Returns the cached enrichment for the entry in the requested language,
+// or null if nothing cached. `lang` defaults to the effective language of
+// the entry (per-note override > global Translation pref).
+function getNoteEnrichment(entry, lang) {
+  const rec = NOTE_ENRICH[entry.id];
+  if (!rec || !rec.byLang) return null;
+  const target = lang || effectiveLang(entry);
+  return rec.byLang[target] || null;
+}
+
+async function enrichNoteWithClaude(entryId, lang) {
   const entry = ENTRIES.find(e => e.id === entryId);
   if (!entry) return;
-  if (_noteEnrichInflight[entryId]) return;
-  _noteEnrichInflight[entryId] = true;
+  const targetLang = lang || effectiveLang(entry);
+  const inflightKey = entryId + ':' + targetLang;
+  if (_noteEnrichInflight[inflightKey]) return;
+  _noteEnrichInflight[inflightKey] = true;
   // Re-render so the button shows its loading state
   if (selectedEntryId === entry.id) renderSummaryTab(entry);
 
   try {
+    const langName = LANG_NAMES[targetLang] || 'Deutsch';
     const systemPrompt = [
-      'Du bist Larry, ein persönlicher Wissens-Assistent.',
-      'Erweitere die folgende kurze Notiz mit relevantem Hintergrundkontext: Definitionen, verwandte Konzepte, historischer/sachlicher Kontext, weiterführende Stichworte.',
-      'WICHTIG: Schreibe FAKTISCH und NEUTRAL — keine Spekulationen. Wenn du dir unsicher bist, sag das explizit („möglicherweise…").',
-      'Maximal 4 kurze Absätze. Klare, sachliche Sprache. Kein Markdown, keine Aufzählungen, keine Überschriften.',
+      `Du bist Larry, ein persönlicher Wissens-Assistent.`,
+      `Erweitere die folgende kurze Notiz mit relevantem Hintergrundkontext: Definitionen, verwandte Konzepte, historischer/sachlicher Kontext, weiterführende Stichworte.`,
+      `WICHTIG: Antworte AUSSCHLIESSLICH auf ${langName} — egal in welcher Sprache der Originaltext ist.`,
+      `Schreibe FAKTISCH und NEUTRAL — keine Spekulationen. Wenn du dir unsicher bist, sag das explizit.`,
+      `Maximal 4 kurze Absätze. Klare, sachliche Sprache. Kein Markdown, keine Aufzählungen, keine Überschriften.`,
     ].join('\n');
 
     const userMsg = [
@@ -3916,52 +4177,71 @@ async function enrichNoteWithClaude(entryId) {
     const text = (data.content || []).filter(c => c.type === 'text').map(c => c.text).join('\n').trim();
     if (!text) throw new Error('Leere Antwort von Claude');
 
-    NOTE_ENRICH[entryId] = {
+    if (!NOTE_ENRICH[entryId]) NOTE_ENRICH[entryId] = { byLang: {}, _dismissed: false };
+    if (!NOTE_ENRICH[entryId].byLang) NOTE_ENRICH[entryId].byLang = {};
+    NOTE_ENRICH[entryId].byLang[targetLang] = {
       text,
       fetchedAt: new Date().toISOString(),
       model: modelUsed,
       usage: data.usage || null,
     };
+    NOTE_ENRICH[entryId]._dismissed = false;  // re-enriching un-dismisses
     saveNoteEnrich();
   } catch (err) {
     alert('Fehler bei Anreicherung: ' + (err.message || err));
   } finally {
-    delete _noteEnrichInflight[entryId];
+    delete _noteEnrichInflight[inflightKey];
     const entry2 = ENTRIES.find(e => e.id === entryId);
     if (entry2 && selectedEntryId === entry2.id) renderSummaryTab(entry2);
   }
 }
 
 // Mark the entry as "user dismissed" so auto-trigger won't re-run it.
-// User can always click "Anreichern" again to redo.
+// Doesn't delete the cache — lets user un-dismiss with a click and re-display
+// without paying for another Claude call.
 function undoNoteEnrichment(entryId) {
-  if (!confirm('Anreicherung wirklich verwerfen? Die ursprüngliche Notiz bleibt erhalten.')) return;
-  NOTE_ENRICH[entryId] = { _dismissed: true, dismissedAt: new Date().toISOString() };
+  if (!confirm('Anreicherung wirklich verwerfen? Die ursprüngliche Notiz bleibt erhalten. Der Cache pro Sprache bleibt erhalten, falls du sie später wieder aktivieren willst.')) return;
+  if (!NOTE_ENRICH[entryId]) NOTE_ENRICH[entryId] = { byLang: {} };
+  NOTE_ENRICH[entryId]._dismissed = true;
+  NOTE_ENRICH[entryId].dismissedAt = new Date().toISOString();
   saveNoteEnrich();
   const entry = ENTRIES.find(e => e.id === entryId);
   if (entry && selectedEntryId === entry.id) renderSummaryTab(entry);
 }
 
 function toggleNoteEnrichment(entryId) {
-  const enr = NOTE_ENRICH[entryId];
-  if (enr && enr.text) {
-    undoNoteEnrichment(entryId);
+  const entry = ENTRIES.find(e => e.id === entryId);
+  if (!entry) return;
+  const rec = NOTE_ENRICH[entryId];
+  const lang = effectiveLang(entry);
+  const cached = rec?.byLang?.[lang];
+  if (rec && !rec._dismissed && cached) {
+    undoNoteEnrichment(entryId);  // visible enrichment exists → dismiss
+  } else if (rec && rec._dismissed && cached) {
+    // Re-activate the cached version without paying for another call
+    NOTE_ENRICH[entryId]._dismissed = false;
+    saveNoteEnrich();
+    if (selectedEntryId === entry.id) renderSummaryTab(entry);
   } else {
-    // Either undefined or _dismissed — both mean "no enrichment showing", click runs Claude
-    enrichNoteWithClaude(entryId);
+    // No cache for this language yet → fetch
+    enrichNoteWithClaude(entryId, lang);
   }
 }
 
 // Auto-trigger Claude enrichment for sparse notes: if the entry has very
-// little content AND wasn't enriched/dismissed yet, fire one Claude call
-// in the background. The result shows up in the summary tab when ready.
+// little content AND wasn't enriched/dismissed yet AND no cached version
+// exists for the active language, fire one Claude call in the background.
 function maybeAutoEnrichNote(entry) {
   if (!entry || entry.type === 'garden') return;
-  if (NOTE_ENRICH[entry.id]) return;  // already enriched OR dismissed
-  if (_noteEnrichInflight[entry.id]) return;
+  const rec = NOTE_ENRICH[entry.id];
+  if (rec?._dismissed) return;
+  const lang = effectiveLang(entry);
+  if (rec?.byLang?.[lang]) return;  // already cached for this language
+  const inflightKey = entry.id + ':' + lang;
+  if (_noteEnrichInflight[inflightKey]) return;
   const content = ((entry.preview || '') + ' ' + (entry.detailed || '') + ' ' + (entry.body || '')).trim();
   if (content.length >= 150) return;  // not sparse — don't auto-enrich
-  enrichNoteWithClaude(entry.id);
+  enrichNoteWithClaude(entry.id, lang);
 }
 
 // ── Wikidata structured-facts fetch ───────────────────────────
@@ -4495,19 +4775,33 @@ function openDetail(entry) {
     // Standard journal entry: same editable tag row as Garden, plus a "push to Garden" button
     const cat = entryCategory(entry);
     const color = cat ? cat.color : '#60a5fa';
-    const enrichState = NOTE_ENRICH[entry.id];
-    const enrichLabel = (enrichState && enrichState.text) ? '↺ Anreicherung verwerfen'
-      : (_noteEnrichInflight[entry.id] ? '⏳ Wird angereichert…' : '✨ Mit Claude anreichern');
-    const enrichTitle = (enrichState && enrichState.text) ? 'Claude-Anreicherung entfernen, Original bleibt erhalten'
-      : 'Notiz mit Claude um Hintergrundkontext erweitern';
+    const eLang = effectiveLang(entry);
+    const enrichRec = NOTE_ENRICH[entry.id];
+    const cachedForLang = enrichRec?.byLang?.[eLang];
+    const inflightKeyHdr = entry.id + ':' + eLang;
+    const isInflight = !!_noteEnrichInflight[inflightKeyHdr];
+    const hasVisibleEnrich = cachedForLang && !enrichRec?._dismissed;
+    const enrichLabel = hasVisibleEnrich ? '↺ Verwerfen'
+      : (isInflight ? '⏳ Wird angereichert…' : '✨ Mit Claude anreichern');
+    const enrichTitle = hasVisibleEnrich
+      ? 'Anreicherung ausblenden — Cache bleibt für später erhalten'
+      : `Notiz auf ${LANG_NAMES[eLang] || eLang} mit Claude erweitern (cached pro Sprache)`;
+    // Per-entry language override picker — overrides the global Translation pref.
+    const langOpts = ['de','en','fr'].map(l =>
+      `<option value="${l}" ${entry.lang === l ? 'selected' : ''}>${l.toUpperCase()}</option>`
+    ).join('');
+    const langPicker = `<select class="entry-lang-picker" onchange="setEntryLang(${entry.id}, this.value)" title="Sprache nur für diese Notiz übersteuern (leer = globale Einstellung verwenden)">
+      <option value="">🌐 Auto (${(getPref('translationLang')||'de').toUpperCase()})</option>${langOpts}
+    </select>`;
     header.innerHTML = `
       <button class="detail-close" onclick="closeDetail()" title="Details schliessen">✕</button>
       <div class="detail-type-badge" id="detail-type"><span style="color:${color}">${entry.icon}</span>&nbsp;${entry.type === 'video' ? 'Video' : entry.type === 'article' ? 'Artikel' : 'Notiz'}</div>
       <div class="detail-title" id="detail-title">${escapeHtml(entry.title)}</div>
       <div class="detail-meta" style="flex-wrap:wrap">
         <span class="detail-date" id="detail-date">${fmtDate(entry.date)}</span>
+        ${langPicker}
         <button class="push-to-garden-btn ${GARDEN_PUSHED[entry.id] ? 'pushed' : ''}" onclick="pushNoteToGarden(${entry.id})" title="${GARDEN_PUSHED[entry.id] ? 'Aus Garden entfernen' : 'Diese Notiz als Garten-Karte pushen'}">${GARDEN_PUSHED[entry.id] ? '✓ Im Garden' : '🌱 In Garden pushen'}</button>
-        <button class="enrich-note-btn ${enrichState && enrichState.text ? 'enriched' : ''}" onclick="toggleNoteEnrichment(${entry.id})" title="${enrichTitle}" ${_noteEnrichInflight[entry.id] ? 'disabled' : ''}>${enrichLabel}</button>
+        <button class="enrich-note-btn ${hasVisibleEnrich ? 'enriched' : ''}" onclick="toggleNoteEnrichment(${entry.id})" title="${enrichTitle}" ${isInflight ? 'disabled' : ''}>${enrichLabel}</button>
       </div>
       ${buildEditableTagsRow(entry)}`;
   }
@@ -4631,23 +4925,30 @@ function renderSummaryTab(entry, color) {
   }
 
   // Claude enrichment block (personal notes only) — shows enriched text
-  // OR a loading spinner while the auto-trigger is in flight.
-  const claudeEnr = NOTE_ENRICH[entry.id];
+  // for the EFFECTIVE language (per-note override > global Translation pref).
+  // Hidden when user has dismissed it. Spinner while auto/manual trigger
+  // is in flight for this language.
+  const claudeRec = NOTE_ENRICH[entry.id];
+  const lang = effectiveLang(entry);
+  const claudeForLang = claudeRec?.byLang?.[lang];
+  const inflightKey = entry.id + ':' + lang;
   let claudeBlock = '';
-  if (entry.type !== 'garden') {
-    if (_noteEnrichInflight[entry.id]) {
-      claudeBlock = `<div class="enrich-banner"><div class="spinner"></div><span>Claude erweitert die Notiz mit Hintergrund…</span></div>`;
-    } else if (claudeEnr && claudeEnr.text) {
-      const claudeHtml = claudeEnr.text.split(/\n\n+/).map(p =>
+  if (entry.type !== 'garden' && !claudeRec?._dismissed) {
+    if (_noteEnrichInflight[inflightKey]) {
+      claudeBlock = `<div class="enrich-banner"><div class="spinner"></div><span>Claude erweitert die Notiz auf ${escapeHtml(LANG_NAMES[lang] || lang)}…</span></div>`;
+    } else if (claudeForLang && claudeForLang.text) {
+      const claudeHtml = claudeForLang.text.split(/\n\n+/).map(p =>
         `<p style="margin-bottom:10px">${linkifyEntities(p, entry.id)}</p>`
       ).join('');
-      const modelShort = (claudeEnr.model || '').replace(/^claude-/, '').replace(/-latest$/, '');
+      const modelShort = (claudeForLang.model || '').replace(/^claude-/, '').replace(/-latest$/, '');
+      const cachedLangs = Object.keys(claudeRec?.byLang || {}).filter(l => l !== lang);
+      const cachedNote = cachedLangs.length ? ` · auch gecacht: ${cachedLangs.join(', ').toUpperCase()}` : '';
       claudeBlock = `
         <div class="summary-section">
           <div class="summary-section-title" style="display:flex;align-items:center;gap:6px">
             ✨ KI-Anreicherung
             <span style="font-size:9px;color:var(--text-3);font-weight:400;text-transform:none;letter-spacing:0">
-              ${escapeHtml(modelShort)} · ${new Date(claudeEnr.fetchedAt).toLocaleDateString('de-CH')}
+              ${escapeHtml(modelShort)} · ${escapeHtml((LANG_NAMES[lang] || lang))} · ${new Date(claudeForLang.fetchedAt).toLocaleDateString('de-CH')}${escapeHtml(cachedNote)}
             </span>
           </div>
           <div style="font-size:13px;color:var(--text-2);line-height:1.7">${claudeHtml}</div>
@@ -6147,9 +6448,13 @@ async function callClaudeChat(userText, ctxEntries, chat) {
     ? grounding.map(e => `### ${e.title} (${e.date})\nTags: ${(e.topics || []).join(', ')}\n${e.preview || e.detailed || e.body || ''}`).join('\n\n')
     : '(Keine relevanten Einträge im Wissensgarten gefunden.)';
 
+  // Output language: use the global Translation pref (the chat answer isn't
+  // bound to one specific entry, so we use the global setting here).
+  const chatLang = getPref('translationLang') || 'de';
+  const chatLangName = LANG_NAMES[chatLang] || 'Deutsch';
   const systemPrompt = [
     'Du bist Larry, ein persönlicher Wissens-Assistent für den Nutzer.',
-    'Antworte in der Sprache der Frage (meist Deutsch).',
+    `Antworte AUSSCHLIESSLICH auf ${chatLangName} — egal in welcher Sprache die Notizen sind.`,
     'Stütze dich primär auf die folgenden Notizen und Garden-Karten aus dem persönlichen Wissensgarten.',
     'Wenn du eine Karte aus dem Wissensgarten zitierst, erwähne ihren Titel exakt (z.B. „Marc Aurel: Selbstbetrachtungen") — der Frontend zeigt den Eintrag dann als anklickbare Karte unter deiner Antwort.',
     'Wenn die Notizen die Frage nicht abdecken, sag das klar und gib eine kurze allgemeine Antwort.',
@@ -8420,12 +8725,15 @@ async function vaRespond(userText) {
     : '(Keine relevanten Einträge im Wissensgarten gefunden.)';
 
   const personaPrompt = persona?.prompt
-    || 'Du bist Larry, der persönliche Wissens-Assistent. Antworte freundlich, knapp und hilfreich auf Deutsch.';
+    || 'Du bist Larry, der persönliche Wissens-Assistent. Antworte freundlich, knapp und hilfreich.';
 
+  const voiceLang = getPref('translationLang') || 'de';
+  const voiceLangName = LANG_NAMES[voiceLang] || 'Deutsch';
   const systemPrompt = [
     personaPrompt,
     '',
-    'WICHTIG: Antworte sehr knapp und gesprächig — die Antwort wird laut vorgelesen.',
+    `WICHTIG: Antworte AUSSCHLIESSLICH auf ${voiceLangName}.`,
+    'Antworte sehr knapp und gesprächig — die Antwort wird laut vorgelesen.',
     'Maximal 2–3 kurze Sätze, kein Markdown, keine Aufzählungen, keine Überschriften.',
     'Stütze dich wo möglich auf die folgenden Notizen aus dem persönlichen Wissensgarten:',
     '',
@@ -8576,6 +8884,13 @@ applyLanguage();
 loadGarden();
 applyLogo();  // re-run after avatar element exists in topbar
 _initCloudSync();  // restore OneDrive connection if previously signed in
+
+// Replay per-entry language overrides onto ENTRIES so effectiveLang() finds
+// them on entry.lang directly (faster than re-checking localStorage every call).
+for (const id of Object.keys(ENTRY_LANG_OVERRIDES)) {
+  const e = ENTRIES.find(x => x.id == id);
+  if (e) e.lang = ENTRY_LANG_OVERRIDES[id];
+}
 
 // Sync the model dropdown UI to whatever was loaded from localStorage —
 // otherwise the menu shows "Haiku active" while a different model is selected.
