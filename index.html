@@ -1646,6 +1646,87 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
   .no-print { display: none !important; }
   .fc-print-card, .fc-ds-card { break-inside: avoid; }
 }
+
+/* ── Tasks (Microsoft Planner integration) ───────────────────── */
+#tasks-view { padding: 20px 28px; max-width: 1400px; margin: 0 auto; width: 100%; }
+.tasks-toolbar { display: flex; align-items: center; justify-content: space-between;
+                  gap: 10px; margin-bottom: 18px; flex-wrap: wrap; }
+.tasks-tab-group { display: flex; gap: 4px; background: var(--surface-2);
+                    border: 1px solid var(--border); border-radius: 10px; padding: 4px; }
+.tasks-tab { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px;
+              border-radius: 7px; font-size: 13px; color: var(--text-2); cursor: pointer;
+              transition: all .15s; background: transparent; border: none; }
+.tasks-tab:hover { color: var(--text); }
+.tasks-tab.active { background: var(--accent-dim); color: var(--accent); font-weight: 600; }
+.tasks-toolbar-right { display: flex; gap: 8px; }
+.tasks-status { font-size: 13px; color: var(--text-3); padding: 8px 4px; min-height: 22px; }
+.tasks-status.error { color: #ef4444; }
+.tasks-content { display: block; }
+
+/* Task list (used by Mein Tag + Alle Aufgaben + a single plan view) */
+.task-section { margin-bottom: 22px; }
+.task-section-title { font-size: 12px; font-weight: 600; color: var(--text-3);
+                       text-transform: uppercase; letter-spacing: .5px; margin-bottom: 8px;
+                       display: flex; align-items: center; gap: 8px; }
+.task-section-count { background: var(--surface-3); padding: 1px 8px; border-radius: 10px;
+                       color: var(--text-2); font-size: 11px; font-weight: 500; }
+.task-list { display: flex; flex-direction: column; gap: 4px; }
+.task-row { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px;
+             background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px;
+             cursor: pointer; transition: all .15s; }
+.task-row:hover { background: var(--surface-3); border-color: var(--border-2); }
+.task-row.done .task-title { text-decoration: line-through; color: var(--text-3); }
+.task-checkbox { width: 18px; height: 18px; border: 2px solid var(--border-2); border-radius: 50%;
+                  flex-shrink: 0; cursor: pointer; transition: all .15s; margin-top: 2px;
+                  display: inline-flex; align-items: center; justify-content: center; }
+.task-checkbox:hover { border-color: var(--accent); }
+.task-row.done .task-checkbox { background: var(--accent); border-color: var(--accent); }
+.task-checkbox svg { opacity: 0; transition: opacity .15s; }
+.task-row.done .task-checkbox svg { opacity: 1; }
+.task-body { flex: 1; min-width: 0; }
+.task-title { font-size: 14px; color: var(--text); line-height: 1.4; margin-bottom: 2px;
+               word-wrap: break-word; }
+.task-meta { display: flex; gap: 12px; font-size: 11px; color: var(--text-3); flex-wrap: wrap; }
+.task-meta-item { display: flex; align-items: center; gap: 4px; }
+.task-due-overdue { color: #ef4444; font-weight: 600; }
+.task-due-today { color: #fbbf24; font-weight: 600; }
+.task-due-soon { color: var(--text-2); }
+.task-priority-badge { padding: 1px 6px; border-radius: 8px; font-size: 10px; font-weight: 600; }
+.task-priority-1 { background: rgba(239,68,68,.15); color: #ef4444; }
+.task-priority-3 { background: rgba(251,191,36,.15); color: #fbbf24; }
+.task-priority-5 { display: none; }  /* hide medium (default) */
+.task-priority-9 { background: var(--surface-3); color: var(--text-3); }
+.task-plan-badge { padding: 1px 6px; border-radius: 8px; font-size: 10px; background: var(--accent-dim);
+                    color: var(--accent); }
+
+/* Plan grid (in the "Pläne" tab) */
+.plan-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.plan-card { background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px;
+              padding: 16px; cursor: pointer; transition: all .15s; }
+.plan-card:hover { background: var(--surface-3); border-color: var(--border-2);
+                    transform: translateY(-1px); }
+.plan-card-name { font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+.plan-card-group { font-size: 11px; color: var(--text-3); }
+.plan-card-stats { font-size: 12px; color: var(--text-2); margin-top: 10px;
+                    display: flex; gap: 12px; }
+
+/* Plan detail (kanban-style buckets) */
+.plan-buckets { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 8px; }
+.plan-bucket { flex-shrink: 0; width: 280px; background: var(--surface-2);
+                border: 1px solid var(--border); border-radius: 10px; padding: 12px;
+                display: flex; flex-direction: column; gap: 8px; max-height: calc(100vh - 240px);
+                overflow-y: auto; }
+.plan-bucket-name { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 4px;
+                     display: flex; justify-content: space-between; align-items: center; }
+.plan-bucket-count { color: var(--text-3); font-size: 11px; font-weight: 500; }
+
+/* Empty state */
+.tasks-empty { text-align: center; padding: 60px 20px; color: var(--text-3); }
+.tasks-empty-title { font-size: 16px; color: var(--text-2); margin-bottom: 8px; font-weight: 500; }
+.tasks-empty-sub { font-size: 13px; line-height: 1.6; max-width: 420px; margin: 0 auto; }
+.tasks-signin-prompt { background: var(--surface-2); border: 1px solid var(--border-2);
+                        border-radius: 12px; padding: 30px; text-align: center; max-width: 480px;
+                        margin: 40px auto; }
 .detail-meta { display: flex; align-items: center; gap: 10px; }
 
 /* Language toggle in topbar — height matches the search input + mode chip */
@@ -1963,6 +2044,10 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
     <div class="nav-item" id="nav-chat" onclick="setView('chat')" title="Chat">
       <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2l1.8 4.4L18 8l-4.2 1.6L12 14l-1.8-4.4L6 8l4.2-1.6L12 2z"/><circle cx="18" cy="18" r="2.5"/><path d="M5 17l1 2.5L8 20l-2 1-1 2-1-2-2-1 2-.5L5 17z"/></svg>
       <span>Chat</span>
+    </div>
+    <div class="nav-item" id="nav-tasks" onclick="setView('tasks')" title="Aufgaben (Microsoft Planner)">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+      <span>Aufgaben</span>
     </div>
     <div class="nav-item" id="nav-settings" onclick="openSettings()" title="Einstellungen">
       <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -2460,6 +2545,88 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
       </div>
     </div>
   </div>
+
+  <!-- ── Aufgaben (Microsoft Planner) view ──────────────────────── -->
+  <div id="tasks-view" style="display:none;flex:1;overflow:auto;flex-direction:column">
+    <div class="tasks-toolbar">
+      <div class="tasks-tab-group">
+        <button class="tasks-tab active" data-tab="myday" onclick="setTasksTab('myday')">
+          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5"/></svg>
+          Mein Tag
+        </button>
+        <button class="tasks-tab" data-tab="all" onclick="setTasksTab('all')">
+          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+          Alle Aufgaben
+        </button>
+        <button class="tasks-tab" data-tab="plans" onclick="setTasksTab('plans')">
+          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+          Pläne
+        </button>
+      </div>
+      <div class="tasks-toolbar-right">
+        <button class="fc-btn fc-btn-ghost" onclick="reloadTasks()" title="Daten neu laden">
+          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          Aktualisieren
+        </button>
+        <button class="fc-btn fc-btn-primary" onclick="openTaskCreateModal()">
+          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Neue Aufgabe
+        </button>
+      </div>
+    </div>
+    <div id="tasks-status" class="tasks-status"></div>
+    <div id="tasks-content" class="tasks-content"></div>
+  </div>
+
+  <!-- Modal: task create / edit -->
+  <div id="task-modal" class="fc-modal-overlay" onclick="if(event.target===this) closeTaskModal()">
+    <div class="fc-modal">
+      <div class="fc-modal-head">
+        <span class="fc-modal-title" id="task-modal-title">Neue Aufgabe</span>
+        <button class="settings-close" onclick="closeTaskModal()">✕</button>
+      </div>
+      <div class="fc-modal-body">
+        <div class="fc-modal-row">
+          <label class="fc-modal-label">Titel</label>
+          <input type="text" id="task-title" class="fc-modal-input" placeholder="Was muss getan werden?">
+        </div>
+        <div class="fc-modal-row">
+          <label class="fc-modal-label">Plan</label>
+          <select id="task-plan" class="fc-modal-input"></select>
+        </div>
+        <div class="fc-modal-row">
+          <label class="fc-modal-label">Bucket</label>
+          <select id="task-bucket" class="fc-modal-input"></select>
+        </div>
+        <div class="fc-modal-row" style="display:flex;gap:10px">
+          <div style="flex:1">
+            <label class="fc-modal-label">Fällig am</label>
+            <input type="date" id="task-due" class="fc-modal-input">
+          </div>
+          <div style="flex:1">
+            <label class="fc-modal-label">Priorität</label>
+            <select id="task-priority" class="fc-modal-input">
+              <option value="9">Niedrig</option>
+              <option value="5" selected>Mittel</option>
+              <option value="3">Wichtig</option>
+              <option value="1">Dringend</option>
+            </select>
+          </div>
+        </div>
+        <div class="fc-modal-row">
+          <label class="fc-modal-label">Beschreibung / Notiz-Verlinkung</label>
+          <textarea id="task-description" class="fc-modal-input" rows="4" style="resize:vertical;font-family:inherit" placeholder="Optional: Beschreibung. Verlinkungen zu Notizen werden hier gespeichert."></textarea>
+        </div>
+        <div class="fc-modal-actions">
+          <button class="fc-btn fc-btn-ghost" id="task-delete-btn" onclick="deleteTaskFromModal()" style="margin-right:auto;display:none">Löschen</button>
+          <button class="fc-btn fc-btn-ghost" onclick="closeTaskModal()">Abbrechen</button>
+          <button class="fc-btn fc-btn-primary" id="task-save-btn" onclick="saveTaskFromModal()">Speichern</button>
+        </div>
+        <div id="task-modal-status" class="fc-modal-hint"></div>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <!-- ── Detail Panel ────────────────────────── -->
@@ -3192,6 +3359,50 @@ async function _getCloudToken() {
   }
 }
 
+// Generic helper to obtain a Microsoft Graph access token for a given
+// scope set. Used by both cloud-sync and the Planner integration so each
+// feature can request its own minimal scopes (Files.ReadWrite.AppFolder
+// for sync; Tasks.ReadWrite + Group.ReadWrite.All for Planner).
+async function getGraphToken(scopes) {
+  if (!CloudSync.msal || !CloudSync.account) throw new Error('Nicht bei OneDrive angemeldet');
+  try {
+    const r = await CloudSync.msal.acquireTokenSilent({ scopes, account: CloudSync.account });
+    return r.accessToken;
+  } catch (e) {
+    const r = await CloudSync.msal.acquireTokenPopup({ scopes });
+    return r.accessToken;
+  }
+}
+
+// Thin wrapper around fetch() that adds the bearer token + retries once
+// on 401 (token expired). Returns parsed JSON body, or throws with the
+// Graph-API error message.
+async function graphFetch(path, opts = {}, scopes = ['Tasks.ReadWrite', 'Group.ReadWrite.All']) {
+  const url = path.startsWith('http') ? path : `https://graph.microsoft.com/v1.0${path}`;
+  const doFetch = async () => {
+    const token = await getGraphToken(scopes);
+    return fetch(url, {
+      ...opts,
+      headers: {
+        'Authorization': 'Bearer ' + token,
+        'Content-Type': 'application/json',
+        ...(opts.headers || {}),
+      },
+    });
+  };
+  let res = await doFetch();
+  if (res.status === 401) res = await doFetch();  // retry once on token expiry
+  if (res.status === 204) return null;  // no content (e.g. successful PATCH)
+  const text = await res.text();
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; } catch (_) {}
+  if (!res.ok) {
+    const msg = data?.error?.message || text || `HTTP ${res.status}`;
+    throw new Error(msg);
+  }
+  return data;
+}
+
 // Build the JSON snapshot to push. We serialise every localStorage key
 // EXCEPT MSAL's own cache + the client-id itself (so a synced state can be
 // imported into a different installation without leaking auth state).
@@ -3212,7 +3423,14 @@ async function cloudSignIn() {
   if (!CloudSync.msal) await _initCloudSync();
   if (!CloudSync.msal) { alert('MSAL nicht verfügbar — Konsole prüfen.'); return; }
   try {
-    const r = await CloudSync.msal.loginPopup({ scopes: ['Files.ReadWrite.AppFolder', 'User.Read'] });
+    const r = await CloudSync.msal.loginPopup({
+      scopes: [
+        'Files.ReadWrite.AppFolder',  // OneDrive cloud-sync
+        'User.Read',                   // basic profile
+        'Tasks.ReadWrite',             // Microsoft Planner / To Do tasks
+        'Group.ReadWrite.All',         // read & create tasks in group plans
+      ],
+    });
     CloudSync.account = r.account;
     CloudSync.status = 'signed-in';
     updateCloudStatusUI();
@@ -4365,13 +4583,16 @@ function setView(view, filter) {
   document.getElementById('chat-view').style.display = view === 'chat' ? 'flex' : 'none';
   const fcv = document.getElementById('flashcards-view');
   if (fcv) fcv.style.display = view === 'flashcards' ? 'block' : 'none';
+  const tv = document.getElementById('tasks-view');
+  if (tv) tv.style.display = view === 'tasks' ? 'flex' : 'none';
   // Topbar view buttons removed — left-sidebar nav owns the active state now.
   document.getElementById('vbtn-list')?.classList.toggle('active', view === 'list');
   document.getElementById('vbtn-graph')?.classList.toggle('active', view === 'graph');
   document.getElementById('vbtn-chat')?.classList.toggle('active', view === 'chat');
-  const navMap = { list: 'nav-all', graph: 'nav-graph', chat: 'nav-chat', flashcards: 'nav-flashcards' };
+  const navMap = { list: 'nav-all', graph: 'nav-graph', chat: 'nav-chat', flashcards: 'nav-flashcards', tasks: 'nav-tasks' };
   updateNavActive(navMap[view] || 'nav-all');
   if (view === 'flashcards' && typeof renderFcDeckList === 'function') renderFcDeckList();
+  if (view === 'tasks' && typeof openTasksView === 'function') openTasksView();
   document.getElementById('vbtn-settings')?.classList.toggle('visible', view === 'graph');
 
   // Sidebar swap: tags in list/graph view, chat history in chat view
@@ -9756,6 +9977,500 @@ function exitFcPrintView() {
     renderFcDeckList();
   }
 }
+
+// ──────────────────────────────────────────────────────────────
+// Microsoft Planner integration
+// ──────────────────────────────────────────────────────────────
+// All Graph calls go through graphFetch() which handles the bearer token,
+// 401 retry, and error surfacing. Plans/Buckets/Tasks are cached in memory
+// (TASK_CACHE) for the session — refreshed manually via the "Aktualisieren"
+// button or after each mutation. Etags are tracked per task for PATCH calls
+// (Microsoft Graph requires If-Match: <etag> on PATCH/DELETE).
+
+const TASK_CACHE = {
+  plans: [],          // [{id, title, groupId}]
+  groups: {},         // groupId → { id, displayName }
+  tasksByPlan: {},    // planId → [task]
+  bucketsByPlan: {},  // planId → [bucket]
+  loadedAt: null,
+};
+let _tasksTab = 'myday';
+let _tasksLoading = false;
+let _editingTaskId = null;  // task being edited in the modal (null = create)
+
+function setTasksTab(tab) {
+  _tasksTab = tab;
+  document.querySelectorAll('.tasks-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  renderTasksContent();
+}
+
+// Called when the Tasks view is opened. Triggers an initial load if we
+// don't have cached data yet (or it's stale).
+async function openTasksView() {
+  if (!CloudSync.account) {
+    document.getElementById('tasks-content').innerHTML = `
+      <div class="tasks-signin-prompt">
+        <div class="tasks-empty-title">Microsoft-Konto verbinden</div>
+        <div class="tasks-empty-sub">Aufgaben kommen aus Microsoft Planner. Bitte unter <strong>Einstellungen → Cloud-Sync</strong> dein Microsoft-Konto verbinden — die gleiche Anmeldung deckt sowohl OneDrive als auch Planner ab.</div>
+      </div>`;
+    document.getElementById('tasks-status').textContent = '';
+    return;
+  }
+  if (!TASK_CACHE.loadedAt) await reloadTasks();
+  else renderTasksContent();
+}
+
+async function reloadTasks() {
+  if (_tasksLoading) return;
+  if (!CloudSync.account) { openTasksView(); return; }
+  _tasksLoading = true;
+  const status = document.getElementById('tasks-status');
+  status.classList.remove('error');
+  status.textContent = 'Lade Pläne und Aufgaben aus Planner…';
+  try {
+    // 1) Fetch all plans the user has access to via groups
+    const plansRes = await graphFetch('/me/planner/plans');
+    TASK_CACHE.plans = (plansRes.value || []).map(p => ({
+      id: p.id,
+      title: p.title,
+      groupId: p.owner || p.container?.containerId,
+      etag: p['@odata.etag'],
+    }));
+
+    // 2) Fetch all tasks across all plans (one API call gives all assigned to the user)
+    const tasksRes = await graphFetch('/me/planner/tasks');
+    const allTasks = (tasksRes.value || []).map(_normaliseTask);
+    TASK_CACHE.tasksByPlan = {};
+    for (const t of allTasks) {
+      if (!TASK_CACHE.tasksByPlan[t.planId]) TASK_CACHE.tasksByPlan[t.planId] = [];
+      TASK_CACHE.tasksByPlan[t.planId].push(t);
+    }
+
+    // 3) Fetch buckets for each plan in parallel (we need bucket names for the UI)
+    const bucketPromises = TASK_CACHE.plans.map(p =>
+      graphFetch(`/planner/plans/${p.id}/buckets`).then(r => {
+        TASK_CACHE.bucketsByPlan[p.id] = (r.value || []).map(b => ({
+          id: b.id, name: b.name, planId: b.planId, etag: b['@odata.etag']
+        }));
+      }).catch(() => { TASK_CACHE.bucketsByPlan[p.id] = []; })
+    );
+    await Promise.all(bucketPromises);
+
+    TASK_CACHE.loadedAt = new Date();
+    const taskCount = Object.values(TASK_CACHE.tasksByPlan).reduce((n, arr) => n + arr.length, 0);
+    status.textContent = `${TASK_CACHE.plans.length} Pläne, ${taskCount} Aufgaben — geladen ${TASK_CACHE.loadedAt.toLocaleTimeString('de-CH')}`;
+    renderTasksContent();
+  } catch (err) {
+    status.classList.add('error');
+    status.textContent = 'Fehler: ' + (err.message || err);
+    document.getElementById('tasks-content').innerHTML = `
+      <div class="tasks-empty">
+        <div class="tasks-empty-title">Aufgaben konnten nicht geladen werden</div>
+        <div class="tasks-empty-sub">${escapeHtml(err.message || String(err))}<br><br>Wenn das ein Permissions-Fehler ist, melde dich unter <strong>Einstellungen → Cloud-Sync</strong> ab und neu an, damit die zusätzlichen Berechtigungen (Tasks.ReadWrite, Group.ReadWrite.All) konsentiert werden.</div>
+      </div>`;
+  } finally {
+    _tasksLoading = false;
+  }
+}
+
+// Normalise a Graph task into the shape we use internally. Captures the
+// etag (needed for PATCH/DELETE) and decodes the priority field
+// (Graph: 0..10, with 1=urgent, 3=important, 5=medium, 9=low).
+function _normaliseTask(t) {
+  return {
+    id: t.id,
+    title: t.title,
+    planId: t.planId,
+    bucketId: t.bucketId,
+    percentComplete: t.percentComplete || 0,
+    completed: (t.percentComplete || 0) >= 100,
+    dueDateTime: t.dueDateTime || null,
+    startDateTime: t.startDateTime || null,
+    priority: t.priority || 5,
+    description: '',  // loaded on demand via /tasks/{id}/details
+    detailsLoaded: false,
+    detailsEtag: null,
+    etag: t['@odata.etag'],
+    createdDateTime: t.createdDateTime,
+    completedDateTime: t.completedDateTime,
+  };
+}
+
+// Pull task details (description, checklist, references) on demand —
+// the /me/planner/tasks list endpoint doesn't include these.
+async function loadTaskDetails(taskId) {
+  const task = _findTaskById(taskId);
+  if (!task || task.detailsLoaded) return task;
+  try {
+    const d = await graphFetch(`/planner/tasks/${taskId}/details`);
+    task.description = d.description || '';
+    task.detailsEtag = d['@odata.etag'];
+    task.detailsLoaded = true;
+  } catch (_) {}
+  return task;
+}
+
+function _findTaskById(taskId) {
+  for (const planId of Object.keys(TASK_CACHE.tasksByPlan)) {
+    const t = TASK_CACHE.tasksByPlan[planId].find(x => x.id === taskId);
+    if (t) return t;
+  }
+  return null;
+}
+
+// ── Renderers ────────────────────────────────────────────────
+function renderTasksContent() {
+  const wrap = document.getElementById('tasks-content');
+  if (_tasksTab === 'myday') return renderTasksMyDay(wrap);
+  if (_tasksTab === 'all')   return renderTasksAll(wrap);
+  if (_tasksTab === 'plans') return renderTasksPlans(wrap);
+  if (_tasksTab.startsWith('plan:')) return renderSinglePlan(wrap, _tasksTab.slice(5));
+}
+
+// "Mein Tag": tasks due today or overdue, plus tasks with no due date that
+// are flagged as in-progress (50% complete) — heuristic since the official
+// "My Day" list is via Microsoft To Do (separate API).
+function renderTasksMyDay(wrap) {
+  const all = _allTasks().filter(t => !t.completed);
+  const today = new Date(); today.setHours(23, 59, 59, 999);
+  const dueToday = [], overdue = [];
+  for (const t of all) {
+    if (!t.dueDateTime) continue;
+    const d = new Date(t.dueDateTime);
+    if (d < new Date(new Date().setHours(0, 0, 0, 0))) overdue.push(t);
+    else if (d <= today) dueToday.push(t);
+  }
+  let html = '';
+  if (overdue.length) {
+    html += `<div class="task-section">
+      <div class="task-section-title">Überfällig <span class="task-section-count">${overdue.length}</span></div>
+      <div class="task-list">${overdue.map(_taskRowHtml).join('')}</div>
+    </div>`;
+  }
+  if (dueToday.length) {
+    html += `<div class="task-section">
+      <div class="task-section-title">Heute fällig <span class="task-section-count">${dueToday.length}</span></div>
+      <div class="task-list">${dueToday.map(_taskRowHtml).join('')}</div>
+    </div>`;
+  }
+  if (!html) {
+    html = `<div class="tasks-empty"><div class="tasks-empty-title">Nichts für heute</div><div class="tasks-empty-sub">Keine überfälligen oder heute fälligen Aufgaben — vorbildlich. Wechsle auf „Alle Aufgaben" für die volle Liste.</div></div>`;
+  }
+  wrap.innerHTML = html;
+}
+
+function renderTasksAll(wrap) {
+  const all = _allTasks();
+  const open = all.filter(t => !t.completed);
+  const done = all.filter(t => t.completed).slice(0, 25);  // cap done list
+  open.sort(_taskCompareByDue);
+  let html = '';
+  if (open.length) {
+    html += `<div class="task-section">
+      <div class="task-section-title">Offen <span class="task-section-count">${open.length}</span></div>
+      <div class="task-list">${open.map(_taskRowHtml).join('')}</div>
+    </div>`;
+  }
+  if (done.length) {
+    html += `<div class="task-section">
+      <div class="task-section-title">Kürzlich erledigt <span class="task-section-count">${done.length}</span></div>
+      <div class="task-list">${done.map(_taskRowHtml).join('')}</div>
+    </div>`;
+  }
+  if (!html) {
+    html = `<div class="tasks-empty"><div class="tasks-empty-title">Noch keine Aufgaben</div><div class="tasks-empty-sub">Klick auf „Neue Aufgabe", um die erste anzulegen.</div></div>`;
+  }
+  wrap.innerHTML = html;
+}
+
+function renderTasksPlans(wrap) {
+  if (!TASK_CACHE.plans.length) {
+    wrap.innerHTML = `<div class="tasks-empty"><div class="tasks-empty-title">Keine Pläne gefunden</div><div class="tasks-empty-sub">Du bist in keinen Microsoft-365-Gruppen mit Plänen. Erstelle einen Plan in der Planner-Web-App, dann erscheint er hier.</div></div>`;
+    return;
+  }
+  wrap.innerHTML = `<div class="plan-grid">${TASK_CACHE.plans.map(p => {
+    const tasks = TASK_CACHE.tasksByPlan[p.id] || [];
+    const open = tasks.filter(t => !t.completed).length;
+    const done = tasks.filter(t => t.completed).length;
+    return `<div class="plan-card" onclick="setTasksTab('plan:${p.id}')">
+      <div class="plan-card-name">${escapeHtml(p.title)}</div>
+      <div class="plan-card-stats">
+        <span>${open} offen</span>
+        <span>${done} erledigt</span>
+      </div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+function renderSinglePlan(wrap, planId) {
+  const plan = TASK_CACHE.plans.find(p => p.id === planId);
+  if (!plan) { wrap.innerHTML = `<div class="tasks-empty">Plan nicht gefunden.</div>`; return; }
+  const buckets = TASK_CACHE.bucketsByPlan[planId] || [];
+  const tasks = TASK_CACHE.tasksByPlan[planId] || [];
+  const tasksByBucket = {};
+  for (const t of tasks) (tasksByBucket[t.bucketId] = tasksByBucket[t.bucketId] || []).push(t);
+  let html = `<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+    <button class="fc-btn fc-btn-ghost" onclick="setTasksTab('plans')">‹ Pläne</button>
+    <h2 style="margin:0;font-size:18px;font-weight:600">${escapeHtml(plan.title)}</h2>
+  </div>`;
+  html += `<div class="plan-buckets">${buckets.map(b => {
+    const bTasks = (tasksByBucket[b.id] || []).slice().sort(_taskCompareByDue);
+    return `<div class="plan-bucket">
+      <div class="plan-bucket-name">${escapeHtml(b.name || '(unbenannt)')}<span class="plan-bucket-count">${bTasks.length}</span></div>
+      ${bTasks.map(_taskRowHtml).join('') || '<div style="font-size:11px;color:var(--text-3);padding:6px;text-align:center">Leer</div>'}
+    </div>`;
+  }).join('')}</div>`;
+  wrap.innerHTML = html;
+}
+
+function _allTasks() {
+  return Object.values(TASK_CACHE.tasksByPlan).flat();
+}
+function _taskCompareByDue(a, b) {
+  if (a.completed !== b.completed) return a.completed ? 1 : -1;
+  const ad = a.dueDateTime ? new Date(a.dueDateTime).getTime() : Infinity;
+  const bd = b.dueDateTime ? new Date(b.dueDateTime).getTime() : Infinity;
+  if (ad !== bd) return ad - bd;
+  return (a.priority || 5) - (b.priority || 5);
+}
+
+function _taskRowHtml(t) {
+  const plan = TASK_CACHE.plans.find(p => p.id === t.planId);
+  const planLabel = plan ? plan.title : '';
+  const meta = [];
+  if (t.dueDateTime) {
+    const d = new Date(t.dueDateTime);
+    const today = new Date(new Date().setHours(0, 0, 0, 0));
+    const todayEnd = new Date(new Date().setHours(23, 59, 59, 999));
+    let cls = 'task-due-soon';
+    if (d < today && !t.completed) cls = 'task-due-overdue';
+    else if (d <= todayEnd) cls = 'task-due-today';
+    meta.push(`<span class="task-meta-item ${cls}">📅 ${d.toLocaleDateString('de-CH', { day:'numeric', month:'short' })}</span>`);
+  }
+  if (t.priority && t.priority !== 5) {
+    const lbl = t.priority === 1 ? 'Dringend' : t.priority === 3 ? 'Wichtig' : 'Niedrig';
+    meta.push(`<span class="task-priority-badge task-priority-${t.priority}">${lbl}</span>`);
+  }
+  if (planLabel) meta.push(`<span class="task-plan-badge">${escapeHtml(planLabel)}</span>`);
+  return `<div class="task-row ${t.completed ? 'done' : ''}" onclick="openTaskEditModal('${t.id}')">
+    <div class="task-checkbox" onclick="event.stopPropagation(); toggleTaskComplete('${t.id}')" title="${t.completed ? 'Auf offen setzen' : 'Erledigt markieren'}">
+      <svg width="11" height="11" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+    </div>
+    <div class="task-body">
+      <div class="task-title">${escapeHtml(t.title)}</div>
+      ${meta.length ? `<div class="task-meta">${meta.join('')}</div>` : ''}
+    </div>
+  </div>`;
+}
+
+// ── Mutations ────────────────────────────────────────────────
+async function toggleTaskComplete(taskId) {
+  const t = _findTaskById(taskId);
+  if (!t) return;
+  const newComplete = !t.completed;
+  // Optimistic UI: flip immediately, then PATCH.
+  t.completed = newComplete;
+  t.percentComplete = newComplete ? 100 : 0;
+  renderTasksContent();
+  try {
+    await graphFetch(`/planner/tasks/${taskId}`, {
+      method: 'PATCH',
+      headers: { 'If-Match': t.etag },
+      body: JSON.stringify({ percentComplete: newComplete ? 100 : 0 }),
+    });
+    // Refresh etag — Graph returns new one in the response, but we'd need
+    // a follow-up GET. Simpler: full reload after a short delay.
+    setTimeout(reloadTasks, 400);
+  } catch (err) {
+    // Revert on failure
+    t.completed = !newComplete;
+    t.percentComplete = newComplete ? 0 : 100;
+    renderTasksContent();
+    alert('Fehler beim Aktualisieren: ' + (err.message || err));
+  }
+}
+
+function openTaskCreateModal() {
+  if (!CloudSync.account) { alert('Bitte zuerst Microsoft-Konto verbinden (Einstellungen → Cloud-Sync).'); return; }
+  if (!TASK_CACHE.plans.length) { alert('Kein Plan vorhanden. Erstelle zuerst einen Plan in Planner.'); return; }
+  _editingTaskId = null;
+  document.getElementById('task-modal-title').textContent = 'Neue Aufgabe';
+  document.getElementById('task-title').value = '';
+  document.getElementById('task-due').value = '';
+  document.getElementById('task-priority').value = '5';
+  document.getElementById('task-description').value = '';
+  document.getElementById('task-delete-btn').style.display = 'none';
+  // Populate plan dropdown
+  const planSel = document.getElementById('task-plan');
+  planSel.innerHTML = TASK_CACHE.plans.map(p => `<option value="${p.id}">${escapeHtml(p.title)}</option>`).join('');
+  planSel.onchange = () => updateTaskBucketDropdown(planSel.value);
+  updateTaskBucketDropdown(TASK_CACHE.plans[0].id);
+  document.getElementById('task-modal').classList.add('visible');
+  setTimeout(() => document.getElementById('task-title').focus(), 50);
+}
+
+async function openTaskEditModal(taskId) {
+  const t = _findTaskById(taskId);
+  if (!t) return;
+  _editingTaskId = taskId;
+  document.getElementById('task-modal-title').textContent = 'Aufgabe bearbeiten';
+  document.getElementById('task-title').value = t.title || '';
+  document.getElementById('task-due').value = t.dueDateTime ? t.dueDateTime.slice(0, 10) : '';
+  document.getElementById('task-priority').value = String(t.priority || 5);
+  document.getElementById('task-delete-btn').style.display = '';
+  // Plan dropdown locked to current plan (Planner doesn't allow moving tasks between plans easily)
+  const planSel = document.getElementById('task-plan');
+  planSel.innerHTML = TASK_CACHE.plans.map(p => `<option value="${p.id}" ${p.id === t.planId ? 'selected' : ''}>${escapeHtml(p.title)}</option>`).join('');
+  updateTaskBucketDropdown(t.planId, t.bucketId);
+  document.getElementById('task-modal-status').textContent = 'Lade Beschreibung…';
+  document.getElementById('task-description').value = '';
+  document.getElementById('task-modal').classList.add('visible');
+  await loadTaskDetails(taskId);
+  document.getElementById('task-description').value = t.description || '';
+  document.getElementById('task-modal-status').textContent = '';
+}
+
+function updateTaskBucketDropdown(planId, selectedBucketId) {
+  const bucketSel = document.getElementById('task-bucket');
+  const buckets = TASK_CACHE.bucketsByPlan[planId] || [];
+  bucketSel.innerHTML = buckets.map(b => `<option value="${b.id}" ${b.id === selectedBucketId ? 'selected' : ''}>${escapeHtml(b.name || '(unbenannt)')}</option>`).join('') || '<option>(Keine Buckets)</option>';
+}
+
+function closeTaskModal() {
+  document.getElementById('task-modal').classList.remove('visible');
+  _editingTaskId = null;
+}
+
+async function saveTaskFromModal() {
+  const title = document.getElementById('task-title').value.trim();
+  const planId = document.getElementById('task-plan').value;
+  const bucketId = document.getElementById('task-bucket').value;
+  const dueStr = document.getElementById('task-due').value;
+  const priority = parseInt(document.getElementById('task-priority').value, 10);
+  const description = document.getElementById('task-description').value.trim();
+  const status = document.getElementById('task-modal-status');
+  const saveBtn = document.getElementById('task-save-btn');
+  if (!title) { status.textContent = 'Titel fehlt.'; return; }
+  saveBtn.disabled = true;
+  status.textContent = 'Speichere…';
+  try {
+    if (_editingTaskId) {
+      // UPDATE
+      const t = _findTaskById(_editingTaskId);
+      const patch = { title, priority };
+      patch.dueDateTime = dueStr ? new Date(dueStr + 'T00:00:00Z').toISOString() : null;
+      // bucketId can be changed within the same plan
+      if (bucketId && bucketId !== t.bucketId) patch.bucketId = bucketId;
+      await graphFetch(`/planner/tasks/${_editingTaskId}`, {
+        method: 'PATCH',
+        headers: { 'If-Match': t.etag },
+        body: JSON.stringify(patch),
+      });
+      // Update description (separate /details endpoint, separate etag)
+      if (description !== (t.description || '')) {
+        await loadTaskDetails(_editingTaskId);
+        await graphFetch(`/planner/tasks/${_editingTaskId}/details`, {
+          method: 'PATCH',
+          headers: { 'If-Match': t.detailsEtag },
+          body: JSON.stringify({ description }),
+        });
+      }
+    } else {
+      // CREATE
+      const body = { planId, bucketId, title, priority };
+      if (dueStr) body.dueDateTime = new Date(dueStr + 'T00:00:00Z').toISOString();
+      const created = await graphFetch('/planner/tasks', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      });
+      // Add description if any
+      if (description) {
+        // Need details etag — fetch details first
+        const det = await graphFetch(`/planner/tasks/${created.id}/details`);
+        await graphFetch(`/planner/tasks/${created.id}/details`, {
+          method: 'PATCH',
+          headers: { 'If-Match': det['@odata.etag'] },
+          body: JSON.stringify({ description }),
+        });
+      }
+    }
+    closeTaskModal();
+    await reloadTasks();
+  } catch (err) {
+    status.textContent = 'Fehler: ' + (err.message || err);
+  } finally {
+    saveBtn.disabled = false;
+  }
+}
+
+async function deleteTaskFromModal() {
+  if (!_editingTaskId) return;
+  const t = _findTaskById(_editingTaskId);
+  if (!t) return;
+  if (!confirm(`Aufgabe „${t.title}" wirklich löschen?`)) return;
+  try {
+    await graphFetch(`/planner/tasks/${_editingTaskId}`, {
+      method: 'DELETE',
+      headers: { 'If-Match': t.etag },
+    });
+    closeTaskModal();
+    await reloadTasks();
+  } catch (err) {
+    document.getElementById('task-modal-status').textContent = 'Fehler beim Löschen: ' + (err.message || err);
+  }
+}
+
+// ── Note → Task linkage ──────────────────────────────────────
+// Called from the detail header of a personal note. Pre-fills the task
+// modal with the note's title and a description that links back to the
+// note via #entry-<id> anchor (the app picks this up on load and opens
+// the corresponding entry — see loadFromHash below).
+function createTaskFromEntry(entryId) {
+  if (!CloudSync.account) { alert('Bitte zuerst Microsoft-Konto unter Einstellungen → Cloud-Sync verbinden.'); return; }
+  const entry = ENTRIES.find(e => e.id === entryId);
+  if (!entry) return;
+  setView('tasks');
+  // Defer modal open until view has rendered (and tasks are loaded)
+  setTimeout(() => {
+    if (TASK_CACHE.loadedAt) {
+      openTaskCreateModal();
+      document.getElementById('task-title').value = entry.title;
+      document.getElementById('task-description').value =
+        `Verlinkt mit Notiz: ${entry.title}\n${location.origin}${location.pathname}#entry-${entryId}\n\n${entry.preview || entry.detailed || ''}`.trim();
+    } else {
+      // Wait for tasks to load, then retry
+      const interval = setInterval(() => {
+        if (TASK_CACHE.loadedAt && !_tasksLoading) {
+          clearInterval(interval);
+          openTaskCreateModal();
+          document.getElementById('task-title').value = entry.title;
+          document.getElementById('task-description').value =
+            `Verlinkt mit Notiz: ${entry.title}\n${location.origin}${location.pathname}#entry-${entryId}\n\n${entry.preview || entry.detailed || ''}`.trim();
+        }
+      }, 300);
+      setTimeout(() => clearInterval(interval), 6000);
+    }
+  }, 200);
+}
+
+// Hash-based deep-link: if the URL has #entry-123 on load, jump to that
+// entry's detail panel. Used by note-task links round-tripping back into
+// the app from Planner.
+window.addEventListener('hashchange', () => {
+  const m = (location.hash || '').match(/^#entry-(\d+)$/);
+  if (!m) return;
+  const id = parseInt(m[1], 10);
+  const e = ENTRIES.find(x => x.id === id);
+  if (e) { setView('list'); setTimeout(() => openDetail(e), 80); }
+});
+// Run once on initial load too
+setTimeout(() => {
+  const m = (location.hash || '').match(/^#entry-(\d+)$/);
+  if (!m) return;
+  const id = parseInt(m[1], 10);
+  const e = ENTRIES.find(x => x.id === id);
+  if (e) { setView('list'); setTimeout(() => openDetail(e), 80); }
+}, 1500);
 
 // ── PWA: register service worker + handle Web Share Target ──────────
 if ('serviceWorker' in navigator) {
