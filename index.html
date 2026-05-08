@@ -2507,10 +2507,14 @@ function updateThemeButton() {
 // ──────────────────────────────────────────────────────────────
 // Cloud-Sync via OneDrive (Microsoft Graph App Folder)
 // ──────────────────────────────────────────────────────────────
-// Uses MSAL.js (loaded lazily from CDN) for OAuth. The user-provided
-// Microsoft Azure Client-ID is stored in localStorage as 'msftClientId'.
+// Uses MSAL.js (loaded lazily from CDN) for OAuth. The Microsoft Azure
+// Client-ID for this deployment is hardcoded below — Client-IDs in SPAs
+// are public-by-design (PKCE flow, no client secret), so it's safe to
+// commit. localStorage 'msftClientId' overrides this default if set,
+// e.g. for testing against a different Azure app.
 // State is serialised as a single JSON blob `pka-state.json` in the app's
 // sandboxed OneDrive App Folder (scope: Files.ReadWrite.AppFolder).
+const DEFAULT_MSFT_CLIENT_ID = 'd0f3ac0c-d922-41c7-9b72-c63a3b631568';
 const CloudSync = {
   msal: null,        // MSAL instance
   account: null,     // active account
@@ -2532,7 +2536,7 @@ function _ensureMsal() {
 }
 
 async function _initCloudSync() {
-  const clientId = localStorage.getItem('msftClientId');
+  const clientId = localStorage.getItem('msftClientId') || DEFAULT_MSFT_CLIENT_ID;
   if (!clientId) return;  // No client ID → user hasn't configured yet
   try {
     await _ensureMsal();
@@ -2582,7 +2586,7 @@ function _snapshotLocalState() {
 }
 
 async function cloudSignIn() {
-  const clientId = localStorage.getItem('msftClientId');
+  const clientId = localStorage.getItem('msftClientId') || DEFAULT_MSFT_CLIENT_ID;
   if (!clientId) { alert('Bitte zuerst die Microsoft Client-ID eingeben und speichern.'); return; }
   if (!CloudSync.msal) await _initCloudSync();
   if (!CloudSync.msal) { alert('MSAL nicht verfügbar — Konsole prüfen.'); return; }
@@ -2714,7 +2718,7 @@ function onSaveMsftClientId() {
 }
 function updateCloudStatusUI() {
   const inp = document.getElementById('settings-msft-client-id');
-  if (inp) inp.value = localStorage.getItem('msftClientId') || '';
+  if (inp) inp.value = localStorage.getItem('msftClientId') || DEFAULT_MSFT_CLIENT_ID;
   const signin  = document.getElementById('cloud-signin-btn');
   const signout = document.getElementById('cloud-signout-btn');
   const pushBtn = document.getElementById('cloud-push-btn');
