@@ -1497,6 +1497,23 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
 .chat-msg-citation-icon { font-size: 14px; }
 .chat-msg-citation-title { color: var(--text); font-weight: 500; flex: 1; }
 .chat-msg-citation-date { color: var(--text-3); font-size: 11px; }
+/* Footer under each AI message: model · token counts · cost. Subtle so it
+   doesn't compete with the answer, but readable enough to glance at. */
+.chat-msg-meta { display: flex; gap: 12px; margin-top: 8px; font-size: 11px; color: var(--text-3);
+                  opacity: 0.7; transition: opacity .15s; }
+.chat-msg:hover .chat-msg-meta { opacity: 1; }
+.chat-msg-meta-model { color: var(--accent); font-weight: 600; }
+.chat-msg-meta-tokens { font-variant-numeric: tabular-nums; }
+.chat-msg-meta-cost { font-variant-numeric: tabular-nums; }
+/* Streaming cursor: a blinking block that sits at the end of the partial
+   answer text, just like Claude.ai. Removed once streaming flag drops. */
+.chat-msg-cursor { display: inline-block; width: 0.6em; margin-left: 2px;
+                    background: var(--accent); animation: chat-cursor-blink 1s step-end infinite;
+                    color: transparent; }
+@keyframes chat-cursor-blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
 
 .chat-input-wrap { padding: 12px 24px 24px; max-width: 840px; margin: 0 auto; width: 100%; flex-shrink: 0; }
 .chat-input-box { background: var(--surface-2); border: 1px solid var(--border); border-radius: 14px;
@@ -5532,10 +5549,35 @@ function renderChatThread() {
         <span class="chat-msg-citation-date">${fmtDate(e.date)}</span>
       </div>`;
     }).join('');
-    return `<div class="chat-msg">
+    // Footer with token usage + cost estimate (only on AI messages with usage data).
+    // Cost calculation per million tokens — prices in USD, current as of late 2025:
+    //   Haiku: $1 in / $5 out · Sonnet: $3 in / $15 out · Opus: $15 in / $75 out
+    let footer = '';
+    if (m.role === 'ai' && m.usage) {
+      const prices = {
+        'claude-haiku-4-5':         { in: 1,  out: 5 },
+        'claude-sonnet-4-6':        { in: 3,  out: 15 },
+        'claude-opus-4-5':          { in: 15, out: 75 },
+        'claude-3-5-haiku-latest':  { in: 1,  out: 5 },
+        'claude-3-5-sonnet-latest': { in: 3,  out: 15 },
+        'claude-3-opus-latest':     { in: 15, out: 75 },
+      };
+      const p = prices[m.model] || prices['claude-haiku-4-5'];
+      const ti = m.usage.input_tokens || 0;
+      const to = m.usage.output_tokens || 0;
+      const costUsd = (ti * p.in + to * p.out) / 1_000_000;
+      const modelShort = (m.model || '').replace(/^claude-/, '').replace(/-latest$/, '');
+      footer = `<div class="chat-msg-meta">
+        <span class="chat-msg-meta-model">⚡ ${escapeHtml(modelShort)}</span>
+        <span class="chat-msg-meta-tokens">${ti.toLocaleString('de-CH')} in · ${to.toLocaleString('de-CH')} out</span>
+        <span class="chat-msg-meta-cost">≈ $${costUsd.toFixed(4)}</span>
+      </div>`;
+    }
+    return `<div class="chat-msg${m.streaming ? ' is-streaming' : ''}">
       <div class="chat-msg-role ${m.role === 'user' ? 'user' : ''}">${m.role === 'user' ? 'You' : 'Larry'}</div>
-      <div class="chat-msg-content">${m.content}</div>
+      <div class="chat-msg-content">${m.content}${m.streaming ? '<span class="chat-msg-cursor">▋</span>' : ''}</div>
       ${citations}
+      ${footer}
     </div>`;
   }).join('');
   content.scrollTop = content.scrollHeight;
@@ -5757,11 +5799,12 @@ async function sendChatMessage() {
   // Claude models → real LLM call via /api/chat (Cloudflare Pages Function).
   // Non-Claude models → still placeholder local search until a key is wired.
   if (selectedModel.startsWith('claude-')) {
-    chat.messages.push({ role: 'ai', content: '⏳ Denke …', citations: [] });
+    chat.messages.push({ role: 'ai', content: '⏳ Denke …', citations: [], streaming: true });
     saveChats(); renderChatHistory(); renderChatThread(); renderContextChips();
     try {
       const reply = await callClaudeChat(text, ctxEntries, chat);
-      chat.messages[chat.messages.length - 1] = reply;
+      // Replace placeholder with final reply (streaming flag dropped → cursor gone)
+      chat.messages[chat.messages.length - 1] = { ...reply, streaming: false };
     } catch (err) {
       chat.messages[chat.messages.length - 1] = {
         role: 'ai',
@@ -5779,9 +5822,10 @@ async function sendChatMessage() {
   saveChats(); renderChatHistory(); renderChatThread(); renderContextChips();
 }
 
-// Calls the /api/chat Pages Function. Builds a system prompt that grounds
-// Claude in the user's pinned context + top keyword-search hits, so answers
-// stay rooted in the personal knowledge base instead of hallucinating.
+// Calls the /api/chat Pages Function with streaming. Builds a system prompt
+// that grounds Claude in the user's pinned context + top keyword-search hits,
+// so answers stay rooted in the personal knowledge base. Streams tokens into
+// the chat thread as they arrive; finalises citations + usage on stream end.
 async function callClaudeChat(userText, ctxEntries, chat) {
   const searched = searchKnowledge(userText, 5);
   const seen = new Set();
@@ -5797,6 +5841,7 @@ async function callClaudeChat(userText, ctxEntries, chat) {
     'Du bist Larry, ein persönlicher Wissens-Assistent für den Nutzer.',
     'Antworte in der Sprache der Frage (meist Deutsch).',
     'Stütze dich primär auf die folgenden Notizen und Garden-Karten aus dem persönlichen Wissensgarten.',
+    'Wenn du eine Karte aus dem Wissensgarten zitierst, erwähne ihren Titel exakt (z.B. „Marc Aurel: Selbstbetrachtungen") — der Frontend zeigt den Eintrag dann als anklickbare Karte unter deiner Antwort.',
     'Wenn die Notizen die Frage nicht abdecken, sag das klar und gib eine kurze allgemeine Antwort.',
     'Sei knapp und konkret. Maximal 4 kurze Absätze.',
     '',
@@ -5821,19 +5866,78 @@ async function callClaudeChat(userText, ctxEntries, chat) {
       system: systemPrompt,
       messages,
       max_tokens: 1024,
+      stream: true,
     }),
   });
 
-  const data = await res.json();
   if (!res.ok) {
-    throw new Error(data.error?.message || data.error || `HTTP ${res.status}`);
+    // Non-stream error response (Function returns JSON on failure)
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.error?.message || errData.error || `HTTP ${res.status}`);
   }
 
-  const reply = (data.content || []).filter(c => c.type === 'text').map(c => c.text).join('\n').trim();
+  // Stream parser — Anthropic's SSE format: lines starting with "data: "
+  // contain JSON events. We care about content_block_delta (text chunks),
+  // message_start (input_tokens), message_delta (output_tokens).
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let fullText = '';
+  let usage = { input_tokens: 0, output_tokens: 0 };
+  const placeholderIdx = chat.messages.length - 1;  // we own this message slot
+
+  const flushRender = () => {
+    chat.messages[placeholderIdx] = {
+      role: 'ai',
+      content: escapeHtml(fullText).replace(/\n/g, '<br>'),
+      citations: [],  // computed at end
+      streaming: true,
+    };
+    renderChatThread();
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith('data: ')) continue;
+      const payload = trimmed.slice(6);
+      if (payload === '[DONE]') continue;
+      let event;
+      try { event = JSON.parse(payload); } catch (_) { continue; }
+      if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
+        fullText += event.delta.text;
+        flushRender();
+      } else if (event.type === 'message_start' && event.message?.usage) {
+        usage.input_tokens = event.message.usage.input_tokens || 0;
+        usage.output_tokens = event.message.usage.output_tokens || 0;
+      } else if (event.type === 'message_delta' && event.usage) {
+        if (event.usage.output_tokens) usage.output_tokens = event.usage.output_tokens;
+        if (event.usage.input_tokens)  usage.input_tokens  = event.usage.input_tokens;
+      } else if (event.type === 'error') {
+        throw new Error(event.error?.message || 'Anthropic stream error');
+      }
+    }
+  }
+
+  // Citation matching: only show grounding entries whose title actually
+  // appears (case-insensitive substring) in Claude's reply. Keeps the
+  // citation list tight to what was REALLY referenced, not all 8 candidates.
+  const replyLower = fullText.toLowerCase();
+  const cited = grounding
+    .filter(e => e.title && replyLower.includes(e.title.toLowerCase()))
+    .map(e => e.id);
+
   return {
     role: 'ai',
-    content: escapeHtml(reply || '(Leere Antwort)').replace(/\n/g, '<br>'),
-    citations: grounding.map(e => e.id),
+    content: escapeHtml(fullText || '(Leere Antwort)').replace(/\n/g, '<br>'),
+    citations: cited,
+    usage,
+    model: selectedModel,
   };
 }
 
@@ -7842,15 +7946,11 @@ async function onMobileCameraFile(ev) {
     const text = await runScreenshotOCR(dataUrl);
     if (text && text.trim()) {
       vaAddMsg('user', '(Aus dem Bild erkannt) ' + text.trim().substring(0, 600) + (text.length > 600 ? '…' : ''));
+      vaRespond('Auf dem Foto steht folgender Text — bitte fasse ihn kurz zusammen oder beantworte was relevant ist:\n\n' + text.trim().substring(0, 2000));
+    } else {
+      vaAddMsg('assistant', 'Im Bild konnte ich keinen Text erkennen.');
+      vaSpeak('Im Bild konnte ich keinen Text erkennen.');
     }
-    const persona = getActivePersona();
-    setTimeout(() => {
-      const reply = text && text.trim()
-        ? `Ich sehe das Bild — Text extrahiert. (In Produktion würde ${persona?.name || 'Larry'} jetzt darauf eingehen.)`
-        : `Bild empfangen, kein klarer Text gefunden. (In Produktion würde ${persona?.name || 'Larry'} es trotzdem analysieren.)`;
-      vaAddMsg('assistant', reply);
-      vaSpeak(reply);
-    }, 350);
   };
   reader.onerror = () => vaSetStatus('Fehler beim Lesen der Datei');
   reader.readAsDataURL(file);
@@ -7894,20 +7994,17 @@ async function takeVoiceScreenshot() {
     vaSetStatus('OCR läuft — extrahiere Text aus dem Screenshot…');
     const text = await runScreenshotOCR(dataUrl);
 
-    // Send to Larry: user's last spoken intent (if any) + OCR text.
-    // For the demo stub, just echo back. In production, this is where the
-    // multimodal call to your LLM (GPT-4V / Claude / Gemini) would happen.
+    // OCR-extracted text goes to Larry (text-only — Haiku via /api/chat
+    // doesn't support images yet; we'd switch to Sonnet's multimodal endpoint
+    // for that). The persona prompt + the same grounding logic from vaRespond
+    // are reused, so screenshots work like spoken questions.
     if (text && text.trim()) {
       vaAddMsg('user', '(Vom Bildschirm erkannt) ' + text.trim().substring(0, 600) + (text.length > 600 ? '…' : ''));
+      vaRespond('Auf dem Bildschirm steht folgender Text — bitte fasse ihn kurz zusammen oder beantworte was relevant ist:\n\n' + text.trim().substring(0, 2000));
+    } else {
+      vaAddMsg('assistant', 'Im Screenshot konnte ich keinen Text erkennen.');
+      vaSpeak('Im Screenshot konnte ich keinen Text erkennen.');
     }
-    const persona = getActivePersona();
-    setTimeout(() => {
-      const reply = text && text.trim()
-        ? `Ich sehe deinen Bildschirm — Text extrahiert. (In Produktion würde ${persona?.name || 'Larry'} jetzt darauf eingehen.)`
-        : `Ich sehe deinen Bildschirm, konnte aber keinen klaren Text erkennen. (Bild trotzdem an ${persona?.name || 'Larry'} weitergeleitet.)`;
-      vaAddMsg('assistant', reply);
-      vaSpeak(reply);
-    }, 350);
   } catch (e) {
     vaSetStatus('Screenshot fehlgeschlagen: ' + (e.message || e));
     try { stream.getTracks().forEach(t => t.stop()); } catch(_) {}
@@ -7962,19 +8059,70 @@ function sendVoiceText() {
   vaRespond(raw);
 }
 
-// Stub responder — wire to your real chat backend here. For now we echo the
-// input back so the speech / pulse cycle is visible. The active persona's
-// `prompt` would be sent as the system message to a real LLM endpoint.
-function vaRespond(userText) {
+// Real responder — calls /api/chat with the active persona's system prompt
+// AND grounding from the user's knowledge base, then speaks the reply.
+// Falls back to a friendly error message if the API is unreachable.
+// Uses non-streaming for voice (we want the full answer before TTS starts).
+async function vaRespond(userText) {
   const persona = getActivePersona();
   vaSetStatus(`${persona?.name || 'Larry'} denkt nach…`);
-  setTimeout(() => {
-    const reply = persona
-      ? `[${persona.name}] Verstanden: „${userText}" — (in Produktion würde der LLM mit Persona-Prompt antworten.)`
-      : `Verstanden: „${userText}" — (in Produktion würde Larry hier antworten.)`;
-    vaAddMsg('assistant', reply);
-    vaSpeak(reply);
-  }, 350);
+
+  // Pull the same grounding logic the chat uses, so spoken questions also
+  // benefit from the personal knowledge base. Smaller cap (5) since voice
+  // answers should be more conversational and shorter.
+  const searched = (typeof searchKnowledge === 'function') ? searchKnowledge(userText, 5) : [];
+  const seen = new Set();
+  const grounding = searched
+    .filter(e => { if (!e || seen.has(e.id)) return false; seen.add(e.id); return true; })
+    .slice(0, 5);
+  const groundingText = grounding.length
+    ? grounding.map(e => `### ${e.title} (${e.date})\n${e.preview || e.detailed || e.body || ''}`).join('\n\n')
+    : '(Keine relevanten Einträge im Wissensgarten gefunden.)';
+
+  const personaPrompt = persona?.prompt
+    || 'Du bist Larry, der persönliche Wissens-Assistent. Antworte freundlich, knapp und hilfreich auf Deutsch.';
+
+  const systemPrompt = [
+    personaPrompt,
+    '',
+    'WICHTIG: Antworte sehr knapp und gesprächig — die Antwort wird laut vorgelesen.',
+    'Maximal 2–3 kurze Sätze, kein Markdown, keine Aufzählungen, keine Überschriften.',
+    'Stütze dich wo möglich auf die folgenden Notizen aus dem persönlichen Wissensgarten:',
+    '',
+    groundingText,
+  ].join('\n');
+
+  // Replay last few voice-chat turns so follow-ups stay coherent.
+  const history = (typeof _vaConvHistory !== 'undefined' ? _vaConvHistory : [])
+    .slice(-6)
+    .map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.text || '' }))
+    .filter(m => m.content);
+
+  const messages = [...history, { role: 'user', content: userText }];
+
+  let reply;
+  try {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: localStorage.getItem('selectedModel') || 'claude-haiku-4-5',
+        system: systemPrompt,
+        messages,
+        max_tokens: 400,  // shorter for voice — TTS-friendly
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error?.message || data.error || `HTTP ${res.status}`);
+    reply = (data.content || []).filter(c => c.type === 'text').map(c => c.text).join(' ').trim();
+    if (!reply) reply = 'Hmm, ich habe keine Antwort generieren können.';
+  } catch (err) {
+    reply = `Fehler beim Abrufen der Antwort: ${err.message || err}.`;
+  }
+
+  vaAddMsg('assistant', reply);
+  vaSpeak(reply);
+  vaSetStatus(persona ? `Persona: ${persona.name}` : 'Bereit');
 }
 
 // ── Text-to-Speech ───────────────────────────────────────────

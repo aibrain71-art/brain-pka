@@ -23,7 +23,7 @@ export async function onRequestPost({ request, env }) {
     return json({ error: 'Invalid JSON in request body' }, 400);
   }
 
-  const { messages, model, system, max_tokens } = body;
+  const { messages, model, system, max_tokens, stream } = body;
   if (!Array.isArray(messages) || messages.length === 0) {
     return json({ error: 'Field "messages" must be a non-empty array' }, 400);
   }
@@ -44,6 +44,7 @@ export async function onRequestPost({ request, env }) {
   // Cap output tokens to bound cost — Haiku at $5/MTok output, 4096 tokens
   // = ~$0.02/answer ceiling. Caller can request less, never more.
   const maxTokens = Math.min(Math.max(parseInt(max_tokens, 10) || 1024, 64), 4096);
+  const wantStream = stream === true;
 
   let apiRes;
   try {
@@ -59,14 +60,28 @@ export async function onRequestPost({ request, env }) {
         messages,
         ...(system ? { system } : {}),
         max_tokens: maxTokens,
+        ...(wantStream ? { stream: true } : {}),
       }),
     });
   } catch (err) {
     return json({ error: 'Anthropic API request failed: ' + (err.message || err) }, 502);
   }
 
-  // Pass through Anthropic's response (status + body) so the client can
-  // surface API errors (rate limits, invalid model, etc.) directly.
+  // Streaming: pass the SSE body straight through to the client. The
+  // Cloudflare runtime supports streaming Response bodies natively.
+  if (wantStream && apiRes.ok && apiRes.body) {
+    return new Response(apiRes.body, {
+      status: apiRes.status,
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      },
+    });
+  }
+
+  // Non-streaming (or error): pass through Anthropic's JSON response so the
+  // client can surface API errors (rate limits, invalid model, etc.) directly.
   const data = await apiRes.json();
   return json(data, apiRes.status);
 }
