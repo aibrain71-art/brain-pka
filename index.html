@@ -1074,6 +1074,28 @@ body.view-graph.has-detail .graph-legend         { right: calc(var(--detail-w) +
                       color: var(--text-2); font-size: 12px; padding: 6px 12px;
                       border-radius: 16px; pointer-events: none; opacity: 0.75;
                       transition: opacity .2s; font-variant-numeric: tabular-nums; }
+/* Top-left graph search bar — capsule shape with magnifier icon on the
+   left and an inline X clear button on the right when there's a value. */
+.graph-search-tl { position: absolute; top: 16px; left: 16px; z-index: 11;
+                    display: inline-flex; align-items: center; gap: 8px;
+                    background: var(--surface-2); border: 1px solid var(--border);
+                    border-radius: 18px; padding: 6px 12px;
+                    transition: all .15s; min-width: 220px; max-width: 320px; }
+.graph-search-tl:focus-within { border-color: var(--accent);
+                                 box-shadow: 0 0 0 3px var(--accent-dim); }
+.graph-search-tl svg { color: var(--text-3); flex-shrink: 0; }
+.graph-search-tl input { background: transparent; border: none; outline: none;
+                          color: var(--text); font-size: 13px; flex: 1; min-width: 0;
+                          font-family: inherit; }
+.graph-search-tl input::placeholder { color: var(--text-3); }
+.graph-search-tl-clear { background: transparent; border: none; color: var(--text-3);
+                          cursor: pointer; padding: 2px; display: inline-flex;
+                          align-items: center; justify-content: center; border-radius: 4px;
+                          transition: all .15s; }
+.graph-search-tl-clear:hover { background: var(--surface-3); color: var(--text); }
+@media (max-width: 768px) {
+  .graph-search-tl { min-width: 150px; max-width: calc(100vw - 220px); }
+}
 .graph-stats-badge:hover { opacity: 1; }
 body.view-graph #graph-stats-badge:empty { display: none; }
 .graph-bottom-btn { width: 36px; height: 36px; border-radius: 8px; background: var(--surface-2);
@@ -2330,6 +2352,17 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
     <!-- Compact node/link counter (bottom-left), updated whenever the graph
          is rebuilt (depth slider, mode toggle, filters). -->
     <div class="graph-stats-badge" id="graph-stats-badge"></div>
+    <!-- Top-left search bar: filters the graph by entry title in real time.
+         Wires into the same applyGraphFilters() pipeline that powers the
+         settings-panel filter input, so a search here is visible in the
+         settings filter and vice-versa. -->
+    <div class="graph-search-tl">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" id="graph-search-tl-input" placeholder="Karte über Titel finden…" oninput="onGraphTopSearch(this.value)" autocomplete="off">
+      <button class="graph-search-tl-clear" id="graph-search-tl-clear" onclick="clearGraphTopSearch()" title="Suche zurücksetzen" style="display:none">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
     <div class="graph-bottom-controls">
       <!-- Graph-Settings (gear) — now lives bottom-right, next to the help/legend buttons.
            Removed from the topbar; only visible in graph view because this whole row is. -->
@@ -7617,11 +7650,34 @@ function updateAppearance(key, rawVal) {
 }
 
 function applyGraphFilters() {
-  GRAPH_SETTINGS.filter = (document.getElementById('gs-filter-input')?.value || '').trim().toLowerCase();
+  // Two filter inputs share the same value: the top-left search bar in
+  // the graph view AND the filter input inside the settings panel.
+  // Whichever the user typed in last wins; the other field mirrors it.
+  const tl = document.getElementById('graph-search-tl-input');
+  const gs = document.getElementById('gs-filter-input');
+  const value = ((document.activeElement === tl ? tl.value : gs?.value) || tl?.value || '').trim();
+  if (tl && tl.value !== value) tl.value = value;
+  if (gs && gs.value !== value) gs.value = value;
+  GRAPH_SETTINGS.filter = value.toLowerCase();
   GRAPH_SETTINGS.showUnconnected = document.getElementById('gs-unconnected')?.checked ?? true;
   GRAPH_SETTINGS.showLeafNodes = document.getElementById('gs-leafnodes')?.checked ?? true;
   GRAPH_SETTINGS.autoConn = document.getElementById('gs-autoconn')?.checked ?? false;
+  // Show/hide the X clear button on the top-left search
+  const clearBtn = document.getElementById('graph-search-tl-clear');
+  if (clearBtn) clearBtn.style.display = value ? 'inline-flex' : 'none';
   rebuildGraphHidden();
+}
+
+function onGraphTopSearch(_v) {
+  applyGraphFilters();
+}
+
+function clearGraphTopSearch() {
+  const tl = document.getElementById('graph-search-tl-input');
+  const gs = document.getElementById('gs-filter-input');
+  if (tl) tl.value = '';
+  if (gs) gs.value = '';
+  applyGraphFilters();
 }
 
 function applyPreset(preset) {
