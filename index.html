@@ -1737,6 +1737,120 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
 .tasks-signin-prompt { background: var(--surface-2); border: 1px solid var(--border-2);
                         border-radius: 12px; padding: 30px; text-align: center; max-width: 480px;
                         margin: 40px auto; }
+
+/* ── Spaced Repetition Dashboard (in Lernkasten view) ────────── */
+.srs-card { background: var(--surface-2); border: 1px solid var(--border); border-radius: 14px;
+             padding: 18px 20px; margin-bottom: 14px; }
+.srs-section-label { font-size: 11px; font-weight: 600; color: var(--text-3);
+                      text-transform: uppercase; letter-spacing: 1px;
+                      margin: 22px 4px 10px; }
+.srs-hero { display: flex; align-items: center; gap: 16px; padding: 22px 24px; }
+.srs-hero-icon { width: 44px; height: 44px; border-radius: 12px; background: var(--accent-dim);
+                  color: var(--accent); display: inline-flex; align-items: center;
+                  justify-content: center; flex-shrink: 0; }
+.srs-hero-text { flex: 1; min-width: 0; }
+.srs-hero-title { font-size: 18px; font-weight: 700; color: var(--text); }
+.srs-hero-sub { font-size: 13px; color: var(--text-3); margin-top: 2px; }
+.srs-start-btn { display: inline-flex; align-items: center; gap: 8px;
+                  background: linear-gradient(135deg, #f97316, #ea580c);
+                  color: #fff; border: none; padding: 11px 22px; border-radius: 10px;
+                  font-size: 14px; font-weight: 600; cursor: pointer; transition: all .15s;
+                  box-shadow: 0 4px 14px rgba(249,115,22,.3); }
+.srs-start-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(249,115,22,.45); }
+.srs-start-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+
+/* Three-up stat-card grid (Today/This Week/Next Week) */
+.srs-stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+                   margin-bottom: 14px; }
+.srs-stats-grid-3 { grid-template-columns: repeat(3, 1fr); }
+.srs-stat-card { background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px;
+                  padding: 16px 18px; }
+.srs-stat-card-head { display: flex; align-items: center; gap: 8px; font-size: 12px;
+                       color: var(--text-3); margin-bottom: 8px; }
+.srs-stat-num { font-size: 32px; font-weight: 700; color: var(--text); line-height: 1.1;
+                 font-variant-numeric: tabular-nums; }
+.srs-stat-num-md { font-size: 26px; }
+.srs-stat-sub { font-size: 12px; color: var(--text-3); margin-top: 4px; }
+.srs-stat-lbl { font-size: 12px; color: var(--text-3); margin-top: 4px; }
+.srs-stat-card-compact { text-align: center; padding: 18px 10px; }
+
+/* Streak strip — circles for Mon..Sun, filled when activity occurred that day */
+.srs-streak-head { display: flex; align-items: center; justify-content: space-between;
+                    margin-bottom: 14px; }
+.srs-streak-title { font-size: 14px; font-weight: 600; color: var(--text); }
+.srs-streak-sub { font-size: 11px; color: var(--text-3); }
+.srs-streak-viewall { font-size: 12px; color: var(--accent); cursor: pointer; }
+.srs-streak-viewall:hover { text-decoration: underline; }
+.srs-streak-week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px;
+                    margin-bottom: 16px; }
+.srs-streak-day { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.srs-streak-day-lbl { font-size: 11px; color: var(--text-3); font-weight: 500; }
+.srs-streak-day-dot { width: 28px; height: 28px; border-radius: 50%;
+                       border: 2px solid var(--border-2); transition: all .2s;
+                       display: inline-flex; align-items: center; justify-content: center;
+                       font-size: 10px; color: var(--text-3); }
+.srs-streak-day-dot.active { background: var(--accent); border-color: var(--accent);
+                              color: #fff; font-weight: 600; }
+.srs-streak-day-dot.today { box-shadow: 0 0 0 3px var(--accent-dim); }
+.srs-streak-summary { display: flex; align-items: baseline; gap: 12px; padding-top: 10px;
+                       border-top: 1px solid var(--border); }
+.srs-streak-num { font-size: 24px; font-weight: 700; color: var(--text); }
+.srs-streak-text { font-size: 13px; color: var(--text-2); }
+
+/* Activity bar chart — inline SVG, one bar per day */
+.srs-range-select { background: var(--surface-3); border: 1px solid var(--border);
+                     color: var(--text-2); padding: 4px 8px; border-radius: 6px;
+                     font-size: 11px; cursor: pointer; }
+.srs-activity-chart { height: 160px; display: flex; align-items: flex-end; gap: 4px;
+                       padding: 12px 0 24px; position: relative; }
+.srs-bar { flex: 1; background: var(--accent-dim); border-radius: 4px 4px 0 0;
+            position: relative; min-height: 1px; transition: all .25s ease-out;
+            cursor: pointer; }
+.srs-bar:hover { background: var(--accent); }
+.srs-bar-correct { position: absolute; left: 0; right: 0; bottom: 0; background: var(--accent);
+                    border-radius: inherit; }
+.srs-bar-lbl { position: absolute; bottom: -22px; left: 50%; transform: translateX(-50%);
+                font-size: 10px; color: var(--text-3); white-space: nowrap; }
+.srs-bar-tip { position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
+                background: var(--surface-1); border: 1px solid var(--border-2);
+                border-radius: 6px; padding: 4px 8px; font-size: 11px; color: var(--text);
+                white-space: nowrap; opacity: 0; transition: opacity .15s;
+                pointer-events: none; margin-bottom: 4px; }
+.srs-bar:hover .srs-bar-tip { opacity: 1; }
+.srs-activity-empty { color: var(--text-3); font-size: 13px; margin: auto;
+                       display: flex; align-items: center; gap: 8px; }
+
+/* Memory Stats — segmented bar showing 5 boxes */
+.srs-memory-bar { display: flex; height: 14px; border-radius: 8px; overflow: hidden;
+                   background: var(--surface-3); margin-bottom: 14px; }
+.srs-memory-seg { transition: flex .35s ease-out; min-width: 0; }
+.srs-memory-seg-1 { background: rgba(148,163,184,.5); }
+.srs-memory-seg-2 { background: rgba(96,165,250,.6); }
+.srs-memory-seg-3 { background: rgba(96,165,250,.8); }
+.srs-memory-seg-4 { background: #60a5fa; }
+.srs-memory-seg-5 { background: #3b82f6; }
+.srs-memory-legend { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+.srs-memory-leg { text-align: left; }
+.srs-memory-leg-lbl { font-size: 11px; color: var(--text-3); margin-bottom: 4px;
+                      display: flex; align-items: center; gap: 5px; }
+.srs-memory-leg-dot { width: 8px; height: 8px; border-radius: 50%; }
+.srs-memory-leg-num { font-size: 18px; font-weight: 700; color: var(--text);
+                      font-variant-numeric: tabular-nums; }
+.srs-memory-leg-pct { font-size: 11px; color: var(--text-3); margin-left: 4px; }
+
+/* Memory Progress — inline SVG line chart */
+.srs-progress-chart { height: 140px; padding: 10px 0; }
+.srs-progress-chart svg { width: 100%; height: 100%; }
+.srs-progress-empty { display: flex; flex-direction: column; align-items: center;
+                       gap: 8px; color: var(--text-3); padding: 30px; }
+
+@media (max-width: 768px) {
+  .srs-stats-grid { grid-template-columns: 1fr; }
+  .srs-stats-grid-3 { grid-template-columns: repeat(3, 1fr); }
+  .srs-hero { flex-wrap: wrap; }
+  .srs-hero-text { width: 100%; order: 0; }
+  .srs-hero-icon { order: -1; }
+}
 .detail-meta { display: flex; align-items: center; gap: 10px; }
 
 /* Language toggle in topbar — height matches the search input + mode chip */
@@ -2378,6 +2492,104 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
           <h1 class="fc-title">Lernkasten</h1>
           <div class="fc-header-stats" id="fc-global-stats"></div>
         </div>
+
+        <!-- ── Spaced Repetition Dashboard ───────────────────── -->
+        <div class="srs-card srs-hero">
+          <div class="srs-hero-icon">
+            <svg width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+          </div>
+          <div class="srs-hero-text">
+            <div class="srs-hero-title">Spaced Repetition</div>
+            <div class="srs-hero-sub">Wissen länger behalten durch optimal getimte Wiederholungen</div>
+          </div>
+          <button class="srs-start-btn" onclick="startGlobalReview()">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Review starten
+          </button>
+        </div>
+        <div class="srs-stats-grid">
+          <div class="srs-stat-card">
+            <div class="srs-stat-card-head">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              <span>Heute fällig</span>
+            </div>
+            <div class="srs-stat-num" id="srs-due-today">0</div>
+            <div class="srs-stat-sub">Karten heute zur Wiederholung</div>
+          </div>
+          <div class="srs-stat-card">
+            <div class="srs-stat-card-head">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              <span>Diese Woche</span>
+            </div>
+            <div class="srs-stat-num" id="srs-due-week">0</div>
+            <div class="srs-stat-sub">Kommt in den nächsten Tagen</div>
+          </div>
+          <div class="srs-stat-card">
+            <div class="srs-stat-card-head">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><polyline points="16 2 16 6 8 6 8 2"/><polyline points="9 14 11 16 15 12"/></svg>
+              <span>Nächste Woche</span>
+            </div>
+            <div class="srs-stat-num" id="srs-due-next-week">0</div>
+            <div class="srs-stat-sub">Karten bald</div>
+          </div>
+        </div>
+
+        <div class="srs-section-label">STREAK &amp; AKTIVITÄT</div>
+        <div class="srs-card">
+          <div class="srs-streak-head">
+            <span class="srs-streak-title">Streak</span>
+            <a class="srs-streak-viewall" onclick="renderSrsActivityRange('all')">Alles ansehen</a>
+          </div>
+          <div class="srs-streak-week" id="srs-streak-week"></div>
+          <div class="srs-streak-summary">
+            <div class="srs-streak-num" id="srs-streak-num">0</div>
+            <div class="srs-streak-text" id="srs-streak-text">Starte heute deine Serie</div>
+          </div>
+        </div>
+        <div class="srs-stats-grid srs-stats-grid-3">
+          <div class="srs-stat-card srs-stat-card-compact">
+            <div class="srs-stat-num srs-stat-num-md" id="srs-total-answered">0</div>
+            <div class="srs-stat-lbl">Beantwortet</div>
+          </div>
+          <div class="srs-stat-card srs-stat-card-compact">
+            <div class="srs-stat-num srs-stat-num-md" id="srs-total-correct">0</div>
+            <div class="srs-stat-lbl">Richtig</div>
+          </div>
+          <div class="srs-stat-card srs-stat-card-compact">
+            <div class="srs-stat-num srs-stat-num-md" id="srs-accuracy">0%</div>
+            <div class="srs-stat-lbl">Trefferquote</div>
+          </div>
+        </div>
+        <div class="srs-card">
+          <div class="srs-streak-head">
+            <span class="srs-streak-title">Aktivität</span>
+            <select class="srs-range-select" id="srs-activity-range" onchange="renderSrsActivity(this.value)">
+              <option value="7" selected>Letzte 7 Tage</option>
+              <option value="14">Letzte 14 Tage</option>
+              <option value="30">Letzte 30 Tage</option>
+            </select>
+          </div>
+          <div class="srs-activity-chart" id="srs-activity-chart"></div>
+        </div>
+
+        <div class="srs-section-label">WISSENS-EINBLICKE</div>
+        <div class="srs-card">
+          <div class="srs-streak-head">
+            <span class="srs-streak-title">Memory Stats</span>
+            <span class="srs-streak-sub" id="srs-memory-total">0 Karten</span>
+          </div>
+          <div class="srs-memory-bar" id="srs-memory-bar"></div>
+          <div class="srs-memory-legend" id="srs-memory-legend"></div>
+        </div>
+        <div class="srs-card">
+          <div class="srs-streak-head">
+            <span class="srs-streak-title">Memory Progress</span>
+            <span class="srs-streak-sub">Letzte 30 Tage</span>
+          </div>
+          <div class="srs-progress-chart" id="srs-progress-chart"></div>
+        </div>
+
+        <div class="srs-section-label">DEINE STAPEL</div>
         <div class="fc-actions">
           <button class="fc-btn fc-btn-primary" onclick="openFcCreateModal()">
             <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -9554,6 +9766,9 @@ function renderFcDeckList() {
   const stats = document.getElementById('fc-global-stats');
   if (!grid || !stats) return;
   fcModeSet('decks');
+  // Refresh the SRS dashboard above the deck grid (due-windows, streak,
+  // memory stats, progress chart) every time the user lands on this view.
+  if (typeof renderSrsDashboard === 'function') renderSrsDashboard();
 
   // Global stats: total decks, cards mastered (box 5), accuracy avg
   let totalCards = 0, masteredCards = 0, totalSeen = 0, totalCorrect = 0;
@@ -9900,6 +10115,8 @@ function markFcCard(correct) {
   const interval = FC_BOX_INTERVAL_DAYS[card.box] || 1;
   card.nextReview = new Date(now.getTime() + interval * 24 * 60 * 60 * 1000).toISOString();
   saveFlashDecks();
+  // Activity log: powers the dashboard's streak / accuracy / 7-day bar chart.
+  logFlashActivity(_fcSession.deckId, card.id, !!correct);
   _fcSession.idx++;
   renderFcStudyCard();
 }
@@ -10011,6 +10228,292 @@ function exitFcPrintView() {
     _fcSession = null;
     renderFcDeckList();
   }
+}
+
+// ── Spaced Repetition Dashboard ─────────────────────────────
+// Computes stats from FLASH_DECKS + FLASH_ACTIVITY and renders the
+// dashboard above the deck grid. Called from renderFcDeckList().
+
+const SRS_BOX_LABELS = ['New', 'Learning', 'Practiced', 'Confident', 'Mastered'];
+const _srsRangeKey = 'srsActivityRange';
+
+// All cards across all decks, flat.
+function _srsAllCards() {
+  return FLASH_DECKS.flatMap(d => d.cards.map(c => ({ ...c, _deckId: d.id, _deckName: d.name })));
+}
+
+// Cards due today / this week (next 7 days) / next week (8-14 days out).
+// "Due" = nextReview <= cutoff OR nextReview is null AND seen === 0 (never seen).
+function _srsDueWindows() {
+  const now = new Date();
+  const startOfDay = new Date(now); startOfDay.setHours(0, 0, 0, 0);
+  const endOfDay = new Date(now); endOfDay.setHours(23, 59, 59, 999);
+  const weekEnd = new Date(endOfDay.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const nextWeekEnd = new Date(endOfDay.getTime() + 14 * 24 * 60 * 60 * 1000);
+  const dueToday = [], dueThisWeek = [], dueNextWeek = [];
+  for (const c of _srsAllCards()) {
+    const next = c.nextReview ? new Date(c.nextReview) : null;
+    if (!next) {
+      // Never reviewed → counts as "due today"
+      dueToday.push(c);
+    } else if (next <= endOfDay) {
+      dueToday.push(c);
+    } else if (next <= weekEnd) {
+      dueThisWeek.push(c);
+    } else if (next <= nextWeekEnd) {
+      dueNextWeek.push(c);
+    }
+  }
+  return { dueToday, dueThisWeek, dueNextWeek };
+}
+
+// Build a queue of card-ids across multiple decks for the global review.
+function startGlobalReview() {
+  const due = _srsDueWindows().dueToday;
+  if (!due.length) {
+    alert('Keine Karten heute fällig. Lege einen Stapel an oder warte bis morgen — die Wiederholungen folgen dem Spaced-Repetition-Rhythmus.');
+    return;
+  }
+  // Group by deck so the study UI can find each card on its deck.
+  // We'll cycle through decks in round-robin so the user sees variety.
+  const byDeck = {};
+  for (const c of due) (byDeck[c._deckId] = byDeck[c._deckId] || []).push(c.id);
+  const deckIds = Object.keys(byDeck);
+  // For now: pick the deck with the most due cards and start a normal session
+  // on it (covers most due cards on average; users can run multiple sessions).
+  let bestDeck = deckIds[0], bestCount = byDeck[deckIds[0]].length;
+  for (const id of deckIds) {
+    if (byDeck[id].length > bestCount) { bestDeck = id; bestCount = byDeck[id].length; }
+  }
+  startFcStudy(bestDeck);
+}
+
+// Format a Date as YYYY-MM-DD (used as activity bucket key).
+function _srsDateKey(d) {
+  const z = n => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + z(d.getMonth() + 1) + '-' + z(d.getDate());
+}
+
+// Returns activity per day for the last N days.
+// [{ date: Date, key: 'YYYY-MM-DD', total: n, correct: n }]
+function _srsDailyActivity(daysBack) {
+  const buckets = {};
+  const now = new Date();
+  for (let i = 0; i < daysBack; i++) {
+    const d = new Date(now); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - i);
+    buckets[_srsDateKey(d)] = { date: new Date(d), key: _srsDateKey(d), total: 0, correct: 0 };
+  }
+  for (const a of FLASH_ACTIVITY) {
+    const d = new Date(a.ts); d.setHours(0, 0, 0, 0);
+    const k = _srsDateKey(d);
+    if (!buckets[k]) continue;
+    buckets[k].total++;
+    if (a.correct) buckets[k].correct++;
+  }
+  return Object.values(buckets).sort((a, b) => a.date - b.date);
+}
+
+// Current consecutive-days streak ending today (or 0 if no activity today/yesterday).
+function _srsStreak() {
+  if (!FLASH_ACTIVITY.length) return 0;
+  const days = new Set(FLASH_ACTIVITY.map(a => _srsDateKey(new Date(a.ts))));
+  let streak = 0;
+  const cursor = new Date(); cursor.setHours(0, 0, 0, 0);
+  // Allow starting from yesterday (so a session today still counts even if
+  // user hasn't done one yet today by the time they look)
+  if (!days.has(_srsDateKey(cursor))) cursor.setDate(cursor.getDate() - 1);
+  while (days.has(_srsDateKey(cursor))) {
+    streak++;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  return streak;
+}
+
+// Mon..Sun visit map for the current calendar week.
+function _srsCurrentWeek() {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  // ISO week: Monday = 1 .. Sunday = 7. JS: Sun = 0.
+  const dow = (today.getDay() + 6) % 7;  // 0 = Mon
+  const weekStart = new Date(today); weekStart.setDate(today.getDate() - dow);
+  const days = [];
+  const labels = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+  const visited = new Set(FLASH_ACTIVITY.map(a => _srsDateKey(new Date(a.ts))));
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(weekStart); d.setDate(weekStart.getDate() + i);
+    const key = _srsDateKey(d);
+    days.push({
+      date: d,
+      key,
+      label: labels[i],
+      isToday: key === _srsDateKey(today),
+      visited: visited.has(key),
+      isFuture: d > today,
+    });
+  }
+  return days;
+}
+
+// Memory-stats distribution by Leitner box.
+function _srsMemoryStats() {
+  const cards = _srsAllCards();
+  const counts = [0, 0, 0, 0, 0, 0];  // index 0 unused
+  for (const c of cards) counts[Math.max(1, Math.min(5, c.box || 1))]++;
+  const total = cards.length;
+  return {
+    total,
+    counts,
+    pct: counts.map(c => total ? Math.round((c / total) * 100) : 0),
+  };
+}
+
+function renderSrsDashboard() {
+  // Bail silently if the dashboard isn't in the DOM (other views).
+  if (!document.getElementById('srs-due-today')) return;
+
+  const { dueToday, dueThisWeek, dueNextWeek } = _srsDueWindows();
+  document.getElementById('srs-due-today').textContent = dueToday.length;
+  document.getElementById('srs-due-week').textContent = dueThisWeek.length;
+  document.getElementById('srs-due-next-week').textContent = dueNextWeek.length;
+
+  // Streak strip
+  const week = _srsCurrentWeek();
+  document.getElementById('srs-streak-week').innerHTML = week.map(d =>
+    `<div class="srs-streak-day"><span class="srs-streak-day-lbl">${d.label}</span><span class="srs-streak-day-dot${d.visited ? ' active' : ''}${d.isToday ? ' today' : ''}" title="${d.date.toLocaleDateString('de-CH')}">${d.visited ? '✓' : ''}</span></div>`
+  ).join('');
+  const streak = _srsStreak();
+  document.getElementById('srs-streak-num').textContent = `${streak} ${streak === 1 ? 'Tag' : 'Tage'}`;
+  document.getElementById('srs-streak-text').textContent = streak === 0
+    ? 'Starte heute deine Serie' : streak < 3
+    ? 'Bleib dran — Konstanz schlägt Intensität'
+    : streak < 7 ? 'Sehr gut, weiter so!' : 'Beachtlich — neue Bestmarke?';
+
+  // Totals
+  const totalAnswered = FLASH_ACTIVITY.length;
+  const totalCorrect = FLASH_ACTIVITY.filter(a => a.correct).length;
+  const acc = totalAnswered ? Math.round((totalCorrect / totalAnswered) * 100) : 0;
+  document.getElementById('srs-total-answered').textContent = totalAnswered.toLocaleString('de-CH');
+  document.getElementById('srs-total-correct').textContent = totalCorrect.toLocaleString('de-CH');
+  document.getElementById('srs-accuracy').textContent = acc + '%';
+
+  // Activity chart
+  const range = parseInt(localStorage.getItem(_srsRangeKey) || '7', 10);
+  const sel = document.getElementById('srs-activity-range');
+  if (sel) sel.value = String(range);
+  renderSrsActivity(range);
+
+  // Memory stats
+  const mem = _srsMemoryStats();
+  document.getElementById('srs-memory-total').textContent = `${mem.total} Karte${mem.total === 1 ? '' : 'n'}`;
+  const segs = [];
+  for (let b = 1; b <= 5; b++) {
+    const flex = mem.total ? mem.counts[b] : 0;
+    segs.push(`<div class="srs-memory-seg srs-memory-seg-${b}" style="flex:${flex}" title="${SRS_BOX_LABELS[b-1]}: ${mem.counts[b]} (${mem.pct[b]}%)"></div>`);
+  }
+  document.getElementById('srs-memory-bar').innerHTML = mem.total ? segs.join('') : '';
+  const segColors = ['rgba(148,163,184,.5)', 'rgba(96,165,250,.6)', 'rgba(96,165,250,.8)', '#60a5fa', '#3b82f6'];
+  document.getElementById('srs-memory-legend').innerHTML = SRS_BOX_LABELS.map((lbl, i) =>
+    `<div class="srs-memory-leg">
+      <div class="srs-memory-leg-lbl"><span class="srs-memory-leg-dot" style="background:${segColors[i]}"></span>${lbl}</div>
+      <div><span class="srs-memory-leg-num">${mem.counts[i+1]}</span><span class="srs-memory-leg-pct">${mem.pct[i+1]}%</span></div>
+    </div>`
+  ).join('');
+
+  // Memory progress (line chart over last 30 days — cumulative mastered)
+  renderSrsMemoryProgress();
+}
+
+function renderSrsActivity(range) {
+  range = parseInt(range, 10) || 7;
+  localStorage.setItem(_srsRangeKey, String(range));
+  const wrap = document.getElementById('srs-activity-chart');
+  if (!wrap) return;
+  const days = _srsDailyActivity(range);
+  const max = Math.max(1, ...days.map(d => d.total));
+  if (!FLASH_ACTIVITY.length) {
+    wrap.innerHTML = `<div class="srs-activity-empty">
+      <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+      Noch keine Aktivität — starte einen Stapel
+    </div>`;
+    return;
+  }
+  // Show every day for ranges <= 14, otherwise every 2nd label
+  wrap.innerHTML = days.map((d, i) => {
+    const h = d.total ? Math.max(2, (d.total / max) * 100) : 0;
+    const correctH = d.total ? (d.correct / d.total) * h : 0;
+    const showLbl = (range <= 7) || (i % Math.ceil(days.length / 7) === 0);
+    return `<div class="srs-bar" style="height:${h}%">
+      ${d.correct ? `<div class="srs-bar-correct" style="height:${(correctH/h*100)||0}%"></div>` : ''}
+      ${showLbl ? `<span class="srs-bar-lbl">${d.date.toLocaleDateString('de-CH', { day:'numeric', month: range > 14 ? 'numeric' : 'short' })}</span>` : ''}
+      <span class="srs-bar-tip">${d.total} (${d.correct} ✓)</span>
+    </div>`;
+  }).join('');
+}
+
+function renderSrsActivityRange(range) {
+  // "Alles ansehen" → expand to last 90 days
+  if (range === 'all') range = 90;
+  renderSrsActivity(range);
+  const sel = document.getElementById('srs-activity-range');
+  if (sel) {
+    if (![...sel.options].some(o => o.value == range)) {
+      sel.insertAdjacentHTML('beforeend', `<option value="${range}" selected>Letzte ${range} Tage</option>`);
+    } else sel.value = String(range);
+  }
+}
+
+function renderSrsMemoryProgress() {
+  const wrap = document.getElementById('srs-progress-chart');
+  if (!wrap) return;
+  // For each of the last 30 days, count cards that REACHED box 5 by that day
+  // (proxy for "mastered cumulative"). We don't have historical box snapshots,
+  // so we approximate using activity log: a card moves to box 5 if it was
+  // correctly answered 4+ times in a row. This is a rough estimate; users
+  // primarily care about the trend shape.
+  const days = 30;
+  const now = new Date(); now.setHours(23, 59, 59, 999);
+  const points = [];
+  // Collect activity sorted asc
+  const acts = [...FLASH_ACTIVITY].sort((a, b) => a.ts - b.ts);
+  // Simulate Leitner per card
+  const cardBox = {};
+  let cursorIdx = 0;
+  for (let i = days - 1; i >= 0; i--) {
+    const day = new Date(now); day.setDate(now.getDate() - i); day.setHours(23, 59, 59, 999);
+    while (cursorIdx < acts.length && acts[cursorIdx].ts <= day.getTime()) {
+      const a = acts[cursorIdx++];
+      const cur = cardBox[a.cardId] || 1;
+      cardBox[a.cardId] = a.correct ? Math.min(5, cur + 1) : 1;
+    }
+    const mastered = Object.values(cardBox).filter(b => b >= 5).length;
+    points.push({ date: day, mastered });
+  }
+  const maxY = Math.max(1, ...points.map(p => p.mastered));
+  if (!FLASH_ACTIVITY.length) {
+    wrap.innerHTML = `<div class="srs-progress-empty">
+      <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+      Noch zu wenig Daten — lerne ein paar Karten
+    </div>`;
+    return;
+  }
+  // Build a path
+  const W = 600, H = 120;
+  const dx = W / (points.length - 1);
+  const pts = points.map((p, i) => `${(i * dx).toFixed(1)},${(H - (p.mastered / maxY) * (H - 10) - 5).toFixed(1)}`);
+  const linePath = pts.join(' ');
+  // Area path (below line, to baseline)
+  const areaPath = `${pts[0]} ${linePath} ${(W).toFixed(1)},${H} 0,${H}`;
+  const lastPoint = points[points.length - 1];
+  wrap.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+    <defs>
+      <linearGradient id="srs-progress-grad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="var(--accent)" stop-opacity="0.35"/>
+        <stop offset="100%" stop-color="var(--accent)" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    <polyline points="${areaPath}" fill="url(#srs-progress-grad)" stroke="none"/>
+    <polyline points="${linePath}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"/>
+    <circle cx="${(W).toFixed(1)}" cy="${(H - (lastPoint.mastered / maxY) * (H - 10) - 5).toFixed(1)}" r="3" fill="var(--accent)"/>
+  </svg>`;
 }
 
 // ──────────────────────────────────────────────────────────────
