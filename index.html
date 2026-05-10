@@ -4227,17 +4227,22 @@ function updateElevenStatusLine() {
   if (!el) return;
   const keyOk = !!ELEVEN_KEY;
   const voiceOk = !!ELEVEN_VOICE_ID;
-  if (!keyOk && !voiceOk) {
-    el.innerHTML = '<span style="color:var(--text-3)">Status: Noch nicht eingerichtet.</span>';
-  } else if (!keyOk) {
-    el.innerHTML = '<span style="color:var(--warning)">⚠️ Stimme gewählt, aber Key fehlt → Larry bleibt stumm. Speichern klicken.</span>';
+  // "Reachable" = either we have a localStorage key OR the proxy returned
+  // voices successfully (proxy works → server-side ELEVENLABS_API_KEY OK).
+  const proxyOk = (window._cachedElevenVoices?.length || 0) > 0 && !keyOk;
+  const anyKeyPath = keyOk || proxyOk;
+  if (!anyKeyPath && !voiceOk) {
+    el.innerHTML = '<span style="color:var(--text-3)">Status: Noch nicht eingerichtet — entweder Cloudflare-Secret <code>ELEVENLABS_API_KEY</code> setzen oder hier einen Key eingeben.</span>';
+  } else if (!anyKeyPath) {
+    el.innerHTML = '<span style="color:var(--warning)">⚠️ Stimme gewählt, aber kein Key — Larry bleibt stumm. Cloudflare-Secret prüfen oder Key hier eingeben + Speichern.</span>';
   } else if (!voiceOk) {
-    el.innerHTML = '<span style="color:var(--warning)">⚠️ Key vorhanden, aber keine Stimme gewählt → Larry bleibt stumm. „Stimmen laden" + eine Stimme aus der Liste wählen.</span>';
+    el.innerHTML = '<span style="color:var(--warning)">⚠️ Key OK, aber keine Stimme gewählt → Larry bleibt stumm. „Stimmen laden" + eine Stimme auswählen.</span>';
   } else {
     const voices = window._cachedElevenVoices || [];
     const activeName = voices.find(v => v.id === ELEVEN_VOICE_ID)?.name;
     const nameDisplay = activeName ? `<strong>${escapeHtml(activeName)}</strong>` : `<code>${escapeHtml(ELEVEN_VOICE_ID.slice(0, 12))}…</code>`;
-    el.innerHTML = `<span style="color:var(--success);font-size:13px">✓ Aktive Stimme: ${nameDisplay}</span>`;
+    const source = proxyOk ? ' (via Cloudflare Proxy — Key server-seitig)' : '';
+    el.innerHTML = `<span style="color:var(--success);font-size:13px">✓ Aktive Stimme: ${nameDisplay}${escapeHtml(source)}</span>`;
   }
 }
 // Test the configured ElevenLabs voice with a short German sample. Surfaces
@@ -4245,8 +4250,10 @@ function updateElevenStatusLine() {
 // the issue is the key, the voice ID, or the network.
 async function onTestElevenVoice() {
   const statusEl = document.getElementById('settings-eleven-status');
-  if (!ELEVEN_KEY) {
-    if (statusEl) statusEl.innerHTML = '<span style="color:var(--error)">⚠️ Kein Key gesetzt — bitte erst Key eingeben + „Speichern".</span>';
+  // Allow test if EITHER local key set OR proxy already proven (voices loaded)
+  const proxyProven = (window._cachedElevenVoices?.length || 0) > 0;
+  if (!ELEVEN_KEY && !proxyProven) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--error)">⚠️ Kein Key gesetzt und Proxy nicht geprüft — bitte erst „Stimmen laden" klicken oder Key eingeben.</span>';
     return;
   }
   if (!ELEVEN_VOICE_ID) {
@@ -10449,12 +10456,12 @@ function updatePersonaSwitcher() {
       }
       // State stays consistent with reality
       window._elevenLoadState = 'loaded';
-    } else if (!ELEVEN_KEY) {
-      opts.push('<option value="">⚠️ Kein Key — Settings öffnen</option>');
     } else if (window._elevenLoadState === 'loading') {
       opts.push('<option value="">⏳ Stimmen werden geladen…</option>');
     } else if (window._elevenLoadState === 'error') {
-      opts.push(`<option value="">⚠️ Laden fehlgeschlagen: ${escapeHtml(window._elevenLoadError || 'unbekannt')}</option>`);
+      // Show the actual reason — could be "no key locally + proxy unreachable"
+      // or a real ElevenLabs error like 401/429 from upstream
+      opts.push(`<option value="">⚠️ ${escapeHtml(window._elevenLoadError || 'Laden fehlgeschlagen')}</option>`);
     } else {
       opts.push('<option value="">— Klick zum Laden —</option>');
     }
@@ -10473,7 +10480,9 @@ function updatePersonaSwitcher() {
 // the cached list when already loaded; tracks loading + error state on
 // window so updatePersonaSwitcher can show progress in the dropdown.
 async function vaEnsureVoicesLoaded() {
-  if (!ELEVEN_KEY) return [];
+  // Don't bail when ELEVEN_KEY is empty — the Cloudflare proxy /api/voices
+  // can supply the list using its server-side secret. listElevenLabsVoices
+  // tries the proxy first and only falls back to direct (which needs key).
   if (window._cachedElevenVoices?.length) return window._cachedElevenVoices;
   if (window._elevenLoadState === 'loading') return [];
   window._elevenLoadState = 'loading';
