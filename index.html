@@ -3372,31 +3372,24 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
         <div class="settings-hint">Diese Personas gelten <strong>nur</strong> im Sprachassistenten-Modus (das blaue-Bubble-Fenster) — sie beeinflussen <strong>nicht</strong> den App-Chat oder andere Teile von Larry. Jede Persona hat einen System-Prompt (Sprachverhalten) und eine optionale ElevenLabs-Stimme. Eine ist Standard; jederzeit umschaltbar im Sprachfenster.</div>
       </div>
 
-      <!-- Anthropic API key (Larrys "Hirn") -->
-      <div class="settings-group" data-section="voice">
-        <div class="settings-label">Larrys Hirn (Anthropic API-Key)</div>
-        <div style="display:flex;gap:8px;margin-bottom:8px">
-          <input type="password" id="settings-anthropic-key" class="settings-input" placeholder="sk-ant-… (Anthropic API-Key)" style="flex:1">
-          <button class="settings-btn" onclick="onSaveAnthropicKey()">Speichern</button>
-          <button class="settings-btn ghost" onclick="onTestAnthropicKey()" title="Sendet einen Test-Call an api.anthropic.com">▶ Test</button>
-        </div>
-        <div id="settings-anthropic-status" style="font-size:11px;color:var(--text-3);margin-top:4px;line-height:1.5"></div>
-        <div class="settings-hint">Ohne Key kann Larry nicht antworten („Failed to fetch"). Der Key wird nur lokal im Browser gespeichert (localStorage) und direkt an <code>api.anthropic.com</code> geschickt — kein Backend nötig. Hol dir einen Key auf <code>console.anthropic.com</code>.</div>
-      </div>
+      <!-- API-Keys werden server-seitig in Cloudflare Secrets verwaltet —
+           keine Eingabe in der UI nötig. Falls für lokale Entwicklung doch
+           ein Key gesetzt werden muss: Browser-Konsole → setAnthropicKey('sk-ant-...') -->
 
-      <!-- ElevenLabs voice — minimal: nur Stimmen-Dropdown + Test-Button.
-           Key liegt server-seitig in Cloudflare Secrets, Stimmen werden
-           automatisch geladen, Auswahl persistiert sofort beim Wechsel. -->
+      <!-- ElevenLabs voice — minimalistisch: ein Lade-Button, ein Dropdown,
+           ein Test-Button. Auswahl persistiert sofort beim Wechsel.
+           Schliessen der Settings = aktive Stimme. -->
       <div class="settings-group" data-section="voice">
         <div class="settings-label">PKA-Stimme (ElevenLabs)</div>
-        <div style="display:flex;gap:8px;align-items:center">
-          <select id="settings-eleven-voice" class="settings-input" style="flex:1">
-            <option value="">⏳ Stimmen werden geladen…</option>
-          </select>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+          <button class="settings-btn" id="btn-load-voices" onclick="onLoadVoicesManual()">Stimmen laden</button>
           <button class="settings-btn ghost" onclick="onTestElevenVoice()" title="Spielt einen Testsatz mit der ausgewählten Stimme ab">▶ Test</button>
         </div>
+        <select id="settings-eleven-voice" class="settings-input" style="width:100%">
+          <option value="">⏳ Klick „Stimmen laden" oder warte…</option>
+        </select>
         <div id="settings-eleven-status" style="margin-top:8px;font-size:11px;line-height:1.5;color:var(--text-3)"></div>
-        <div class="settings-hint">Wähle eine Stimme — sie wird beim Schliessen der Settings automatisch aktiviert. Key liegt server-seitig in Cloudflare; falls Stimmen nicht laden, ist der Cloudflare-Secret <code>ELEVENLABS_API_KEY</code> nicht gesetzt.</div>
+        <div class="settings-hint">Stimme auswählen → Settings schliessen → ist aktiv. Falls Stimmen nicht laden, ist der Cloudflare-Secret <code>ELEVENLABS_API_KEY</code> nicht gesetzt (im <a href="https://dash.cloudflare.com/?to=/:account/pages" target="_blank" style="color:var(--accent)">Cloudflare Dashboard</a> nachprüfen).</div>
       </div>
     </div><!-- /settings-body -->
     </div><!-- /settings-layout -->
@@ -4159,7 +4152,6 @@ function openSettings() {
   // Sync controls with the current state every time the modal opens
   updateThemeButton();
   updateLogoPreview();
-  syncAnthropicKeyField();
   updateElevenSettings();
   renderPersonasList();
   updateCloudStatusUI();
@@ -4218,6 +4210,29 @@ function updateElevenSettings() {
     });
   }
 }
+// Manual "Stimmen laden" button handler — clears any cached voices
+// and re-fetches via /api/voices. Visible feedback so the user knows
+// the click did something (button text temporarily changes).
+async function onLoadVoicesManual() {
+  const btn = document.getElementById('btn-load-voices');
+  const sel = document.getElementById('settings-eleven-voice');
+  const original = btn?.textContent || 'Stimmen laden';
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Lade…'; }
+  // Reset cache so we re-fetch
+  window._cachedElevenVoices = null;
+  window._elevenLoadState = 'idle';
+  window._elevenLoadError = '';
+  try {
+    await vaEnsureVoicesLoaded();
+  } catch (_) { /* error state handled by rebuildElevenSettingsDropdown */ }
+  if (sel) {
+    rebuildElevenSettingsDropdown(sel);
+    sel.value = ELEVEN_VOICE_ID || '';
+  }
+  updateElevenStatusLine();
+  if (btn) { btn.disabled = false; btn.textContent = original; }
+}
+
 function rebuildElevenSettingsDropdown(sel) {
   const voices = window._cachedElevenVoices || [];
   if (voices.length) {
@@ -10428,8 +10443,8 @@ function renderPersonasList() {
       <textarea class="settings-input" rows="3" placeholder="System-Prompt — definiert das Sprachverhalten in diesem Modus"
                 oninput="updatePersonaField('${p.id}', 'prompt', this.value)">${escapeHtml(p.prompt || '')}</textarea>
       <div class="persona-card-actions">
-        ${!p.isDefault ? `<button class="settings-btn" onclick="setPersonaDefault('${p.id}')">Als Standard</button>` : ''}
-        <button class="settings-btn ghost" onclick="setActivePersona('${p.id}')">Aktivieren</button>
+        ${PERSONAS.length > 1 && !p.isDefault ? `<button class="settings-btn" onclick="setPersonaDefault('${p.id}')">Als Standard</button>` : ''}
+        ${PERSONAS.length > 1 ? `<button class="settings-btn ghost" onclick="setActivePersona('${p.id}')">Aktivieren</button>` : ''}
         ${PERSONAS.length > 1 ? `<button class="settings-btn ghost" style="color:#ef4444" onclick="deletePersona('${p.id}')">Löschen</button>` : ''}
       </div>
     </div>
@@ -13158,10 +13173,11 @@ document.addEventListener('dblclick', (e) => {
 
 <!-- ── Voice Assistant overlay (PKA) ─────────────────────────── -->
 <div id="voice-assistant" class="voice-assistant" role="dialog" aria-label="PKA Sprachassistent">
-  <div class="va-persona-switch">
-    <select id="va-voice-select" onchange="vaSwitchVoice(this.value)" title="ElevenLabs-Stimme wählen — wirkt sofort beim nächsten Sprechen"></select>
-    <!-- Persona-Dropdown entfernt — Auswahl der Persona läuft jetzt nur noch über Settings → Stimme & Personas. -->
-    <select id="va-persona-select" onchange="setActivePersona(this.value)" style="display:none"></select>
+  <div class="va-persona-switch" style="display:none">
+    <!-- Voice + persona selection lives ONLY in Settings now — bubble UI
+         stays clean. These hidden selects keep the JS handlers happy. -->
+    <select id="va-voice-select"></select>
+    <select id="va-persona-select"></select>
   </div>
   <button class="va-close" onclick="closeVoiceAssistant()" title="Schliessen (Esc)">✕</button>
   <div class="va-stage" onclick="toggleVoiceBubble()" title="Klick neben die Bubble: verkleinern / vergrössern">
