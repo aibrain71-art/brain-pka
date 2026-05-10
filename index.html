@@ -383,10 +383,11 @@ body.va-no-timeline .va-msg.user::after { display: none; }
                                         justify-content: center; }
 .voice-assistant.expanded .va-bubble { width: 320px; height: 320px;
                                          box-shadow: 0 0 140px var(--accent-glow), inset 0 0 50px rgba(255,255,255,.1); }
-/* In expanded (bubble-only) mode: hide chat thread but KEEP the input bar
-   visible — so the user can always type or paste/dictate via Wispr if the
-   browser microphone fails. The bubble + input together = always usable. */
-.voice-assistant.expanded .va-chat { display: none; }
+/* In expanded (bubble-only) mode: clean view — hide chat thread + input
+   bar. User can click the expand button (top-right) to bring chat + input
+   back when needed (e.g. when mic fails and they want to type instead). */
+.voice-assistant.expanded .va-chat,
+.voice-assistant.expanded .va-input { display: none; }
 .voice-assistant.expanded .va-status { font-size: 15px; max-width: 70%; }
 /* Different icon vibe when already expanded — show a "shrink" affordance via tooltip */
 .voice-assistant.expanded .va-expand-btn { background: var(--accent-dim);
