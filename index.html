@@ -3384,25 +3384,19 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
         <div class="settings-hint">Ohne Key kann Larry nicht antworten („Failed to fetch"). Der Key wird nur lokal im Browser gespeichert (localStorage) und direkt an <code>api.anthropic.com</code> geschickt — kein Backend nötig. Hol dir einen Key auf <code>console.anthropic.com</code>.</div>
       </div>
 
-      <!-- ElevenLabs voice -->
+      <!-- ElevenLabs voice — minimal: nur Stimmen-Dropdown + Test-Button.
+           Key liegt server-seitig in Cloudflare Secrets, Stimmen werden
+           automatisch geladen, Auswahl persistiert sofort beim Wechsel. -->
       <div class="settings-group" data-section="voice">
         <div class="settings-label">PKA-Stimme (ElevenLabs)</div>
-        <div style="display:flex;gap:8px;margin-bottom:8px">
-          <input type="password" id="settings-eleven-key" class="settings-input" placeholder="ElevenLabs API-Key (sk-…)" style="flex:1">
-          <button class="settings-btn" onclick="onSaveElevenKey()">Speichern</button>
-        </div>
-        <div style="display:flex;gap:8px;margin-bottom:6px">
-          <button class="settings-btn ghost" onclick="onLoadElevenVoices()">Stimmen laden</button>
-          <button class="settings-btn ghost" onclick="onTestElevenVoice()" title="Spielt einen Testsatz mit der gewählten ElevenLabs-Stimme ab">▶ Stimme testen</button>
-        </div>
-        <div class="settings-voice-row">
+        <div style="display:flex;gap:8px;align-items:center">
           <select id="settings-eleven-voice" class="settings-input" style="flex:1">
-            <option value="">— Erst „Stimmen laden" klicken —</option>
+            <option value="">⏳ Stimmen werden geladen…</option>
           </select>
-          <span class="settings-check" id="settings-eleven-check" title="Aktive Stimme">✓</span>
+          <button class="settings-btn ghost" onclick="onTestElevenVoice()" title="Spielt einen Testsatz mit der ausgewählten Stimme ab">▶ Test</button>
         </div>
         <div id="settings-eleven-status" style="margin-top:8px;font-size:11px;line-height:1.5;color:var(--text-3)"></div>
-        <div class="settings-hint">Mit ElevenLabs bekommt PKA eine natürlichere Stimme. Kostenlose Tier: ~10k Zeichen/Monat. Key wird nur lokal im Browser gespeichert (localStorage). Ohne Key oder ohne ausgewählte Stimme verwendet PKA die eingebaute Browser-TTS.</div>
+        <div class="settings-hint">Wähle eine Stimme — sie wird beim Schliessen der Settings automatisch aktiviert. Key liegt server-seitig in Cloudflare; falls Stimmen nicht laden, ist der Cloudflare-Secret <code>ELEVENLABS_API_KEY</code> nicht gesetzt.</div>
       </div>
     </div><!-- /settings-body -->
     </div><!-- /settings-layout -->
@@ -4190,33 +4184,49 @@ function setSettingsSection(section) {
   const body = document.querySelector('.settings-body');
   if (body) body.scrollTop = 0;
 }
-// Sync the ElevenLabs API-key + voice dropdown with persisted values
+// Sync the ElevenLabs voice dropdown with persisted state. The Settings UI
+// has been simplified to ONLY show the voice dropdown + a Test button —
+// the API key field, Save and "Stimmen laden" buttons were removed because
+// the Cloudflare proxy supplies the key server-side and voices auto-load.
 function updateElevenSettings() {
-  const k = document.getElementById('settings-eleven-key');
   const v = document.getElementById('settings-eleven-voice');
-  if (k && ELEVEN_KEY) k.value = ELEVEN_KEY;
-  if (v && ELEVEN_VOICE_ID) {
-    // If already loaded, mark the right option; if not yet loaded, INJECT a
-    // placeholder option so the dropdown visibly reflects the persisted choice
-    // even before the user clicks "Stimmen laden".
-    let opt = [...v.options].find(o => o.value === ELEVEN_VOICE_ID);
-    if (!opt) {
-      opt = document.createElement('option');
-      opt.value = ELEVEN_VOICE_ID;
-      const cached = (window._cachedElevenVoices || []).find(x => x.id === ELEVEN_VOICE_ID);
-      opt.textContent = cached ? cached.name : 'Gespeicherte Stimme (' + ELEVEN_VOICE_ID.slice(0, 10) + '…)';
-      v.appendChild(opt);
-    }
-    v.value = ELEVEN_VOICE_ID;
+  if (!v) return;
+  // Always (re)build the dropdown from the cached voice list so the user
+  // sees fresh contents whenever Settings opens.
+  rebuildElevenSettingsDropdown(v);
+  // Wire onchange ONCE — picking a voice persists immediately. No save needed.
+  if (!v._wired) {
+    v.addEventListener('change', () => {
+      setElevenLabsVoice(v.value);
+      // Sync per-persona override too so vaSpeak's persona-first lookup wins
+      const p = getActivePersona();
+      if (p) { p.voiceId = v.value; savePersonas(); }
+    });
+    v._wired = true;
   }
-  // Sync the green checkmark to the persisted voice state
-  const chk = document.getElementById('settings-eleven-check');
-  if (chk) chk.classList.toggle('active', !!ELEVEN_VOICE_ID);
+  v.value = ELEVEN_VOICE_ID || '';
   updateElevenStatusLine();
-  // Auto-load real voice list if a key is set and we haven't loaded yet —
-  // so the user always sees the actual list when opening Settings.
-  if (ELEVEN_KEY && !window._cachedElevenVoices) {
-    onLoadElevenVoices().catch(() => {});
+  // Eagerly load voices via the Cloudflare /api/voices proxy. listElevenLabsVoices
+  // tries the proxy first (no localStorage key needed) and falls back to direct
+  // call only if the proxy is unreachable AND a local key exists.
+  if (!window._cachedElevenVoices) {
+    vaEnsureVoicesLoaded().then(() => {
+      // Re-render dropdown with the freshly loaded voices
+      rebuildElevenSettingsDropdown(v);
+      v.value = ELEVEN_VOICE_ID || '';
+      updateElevenStatusLine();
+    });
+  }
+}
+function rebuildElevenSettingsDropdown(sel) {
+  const voices = window._cachedElevenVoices || [];
+  if (voices.length) {
+    sel.innerHTML = '<option value="">— Stimme wählen —</option>' +
+      voices.map(v => `<option value="${v.id}">${escapeHtml(v.name)}${v.category ? ' (' + escapeHtml(v.category) + ')' : ''}</option>`).join('');
+  } else if (window._elevenLoadState === 'error') {
+    sel.innerHTML = `<option value="">⚠️ ${escapeHtml(window._elevenLoadError || 'Laden fehlgeschlagen')}</option>`;
+  } else {
+    sel.innerHTML = '<option value="">⏳ Stimmen werden geladen…</option>';
   }
 }
 // Live diagnostic line under the voice dropdown — tells the user EXACTLY
@@ -10405,10 +10415,9 @@ function renderPersonasList() {
   const wrap = document.getElementById('settings-personas-list');
   if (!wrap) return;
   if (!PERSONAS.length) { wrap.innerHTML = '<div class="settings-hint">Noch keine Personas. Klick „+ Neue Persona".</div>'; return; }
-  // Build the voice-options snippet once (reused per card). Persisted voices
-  // come from the most recent listElevenLabsVoices() call; fallback to none.
-  const voiceOptions = (window._cachedElevenVoices || []).map(v =>
-    `<option value="${v.id}">${escapeHtml(v.name)}</option>`).join('');
+  // Persona = name + prompt only. Voice selection lives ONCE in the
+  // ElevenLabs section below; the per-persona voice dropdown that used to
+  // sit here was redundant and confused users with two places to pick a voice.
   wrap.innerHTML = PERSONAS.map(p => `
     <div class="persona-card ${p.isDefault ? 'is-default' : ''}" data-id="${p.id}">
       <div class="persona-card-row">
@@ -10418,12 +10427,6 @@ function renderPersonasList() {
       </div>
       <textarea class="settings-input" rows="3" placeholder="System-Prompt — definiert das Sprachverhalten in diesem Modus"
                 oninput="updatePersonaField('${p.id}', 'prompt', this.value)">${escapeHtml(p.prompt || '')}</textarea>
-      <div class="persona-card-row" style="margin-top:8px">
-        <select class="settings-input" onchange="updatePersonaField('${p.id}', 'voiceId', this.value); ">
-          <option value="">— Standard-Stimme (oder global) —</option>
-          ${voiceOptions.replace(`value="${p.voiceId}"`, `value="${p.voiceId}" selected`)}
-        </select>
-      </div>
       <div class="persona-card-actions">
         ${!p.isDefault ? `<button class="settings-btn" onclick="setPersonaDefault('${p.id}')">Als Standard</button>` : ''}
         <button class="settings-btn ghost" onclick="setActivePersona('${p.id}')">Aktivieren</button>
