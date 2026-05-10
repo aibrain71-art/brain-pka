@@ -10929,14 +10929,20 @@ const _vaBootGenerators = {
 let _vaMicWarmedUp = false;
 async function vaWarmupMicPermission() {
   if (_vaMicWarmedUp) return;
-  if (!navigator.mediaDevices?.getUserMedia) return;
+  if (!navigator.mediaDevices?.getUserMedia) {
+    vaSetStatus('⚠️ Browser unterstützt keine Mikrofon-API. Bitte Chrome/Edge benutzen.');
+    return;
+  }
   try {
     // Cheap state check first — avoid touching the mic if already granted
     if (navigator.permissions?.query) {
       try {
         const status = await navigator.permissions.query({ name: 'microphone' });
         if (status.state === 'granted') { _vaMicWarmedUp = true; return; }
-        if (status.state === 'denied') { return; } // user explicitly blocked — nothing to do
+        if (status.state === 'denied') {
+          vaSetStatus('🚫 Mikrofon-Zugriff verweigert. Klick aufs Schloss-Icon links neben der URL → Mikrofon → Zulassen → Tab neu laden.');
+          return;
+        }
       } catch (_) { /* Permissions API for 'microphone' isn't universal — fall through */ }
     }
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -10944,8 +10950,15 @@ async function vaWarmupMicPermission() {
     stream.getTracks().forEach(t => t.stop());
     _vaMicWarmedUp = true;
   } catch (e) {
-    // Denied or unavailable — speech recognition will surface its own error
-    console.warn('Mic warmup failed:', e?.name || e);
+    const name = e?.name || 'Fehler';
+    if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+      vaSetStatus('🚫 Mikrofon abgelehnt. Schloss-Icon in URL-Bar → Mikrofon → Zulassen → Tab neu laden.');
+    } else if (name === 'NotFoundError') {
+      vaSetStatus('🚫 Kein Mikrofon gefunden. Hardware prüfen.');
+    } else {
+      vaSetStatus('🚫 Mikrofon-Zugriff fehlgeschlagen: ' + name);
+    }
+    console.warn('Mic warmup failed:', e);
   }
 }
 
@@ -11076,12 +11089,21 @@ function vaStartListening() {
     if (final.trim()) flushSpeech();
   };
   _vaRecognition.onerror = (e) => {
-    // 'no-speech' is benign — user just hasn't spoken yet. Don't show as
-    // an error; keep the mic state as-is and let onend (which fires
-    // immediately after) decide whether to retry or settle.
-    if (e.error && e.error !== 'no-speech' && e.error !== 'aborted') {
+    // Map common Web Speech API errors to actionable messages.
+    if (e.error === 'no-speech' || e.error === 'aborted') {
+      // benign — user just hasn't spoken yet OR we stopped manually
+    } else if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+      vaSetStatus('🚫 Mikrofon-Berechtigung fehlt. Klick aufs Schloss-Icon links neben der URL → Mikrofon → Zulassen → Tab neu laden.');
+    } else if (e.error === 'audio-capture') {
+      vaSetStatus('🚫 Kein Mikrofon gefunden / blockiert. Hardware oder OS-Mikrofon-Settings prüfen.');
+    } else if (e.error === 'network') {
+      vaSetStatus('🌐 Netzwerk-Fehler bei Spracherkennung — Online-Service (Google) nicht erreichbar.');
+    } else if (e.error === 'language-not-supported') {
+      vaSetStatus('⚠️ Spracherkennung unterstützt diese Sprache nicht.');
+    } else if (e.error) {
       vaSetStatus('Spracherkennung-Fehler: ' + e.error);
     }
+    console.warn('SpeechRecognition error:', e.error, e);
     vaStopListening();
   };
   _vaRecognition.onend = () => {
@@ -11149,8 +11171,12 @@ function vaBubbleClick(ev) {
 function vaMaybeAutoListen() {
   if (_vaPaused) return;
   if (!_vaConvActive) return;
-  // Browser mic disabled by user → no auto-listen, no permission prompts
-  if (!getPref('vaUseBrowserMic')) return;
+  // Browser mic disabled by user → no auto-listen, no permission prompts.
+  // BUT: tell the user this — silent no-op leaves them confused.
+  if (!getPref('vaUseBrowserMic')) {
+    vaSetStatus('🔇 Browser-Mikro ist AUS. Settings → „Browser-Mikrofon nutzen" einschalten, oder via Wispr/extern ins Eingabefeld diktieren.');
+    return;
+  }
   if (_vaIsListening || _vaIsSpeaking) return;
   if (_vaAutoListenTimer) clearTimeout(_vaAutoListenTimer);
   _vaAutoListenTimer = setTimeout(() => {
