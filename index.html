@@ -10590,9 +10590,24 @@ function openVoiceAssistant(mode) {
   // greeting follows naturally without a perceptible pause if the sound is
   // disabled. When enabled, vaPlayStartSound resolves after ~850ms.
   (async () => {
-    await vaPlayStartSound();
-    if (_vaMode === 'note') vaGreetForNote();
-    else vaGreet();
+    // Boot sound is decorative — never let it block the greeting. Wrap in
+    // try/catch + race against a short timeout so even a hung AudioContext
+    // can't swallow Larry's hello.
+    try {
+      await Promise.race([
+        vaPlayStartSound(),
+        new Promise(r => setTimeout(r, 1500)),  // hard cap
+      ]);
+    } catch (e) {
+      console.warn('Start sound failed (non-fatal):', e);
+    }
+    try {
+      if (_vaMode === 'note') vaGreetForNote();
+      else vaGreet();
+    } catch (e) {
+      console.error('vaGreet failed:', e);
+      vaSetStatus('⚠️ Begrüssung fehlgeschlagen: ' + (e?.message || e));
+    }
   })();
 }
 
