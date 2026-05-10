@@ -11502,19 +11502,14 @@ async function vaRespond(userText) {
 async function vaSpeak(text) {
   if (!text) return;
   vaStopSpeaking();
-  // ElevenLabs-only by user request — no browser TTS fallback. If anything
-  // is missing or the API fails, show a CLEAR persistent error so the user
-  // can fix the config (key / voice / network) instead of getting a silent
-  // robotic browser voice they didn't ask for.
+  // ElevenLabs-only — no browser TTS fallback. The vaSpeakElevenLabs path
+  // tries the Cloudflare /api/tts proxy first (no localStorage key needed)
+  // and falls back to direct browser → ElevenLabs only if proxy is down.
+  // We DON'T pre-check ELEVEN_KEY here because the proxy works without it.
   const persona = getActivePersona();
   const voiceId = (persona && persona.voiceId) || ELEVEN_VOICE_ID;
-  if (!ELEVEN_KEY) {
-    vaSetStatus('⚠️ Kein ElevenLabs-Key gespeichert. Settings → Stimme & Personas → Key eingeben + Speichern.');
-    vaMaybeAutoListen();
-    return;
-  }
   if (!voiceId) {
-    vaSetStatus('⚠️ Keine ElevenLabs-Stimme gewählt. Wähle unten links eine Stimme aus dem Dropdown.');
+    vaSetStatus('⚠️ Keine ElevenLabs-Stimme gewählt. Settings öffnen → Stimme aus Dropdown wählen.');
     vaMaybeAutoListen();
     return;
   }
