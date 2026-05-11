@@ -37,3 +37,9 @@ desktop.ini
 node_modules/
 dist/
 build/
+
+# ── Playwright E2E test artifacts ─────────────────────────────────
+test-results/
+playwright-report/
+playwright/.cache/
+blob-report/

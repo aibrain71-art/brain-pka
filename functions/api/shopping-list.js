@@ -4,8 +4,13 @@
 //   POST   /api/shopping-list                 → add item { item, qty_value?, qty_unit?, recipe_id?, recipe_title?, notes? }
 //   POST   /api/shopping-list?bulk=1          → add many in one tx { items: [{ item, qty, unit, recipe_id?, recipe_title? }, …] }
 //   PUT    /api/shopping-list?id=N            → update status / qty
+//                                               When status flips to 'done',
+//                                               auto-upserts the item into pantry
+//                                               (meal-planning feature).
 //   DELETE /api/shopping-list?id=N            → remove single
 //   DELETE /api/shopping-list?clear=done      → remove all done
+
+import { normalizeItemKey } from '../_lib/meal-aggregator.js';
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -108,7 +113,41 @@ export async function onRequestPut({ env, request }) {
   try {
     await env.DB.prepare('UPDATE shopping_list SET ' + fields.join(', ') + ' WHERE id = ?')
       .bind(...values, id).run();
-    return json({ ok: true, updated_id: id });
+
+    // ─── Pantry auto-upsert hook ─────────────────────────────────
+    // When an item is marked 'done', drop it into pantry so the
+    // meal-plan aggregator can subtract it from future shopping
+    // lists. Best-effort — if the pantry table doesn't exist (schema
+    // not applied) or the upsert fails, we silently swallow it so
+    // the main UPDATE response stays intact.
+    let pantryUpdated = false;
+    if (body.status === 'done') {
+      try {
+        const row = await env.DB.prepare(
+          'SELECT item, qty_value, qty_unit FROM shopping_list WHERE id = ?'
+        ).bind(id).first();
+        if (row?.item) {
+          const itemKey = normalizeItemKey(row.item);
+          if (itemKey) {
+            await env.DB.prepare(
+              `INSERT INTO pantry (item, item_key, qty_value, qty_unit, source)
+                 VALUES (?, ?, ?, ?, 'auto-shopping')
+                 ON CONFLICT(item_key) DO UPDATE SET
+                   qty_value = COALESCE(pantry.qty_value, 0) + COALESCE(excluded.qty_value, 0),
+                   qty_unit = COALESCE(pantry.qty_unit, excluded.qty_unit),
+                   updated_at = CURRENT_TIMESTAMP`
+            ).bind(
+              String(row.item).slice(0, 200),
+              itemKey,
+              Number.isFinite(row.qty_value) ? row.qty_value : null,
+              row.qty_unit ? String(row.qty_unit).slice(0, 24) : null
+            ).run();
+            pantryUpdated = true;
+          }
+        }
+      } catch (_) { /* pantry table missing or row malformed — ignore */ }
+    }
+    return json({ ok: true, updated_id: id, pantry_updated: pantryUpdated });
   } catch (e) {
     return json({ error: e.message || String(e) }, 500);
   }

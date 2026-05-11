@@ -6,6 +6,8 @@
 // tool_use block, this module executes it, and the result is fed back
 // as a tool_result content block on the next turn.
 
+import { normalizeItemKey, resyncShoppingForPlan } from './meal-aggregator.js';
+
 // ── helpers ─────────────────────────────────────────────────────
 function slugify(s) {
   return String(s || '')
@@ -339,6 +341,42 @@ export const TOOLS = [
         query: { type: 'string' },
       },
       required: ['query'],
+    },
+  },
+
+  // ───── meal planning ───────────────────────────────────────
+  {
+    name: 'set_meal_slot',
+    description: 'Place or change a recipe in the user\'s active weekly meal plan. Use when the user says things like "make Wednesday lunch Bolognese" or "remove Friday dinner". The user must have an active plan (call show_meal_plan first if unsure). recipe_query is fuzzy-matched against recipe titles; if you want to clear a slot, omit recipe_query.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        day_idx: { type: 'integer', description: 'Day of week: 0=Mo, 1=Tue, 2=Wed, 3=Thu, 4=Fri, 5=Sat, 6=Sun.' },
+        meal_type: { type: 'string', enum: ['breakfast', 'lunch', 'dinner'], description: 'Which slot of the day.' },
+        recipe_query: { type: 'string', description: 'Recipe title (fuzzy). Omit to clear the slot.' },
+        servings_override: { type: 'integer', description: 'Override portion count for this slot.' },
+        note: { type: 'string', description: 'Optional note (e.g. "auswärts essen", "Reste").' },
+      },
+      required: ['day_idx', 'meal_type'],
+    },
+  },
+  {
+    name: 'show_meal_plan',
+    description: 'Read out the user\'s currently-active meal plan. Returns all 21 slots (Mo-So × 3) with recipe titles, notes, and plan metadata. Use when the user asks "what\'s the plan this week?" or "what am I cooking on Wednesday?".',
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'add_to_pantry',
+    description: 'Add or update an item in the user\'s pantry (Vorratsschrank) so the meal-plan aggregator can subtract it from future shopping lists. Use when the user says "I just bought 1 liter of olive oil" or "we still have 500g of pasta at home". Items match on a normalized key so "Karotten" and "Karotte" land on the same row.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        item: { type: 'string', description: 'Display name, e.g. "Olivenöl".' },
+        qty_value: { type: 'number', description: 'Quantity (numeric). Omit for "have it, amount doesn\'t matter".' },
+        qty_unit: { type: 'string', description: 'Unit, e.g. "kg", "l", "Stk".' },
+        notes: { type: 'string', description: 'Optional notes.' },
+      },
+      required: ['item'],
     },
   },
 ];
@@ -686,6 +724,97 @@ export async function executeTool(name, args, env) {
           'WHERE lower(full_name) LIKE ? OR lower(coalesce(known_as,\'\')) LIKE ? OR lower(coalesce(role_context,\'\')) LIKE ? LIMIT 15'
         ).bind(q, q, q).all();
         return ok({ count: rows.results.length, results: rows.results });
+      }
+
+      // ───── meal planning ─────────────────────────────────
+      case 'set_meal_slot': {
+        // Find the active plan
+        const plan = await env.DB.prepare(
+          'SELECT id, default_servings FROM meal_plans WHERE is_active = 1 ORDER BY week_start DESC LIMIT 1'
+        ).first().catch(() => null);
+        if (!plan) return fail('Kein aktiver Wochenplan. Erst einen Plan im Cookbook → Plan-Tab erstellen.');
+
+        const dayIdx = parseInt(args.day_idx, 10);
+        if (!Number.isInteger(dayIdx) || dayIdx < 0 || dayIdx > 6) {
+          return fail('day_idx muss 0..6 sein (0=Montag)');
+        }
+        if (!['breakfast','lunch','dinner'].includes(args.meal_type)) {
+          return fail('meal_type muss breakfast|lunch|dinner sein');
+        }
+
+        // Fuzzy-resolve recipe if requested
+        let recipeId = null;
+        let recipeTitle = null;
+        if (args.recipe_query) {
+          const q = '%' + String(args.recipe_query).toLowerCase() + '%';
+          const hit = await env.DB.prepare(
+            "SELECT id, title FROM notes WHERE note_type = 'recipe' AND lower(title) LIKE ? ORDER BY length(title) ASC LIMIT 1"
+          ).bind(q).first();
+          if (!hit) return fail('Kein Rezept gefunden für "' + args.recipe_query + '"');
+          recipeId = hit.id;
+          recipeTitle = hit.title;
+        }
+        const servings = Number.isInteger(args.servings_override) && args.servings_override > 0
+          ? args.servings_override : null;
+        const note = args.note ? String(args.note).slice(0, 500) : null;
+
+        await env.DB.prepare(
+          `UPDATE meal_slots
+             SET recipe_id = ?, servings_override = ?, note = ?, updated_at = CURRENT_TIMESTAMP
+           WHERE plan_id = ? AND day_idx = ? AND meal_type = ?`
+        ).bind(recipeId, servings, note, plan.id, dayIdx, args.meal_type).run();
+
+        // Auto-resync shopping list since this is the active plan
+        let resyncCount = null;
+        try {
+          const r = await resyncShoppingForPlan(env, plan.id);
+          resyncCount = r.count;
+        } catch (_) {}
+
+        return ok({
+          plan_id: plan.id,
+          day_idx: dayIdx,
+          meal_type: args.meal_type,
+          recipe_id: recipeId,
+          recipe_title: recipeTitle,
+          note,
+          shopping_items_after_resync: resyncCount,
+        });
+      }
+      case 'show_meal_plan': {
+        const plan = await env.DB.prepare(
+          'SELECT id, title, week_start, default_servings FROM meal_plans WHERE is_active = 1 ORDER BY week_start DESC LIMIT 1'
+        ).first().catch(() => null);
+        if (!plan) return fail('Kein aktiver Wochenplan vorhanden.');
+        const slotsRes = await env.DB.prepare(
+          `SELECT s.day_idx, s.meal_type, s.recipe_id, s.servings_override, s.note,
+                  n.title AS recipe_title
+             FROM meal_slots s
+             LEFT JOIN notes n ON n.id = s.recipe_id AND n.note_type = 'recipe'
+            WHERE s.plan_id = ?
+            ORDER BY s.day_idx ASC,
+                     CASE s.meal_type WHEN 'breakfast' THEN 0 WHEN 'lunch' THEN 1 ELSE 2 END`
+        ).bind(plan.id).all();
+        return ok({ plan, slots: slotsRes.results || [] });
+      }
+      case 'add_to_pantry': {
+        if (!args.item) return fail('item required');
+        const itemKey = normalizeItemKey(args.item);
+        if (!itemKey) return fail('item normalized to empty key');
+        const qtyValue = Number.isFinite(parseFloat(args.qty_value)) ? parseFloat(args.qty_value) : null;
+        const qtyUnit = args.qty_unit ? String(args.qty_unit).slice(0, 24) : null;
+        const notes = args.notes ? String(args.notes).slice(0, 500) : null;
+        const r = await env.DB.prepare(
+          `INSERT INTO pantry (item, item_key, qty_value, qty_unit, notes, source)
+             VALUES (?, ?, ?, ?, ?, 'manual')
+             ON CONFLICT(item_key) DO UPDATE SET
+               qty_value = COALESCE(pantry.qty_value, 0) + COALESCE(excluded.qty_value, 0),
+               qty_unit = COALESCE(pantry.qty_unit, excluded.qty_unit),
+               notes = COALESCE(excluded.notes, pantry.notes),
+               updated_at = CURRENT_TIMESTAMP
+             RETURNING id, item, item_key, qty_value, qty_unit`
+        ).bind(String(args.item).slice(0, 200), itemKey, qtyValue, qtyUnit, notes).first();
+        return ok({ pantry_row: r });
       }
 
       default:
