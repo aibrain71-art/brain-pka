@@ -11231,6 +11231,7 @@ function closeVoiceAssistant() {
   if (_vaAutoListenTimer) { clearTimeout(_vaAutoListenTimer); _vaAutoListenTimer = null; }
   vaStopListening();
   vaStopSpeaking();
+  vaStopMicLevelMeter();  // mic-level meter is independent of recognition now
   const va = document.getElementById('voice-assistant');
   va?.classList.remove('visible', 'paused');
 }
@@ -11375,7 +11376,9 @@ function vaStopListening() {
     try { _vaRecognition.stop(); } catch(_) {}
     _vaRecognition = null;
   }
-  vaStopMicLevelMeter();
+  // NOTE: The mic-level meter is NOT torn down here on purpose. It runs
+  // independently for the lifetime of the bubble so the user always has
+  // visual feedback. Stopped only by closeVoiceAssistant + pause + mic-off.
 }
 
 // ── Live mic-level meter ──────────────────────────────────────
@@ -11502,6 +11505,7 @@ function vaBubbleClick(ev) {
     if (_vaAutoListenTimer) { clearTimeout(_vaAutoListenTimer); _vaAutoListenTimer = null; }
     vaStopListening();
     vaStopSpeaking();
+    vaStopMicLevelMeter();  // hide bar while paused for clarity + privacy
     _vaConvActive = false;
     vaSetStatus('Pausiert. Klick auf die Bubble um fortzufahren.');
   }
