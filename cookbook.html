@@ -333,6 +333,15 @@
     background: white; box-shadow: 0 4px 16px rgba(0,0,0,.5);
     max-width: 100%; height: auto;
   }
+  /* Two-page spread: render two canvases side by side */
+  .pdf-canvas-wrap.spread {
+    flex-direction: row; align-items: flex-start; gap: 6px;
+    flex-wrap: wrap; justify-content: center;
+  }
+  .pdf-canvas-wrap.spread canvas {
+    max-width: calc(50% - 4px);
+    flex-shrink: 1;
+  }
   .pdf-pager {
     display: flex; align-items: center; justify-content: center; gap: 14px;
     padding: 10px 16px; background: var(--surface-2); border-top: 1px solid var(--border);
@@ -870,6 +879,7 @@ async function loadRecipes() {
 
 // ── Library (cookbook PDFs) ─────────────────────────────────────
 let _PDF_DOC = null, _PDF_PAGE = 1, _PDF_SCALE = 1.3, _PDF_BOOK = null;
+let _PDF_SPREAD = false;  // single (false) vs two-page spread (true)
 async function loadLibrary() {
   window._libLoaded = true;
   $('#lib-upload-btn').onclick = () => $('#lib-upload-input').click();
@@ -971,7 +981,18 @@ async function openCookbook(id) {
     pdfjs.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs';
     _PDF_DOC = await pdfjs.getDocument({ data: bytes }).promise;
     _PDF_PAGE = 1;
+    // Restore the user's preferred view-mode for this book, default = single
+    try { _PDF_SPREAD = localStorage.getItem('pdfSpread_' + _PDF_BOOK.id) === '1'; } catch(_) { _PDF_SPREAD = false; }
     renderPdfViewer();
+    // Sync button labels to current spread state
+    for (const btn of [$('#pdf-spread-btn'), $('#pdf-spread-btn-fs')]) {
+      if (!btn) continue;
+      if (btn.id === 'pdf-spread-btn-fs') {
+        btn.innerHTML = '📖 <span>' + (_PDF_SPREAD ? 'Doppel' : 'Einzel') + '</span>';
+      } else {
+        btn.textContent = '📖 ' + (_PDF_SPREAD ? 'Doppelseite' : 'Einzelseite');
+      }
+    }
     await renderPdfPage();
     await renderPdfOutline();
   } catch (e) {
@@ -992,6 +1013,7 @@ function renderPdfViewer() {
       <h3>${escapeHtml(_PDF_BOOK.title)}</h3>
       <div class="pdf-actions">
         <button onclick="importRecipesFromBook(${_PDF_BOOK.id})" class="primary">📥 Rezepte importieren</button>
+        <button id="pdf-spread-btn" onclick="togglePdfSpread()" title="Einzel- vs Doppelseiten-Ansicht (D)">📖 Einzelseite</button>
         <button onclick="toggleFullscreenPdf()">⛶ Vollbild</button>
         <button onclick="pdfZoom(-0.2)">−</button>
         <button onclick="pdfZoom(+0.2)">+</button>
@@ -1008,6 +1030,7 @@ function renderPdfViewer() {
     <!-- Floating fullscreen controls (visible only when .fullscreen) -->
     <div class="fs-corner left">
       <button class="fs-btn" onclick="toggleFsDrawer()" title="Inhaltsverzeichnis (T)">📑 <span>Inhalt</span></button>
+      <button class="fs-btn" id="pdf-spread-btn-fs" onclick="togglePdfSpread()" title="Einzel- vs Doppelseite (D)">📖 <span>Einzel</span></button>
     </div>
     <div class="fs-corner right">
       <button class="fs-btn fs-btn-round" onclick="pdfZoom(-0.2)" title="Verkleinern">−</button>
@@ -1030,26 +1053,85 @@ function renderPdfViewer() {
 
 async function renderPdfPage() {
   if (!_PDF_DOC) return;
-  const page = await _PDF_DOC.getPage(_PDF_PAGE);
-  const viewport = page.getViewport({ scale: _PDF_SCALE });
-  const canvas = $('#pdf-canvas');
+  const wrap = $('#pdf-canvas-wrap');
+  wrap.classList.toggle('spread', _PDF_SPREAD);
+
+  // In spread mode we draw two adjacent canvases. Otherwise just one.
+  // The DOM gets rebuilt only on layout change to keep the canvas
+  // references stable when only navigating pages.
+  const wantCanvases = _PDF_SPREAD ? 2 : 1;
+  const existing = wrap.querySelectorAll('canvas').length;
+  if (existing !== wantCanvases) {
+    wrap.innerHTML = '';
+    for (let i = 0; i < wantCanvases; i++) {
+      const c = document.createElement('canvas');
+      if (i === 0) c.id = 'pdf-canvas';
+      else c.id = 'pdf-canvas-right';
+      wrap.appendChild(c);
+    }
+  }
+
+  // Render left canvas (current page)
+  const leftPage = _PDF_PAGE;
+  await drawPageOnCanvas(leftPage, $('#pdf-canvas'));
+  // Render right canvas (current+1) in spread mode
+  if (_PDF_SPREAD) {
+    const rightPage = _PDF_PAGE + 1;
+    const rightCanvas = $('#pdf-canvas-right');
+    if (rightPage <= _PDF_DOC.numPages) {
+      rightCanvas.style.visibility = '';
+      await drawPageOnCanvas(rightPage, rightCanvas);
+    } else {
+      // Hide phantom right canvas when current page is the last one
+      rightCanvas.width = 0; rightCanvas.height = 0;
+      rightCanvas.style.visibility = 'hidden';
+    }
+  }
+
+  $('#pdf-page-input').value = _PDF_PAGE;
+  const totalEl = $('#pdf-page-total');
+  if (totalEl) totalEl.textContent = _PDF_DOC.numPages;
+  $('#pdf-prev').disabled = _PDF_PAGE <= 1;
+  $('#pdf-next').disabled = _PDF_PAGE >= _PDF_DOC.numPages;
+}
+async function drawPageOnCanvas(pageNum, canvas) {
+  const page = await _PDF_DOC.getPage(pageNum);
+  // In spread mode shrink the per-page scale a bit so both fit side-by-side
+  const scale = _PDF_SPREAD ? _PDF_SCALE * 0.65 : _PDF_SCALE;
+  const viewport = page.getViewport({ scale });
   canvas.width = viewport.width;
   canvas.height = viewport.height;
   const ctx = canvas.getContext('2d');
   await page.render({ canvasContext: ctx, viewport }).promise;
-  $('#pdf-page-input').value = _PDF_PAGE;
-  $('#pdf-prev').disabled = _PDF_PAGE <= 1;
-  $('#pdf-next').disabled = _PDF_PAGE >= _PDF_DOC.numPages;
 }
 function pdfPage(delta) {
   if (!_PDF_DOC) return;
-  const next = Math.max(1, Math.min(_PDF_DOC.numPages, _PDF_PAGE + delta));
+  // Step by 2 in spread mode (left + right pages), 1 in single mode
+  const step = _PDF_SPREAD ? 2 * Math.sign(delta || 1) : delta;
+  const next = Math.max(1, Math.min(_PDF_DOC.numPages, _PDF_PAGE + step));
   if (next === _PDF_PAGE) return;
   _PDF_PAGE = next;
   renderPdfPage();
 }
 function pdfZoom(delta) {
   _PDF_SCALE = Math.max(0.5, Math.min(3, _PDF_SCALE + delta));
+  renderPdfPage();
+}
+function togglePdfSpread() {
+  _PDF_SPREAD = !_PDF_SPREAD;
+  // Sync both buttons' labels
+  for (const btn of [$('#pdf-spread-btn'), $('#pdf-spread-btn-fs')]) {
+    if (!btn) continue;
+    if (btn.id === 'pdf-spread-btn-fs') {
+      btn.innerHTML = '📖 <span>' + (_PDF_SPREAD ? 'Doppel' : 'Einzel') + '</span>';
+    } else {
+      btn.textContent = '📖 ' + (_PDF_SPREAD ? 'Doppelseite' : 'Einzelseite');
+    }
+  }
+  // Persist per-book so user gets the same view next time
+  if (_PDF_BOOK?.id) {
+    try { localStorage.setItem('pdfSpread_' + _PDF_BOOK.id, _PDF_SPREAD ? '1' : '0'); } catch(_) {}
+  }
   renderPdfPage();
 }
 
@@ -1253,6 +1335,7 @@ document.addEventListener('keydown', (e) => {
   if (['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
   if (e.key === 'Escape') { e.preventDefault(); toggleFullscreenPdf(); }
   else if (e.key === 't' || e.key === 'T') { e.preventDefault(); toggleFsDrawer(); }
+  else if (e.key === 'd' || e.key === 'D') { e.preventDefault(); togglePdfSpread(); }
   else if (e.key === 'ArrowRight' || e.key === 'PageDown') { e.preventDefault(); pdfPage(+1); }
   else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); pdfPage(-1); }
 });
