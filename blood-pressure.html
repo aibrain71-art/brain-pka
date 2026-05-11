@@ -1,0 +1,570 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Blood Pressure · Brain PKA</title>
+<link rel="manifest" href="./pwa.webmanifest">
+<style>
+  :root {
+    --bg: #0d1117; --surface: #161c24; --surface-2: #1f2730;
+    --border: #2a3441; --text: #e6edf3; --text-2: #8b96a3;
+    --accent: #4f8eff; --green: #3fb950; --amber: #d29922; --red: #ef4444; --orange: #e85a18;
+    /* The reference design uses muted greens/oranges for chart markers */
+    --ok: #5fbf6a; --warn: #f5a623; --bad: #ef4444;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, system-ui, 'Helvetica Neue', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Phone-frame header */
+  header.bp-head {
+    display: flex; align-items: center; gap: 12px;
+    padding: 18px 20px; border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    position: sticky; top: 0; z-index: 50;
+  }
+  header.bp-head .back {
+    background: transparent; border: 0; color: var(--text);
+    font-size: 20px; cursor: pointer; padding: 4px 8px; border-radius: 4px;
+  }
+  header.bp-head .back:hover { background: var(--surface-2); }
+  header.bp-head h1 {
+    flex: 1; margin: 0; font-size: 19px; font-weight: 700; letter-spacing: -0.3px;
+  }
+  header.bp-head .add-btn {
+    background: var(--accent); color: #0c1015; border: 0;
+    padding: 8px 14px; border-radius: 20px; font-weight: 700; font-size: 13px; cursor: pointer;
+  }
+  header.bp-head .add-btn:hover { filter: brightness(1.15); }
+  header.bp-head .help {
+    background: transparent; border: 1px solid var(--border);
+    color: var(--text-2); width: 28px; height: 28px; border-radius: 50%;
+    cursor: pointer; font-size: 13px;
+  }
+
+  main.bp-main {
+    max-width: 520px; margin: 0 auto; padding: 18px;
+    display: flex; flex-direction: column; gap: 18px;
+  }
+
+  /* Day / Week / Month segmented switch */
+  .seg-control {
+    display: flex; background: var(--surface-2); border-radius: 24px;
+    padding: 4px; border: 1px solid var(--border);
+  }
+  .seg-control button {
+    flex: 1; background: transparent; color: var(--text-2); border: 0;
+    padding: 8px 12px; border-radius: 20px; cursor: pointer;
+    font-size: 13px; font-weight: 600;
+    transition: all .15s;
+  }
+  .seg-control button.active {
+    background: var(--surface); color: var(--text);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+  }
+
+  /* Hero card — current window summary */
+  .hero {
+    background: linear-gradient(180deg, #1a2531 0%, #131922 100%);
+    border: 1px solid var(--border); border-radius: 14px;
+    padding: 18px 20px;
+    display: grid; grid-template-columns: 1fr auto 1fr auto; gap: 14px;
+    align-items: center;
+  }
+  .hero .label { font-size: 11px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--text-2); margin-bottom: 4px; }
+  .hero .sub { font-size: 11px; color: var(--text-2); margin-top: 2px; }
+  .hero .big { font-size: 36px; font-weight: 200; line-height: 1; letter-spacing: -1px;
+               font-family: 'Cormorant Garamond', Georgia, serif; }
+  .hero .range { font-size: 10px; color: var(--text-2); }
+  .hero .divider { width: 1px; align-self: stretch; background: var(--border); }
+  .hero .window-label { grid-column: 1 / -1; font-size: 12px; color: var(--text-2); margin-bottom: 6px; }
+  .hero .hr-block { text-align: right; }
+
+  /* Chart */
+  .chart-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    padding: 16px;
+  }
+  .chart-svg { width: 100%; height: 220px; display: block; }
+  .chart-axis { fill: var(--text-2); font-size: 9px; }
+  .chart-grid { stroke: var(--border); stroke-width: 0.5; stroke-dasharray: 3 3; }
+  .chart-line-sys { fill: none; stroke: var(--warn); stroke-width: 1.5; }
+  .chart-line-dia { fill: none; stroke: var(--warn); stroke-width: 1.5; }
+  .chart-marker { fill: white; stroke-width: 2; }
+  .chart-marker.normal    { stroke: var(--ok); }
+  .chart-marker.elevated  { stroke: var(--warn); }
+  .chart-marker.stage1    { stroke: var(--orange); }
+  .chart-marker.stage2    { stroke: var(--bad); }
+  .chart-marker.crisis    { stroke: #8b0000; }
+  .chart-current { stroke: var(--text-2); stroke-width: 0.5; stroke-dasharray: 2 2; }
+
+  /* Day/Night row */
+  .day-night {
+    display: flex; gap: 14px; align-items: center; justify-content: space-around;
+    padding: 14px 16px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px;
+  }
+  .day-night .dn-cell { display: flex; align-items: center; gap: 10px; }
+  .day-night .dn-emoji { font-size: 20px; }
+  .day-night .dn-label { font-size: 11px; color: var(--text-2); letter-spacing: 0.6px; text-transform: uppercase; }
+  .day-night .dn-val { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+  /* Target range card */
+  .target-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px 18px;
+  }
+  .target-card .pct {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 32px; font-weight: 400;
+  }
+  .target-card .pct-row {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 4px;
+  }
+  .target-card .info-i {
+    width: 18px; height: 18px; border-radius: 50%;
+    border: 1px solid var(--text-2); color: var(--text-2);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 10px; font-style: italic; cursor: help;
+  }
+  .target-card .target-hint { font-size: 12px; color: var(--text-2); }
+
+  /* Heart rate card */
+  .hr-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px 18px;
+    display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  }
+  .hr-card .big-num {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 28px; font-weight: 400;
+  }
+  .hr-card .unit { font-size: 14px; color: var(--text-2); }
+  .hr-card .hr-hint { width: 100%; font-size: 12px; color: var(--text-2); margin-top: 2px; }
+
+  /* Add-entry modal */
+  .modal-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 100;
+    display: none; align-items: center; justify-content: center; padding: 20px;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    width: 100%; max-width: 420px; padding: 22px;
+    box-shadow: 0 12px 36px rgba(0,0,0,.6);
+  }
+  .modal h2 { margin: 0 0 14px 0; font-size: 18px; font-weight: 700; }
+  .modal .row { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+  .modal label { display: block; font-size: 11px; color: var(--text-2); letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 4px; }
+  .modal input, .modal select, .modal textarea {
+    width: 100%; background: var(--surface-2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 10px 12px; font-size: 14px; font-family: inherit;
+  }
+  .modal input:focus, .modal select:focus, .modal textarea:focus { outline: none; border-color: var(--accent); }
+  .modal .field-half { flex: 1; min-width: 130px; }
+  .modal .btns { display: flex; gap: 10px; margin-top: 14px; }
+  .modal .btn-save { background: var(--accent); color: #0c1015; border: 0; padding: 10px 18px; border-radius: 6px; font-weight: 700; cursor: pointer; flex: 1; }
+  .modal .btn-cancel { background: transparent; color: var(--text); border: 1px solid var(--border); padding: 10px 18px; border-radius: 6px; cursor: pointer; }
+
+  /* Recent measurements list */
+  .recent-list { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .recent-head { padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .recent-head h3 { margin: 0; font-size: 14px; font-weight: 700; }
+  .recent-item {
+    display: grid; grid-template-columns: auto 1fr auto auto; gap: 12px;
+    padding: 12px 18px; align-items: center; border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .recent-item:last-child { border-bottom: 0; }
+  .recent-item .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .recent-item .when { color: var(--text-2); font-size: 11px; }
+  .recent-item .vals { font-variant-numeric: tabular-nums; }
+  .recent-item .vals strong { font-size: 14px; }
+  .recent-item .pulse { color: var(--text-2); font-size: 12px; }
+  .recent-item .del {
+    background: transparent; border: 0; color: var(--text-2); cursor: pointer;
+    padding: 4px; border-radius: 4px;
+  }
+  .recent-item .del:hover { color: var(--bad); background: rgba(239,68,68,0.1); }
+  .recent-empty { padding: 36px 18px; text-align: center; color: var(--text-2); font-style: italic; }
+
+  @media (max-width: 480px) {
+    main.bp-main { padding: 14px; }
+    .hero { grid-template-columns: 1fr 1px 1fr; }
+    .hero .hr-block { display: none; }
+  }
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<header class="bp-head">
+  <button class="back" onclick="location.href='./'" title="Zurück">‹</button>
+  <h1>Blood Pressure</h1>
+  <button class="add-btn" onclick="openAddModal()">＋ Eintrag</button>
+  <button class="help" title="AHA-Klassifizierung:&#10;Normal: &lt;120/80&#10;Elevated: 120-129/&lt;80&#10;Stage 1: 130-139/80-89&#10;Stage 2: 140+/90+">?</button>
+</header>
+
+<main class="bp-main">
+  <!-- Day / Week / Month segmented -->
+  <div class="seg-control" id="seg-range">
+    <button data-range="day" class="active">Day</button>
+    <button data-range="week">Week</button>
+    <button data-range="month">Month</button>
+  </div>
+
+  <!-- Hero summary -->
+  <div class="hero" id="hero">
+    <div class="window-label" id="window-label">Lade…</div>
+    <div>
+      <div class="label">Sys</div>
+      <div class="big" id="hero-sys">–</div>
+      <div class="range" id="hero-sys-range">128-140</div>
+    </div>
+    <div class="divider"></div>
+    <div>
+      <div class="label">Dia</div>
+      <div class="big" id="hero-dia">–</div>
+      <div class="range" id="hero-dia-range">128-140</div>
+    </div>
+    <div class="divider"></div>
+    <div class="hr-block">
+      <div class="label">HR</div>
+      <div class="big" id="hero-pulse" style="font-size:24px">– <span style="font-size:11px;color:var(--text-2)">bpm</span></div>
+    </div>
+  </div>
+
+  <!-- Chart -->
+  <div class="chart-card">
+    <svg class="chart-svg" id="chart" viewBox="0 0 360 220" preserveAspectRatio="none">
+      <text x="180" y="110" text-anchor="middle" class="chart-axis" style="font-size:11px">Lade Chart…</text>
+    </svg>
+  </div>
+
+  <!-- Day / Night split -->
+  <div class="day-night" id="day-night">
+    <div class="dn-cell">
+      <span class="dn-emoji">☀</span>
+      <div>
+        <div class="dn-label">Day</div>
+        <div class="dn-val" id="dn-day">–/–</div>
+      </div>
+    </div>
+    <div class="dn-cell">
+      <div>
+        <div class="dn-label" style="text-align:right">Night</div>
+        <div class="dn-val" id="dn-night">–/–</div>
+      </div>
+      <span class="dn-emoji">🌙</span>
+    </div>
+  </div>
+
+  <!-- Target range -->
+  <div class="target-card">
+    <div class="pct-row">
+      <span class="pct" id="target-pct">–%</span>
+      <span style="font-size:14px;color:var(--text-2)">in target range</span>
+      <span class="info-i" title="Zielbereich: unter 135/85 mmHg laut europäischen Leitlinien">i</span>
+    </div>
+    <div class="target-hint">Ideal blood pressure range is below 135/85</div>
+  </div>
+
+  <!-- Heart rate -->
+  <div class="hr-card">
+    <span class="big-num" id="resting-hr">–</span>
+    <span class="unit">bpm</span>
+    <div class="hr-hint">Your average resting heart rate</div>
+  </div>
+
+  <!-- Recent list -->
+  <div class="recent-list">
+    <div class="recent-head">
+      <h3>Letzte Messungen</h3>
+      <span style="font-size:11px;color:var(--text-2)" id="recent-count"></span>
+    </div>
+    <div id="recent-body">
+      <div class="recent-empty">Lade…</div>
+    </div>
+  </div>
+</main>
+
+<!-- Add-entry modal -->
+<div class="modal-backdrop" id="add-modal">
+  <div class="modal">
+    <h2>Blutdruck eintragen</h2>
+    <div class="row">
+      <div class="field-half">
+        <label>Systolisch (oberer Wert)</label>
+        <input type="number" id="m-sys" min="50" max="260" placeholder="120">
+      </div>
+      <div class="field-half">
+        <label>Diastolisch (unterer Wert)</label>
+        <input type="number" id="m-dia" min="30" max="180" placeholder="80">
+      </div>
+    </div>
+    <div class="row">
+      <div class="field-half">
+        <label>Puls (optional)</label>
+        <input type="number" id="m-pulse" min="30" max="220" placeholder="70">
+      </div>
+      <div class="field-half">
+        <label>Position</label>
+        <select id="m-pos">
+          <option value="">–</option>
+          <option value="sitzend">Sitzend</option>
+          <option value="liegend">Liegend</option>
+          <option value="stehend">Stehend</option>
+        </select>
+      </div>
+    </div>
+    <div class="row">
+      <div class="field-half">
+        <label>Arm</label>
+        <select id="m-arm">
+          <option value="">–</option>
+          <option value="links">Links</option>
+          <option value="rechts">Rechts</option>
+        </select>
+      </div>
+      <div class="field-half">
+        <label>Befinden</label>
+        <input type="text" id="m-mood" placeholder="z.B. entspannt">
+      </div>
+    </div>
+    <div class="row">
+      <div style="flex:1">
+        <label>Notiz</label>
+        <textarea id="m-notes" rows="2" placeholder="Optionale Anmerkung"></textarea>
+      </div>
+    </div>
+    <div class="btns">
+      <button class="btn-cancel" onclick="closeAddModal()">Abbrechen</button>
+      <button class="btn-save" onclick="saveEntry()">Speichern</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = (sel) => document.querySelector(sel);
+function escapeHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+let _RANGE = 'day';
+let _DATA = null;
+
+function classifyToCls(c) {
+  if (c === 'Normal') return 'normal';
+  if (c === 'Elevated') return 'elevated';
+  if (c === 'Hypertension Stage 1') return 'stage1';
+  if (c === 'Hypertension Stage 2') return 'stage2';
+  if (c === 'Crisis') return 'crisis';
+  return 'normal';
+}
+
+async function loadRange(range) {
+  _RANGE = range;
+  document.querySelectorAll('#seg-range button').forEach(b => b.classList.toggle('active', b.dataset.range === range));
+  try {
+    const r = await fetch('/api/blood-pressure?range=' + range);
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'HTTP ' + r.status);
+    _DATA = data;
+    renderHero(data);
+    renderChart(data);
+    renderDayNight(data);
+    renderTarget(data);
+    renderRestingHR(data);
+    renderRecent(data);
+  } catch (e) {
+    $('#window-label').textContent = 'Fehler: ' + (e.message || e);
+  }
+}
+
+function renderHero(data) {
+  const labels = { day: 'Letzte 24 Stunden', week: 'Letzte 7 Tage', month: 'Letzte 30 Tage' };
+  const items = data.items || [];
+  $('#window-label').textContent = labels[_RANGE] + (data.count ? ` · ${data.count} Messung${data.count===1?'':'en'}` : '');
+  if (!items.length) {
+    $('#hero-sys').textContent = '–'; $('#hero-dia').textContent = '–'; $('#hero-pulse').innerHTML = '–';
+    $('#hero-sys-range').textContent = ''; $('#hero-dia-range').textContent = '';
+    return;
+  }
+  const s = data.stats || {};
+  $('#hero-sys').textContent = s.avg_systolic ?? '–';
+  $('#hero-dia').textContent = s.avg_diastolic ?? '–';
+  $('#hero-pulse').innerHTML = (s.avg_pulse ?? '–') + ' <span style="font-size:11px;color:var(--text-2)">bpm</span>';
+  // Range = min-max of the period
+  let minS = Infinity, maxS = -Infinity, minD = Infinity, maxD = -Infinity;
+  for (const r of items) {
+    if (r.systolic < minS) minS = r.systolic;
+    if (r.systolic > maxS) maxS = r.systolic;
+    if (r.diastolic < minD) minD = r.diastolic;
+    if (r.diastolic > maxD) maxD = r.diastolic;
+  }
+  $('#hero-sys-range').textContent = isFinite(minS) ? `${minS}-${maxS}` : '';
+  $('#hero-dia-range').textContent = isFinite(minD) ? `${minD}-${maxD}` : '';
+}
+
+function renderChart(data) {
+  const items = (data.items || []).slice().reverse(); // oldest → newest
+  const svg = $('#chart');
+  if (!items.length) {
+    svg.innerHTML = '<text x="180" y="110" text-anchor="middle" class="chart-axis" style="font-size:11px;fill:var(--text-2)">Keine Messungen</text>';
+    return;
+  }
+  // viewBox is 360x220. Reserve 20px left for y-axis, 8px right, 30px bottom for x-labels.
+  const W = 360, H = 220, padL = 28, padR = 10, padT = 14, padB = 30;
+  const plotW = W - padL - padR;
+  const plotH = H - padT - padB;
+
+  // Y-scale: fixed range 60..150 for now (covers most clinical readings)
+  const yMin = 60, yMax = 150;
+  const yScale = (v) => padT + (1 - (v - yMin) / (yMax - yMin)) * plotH;
+
+  // X-scale: time linear across items
+  const t0 = new Date(items[0].taken_at).getTime();
+  const t1 = new Date(items[items.length-1].taken_at).getTime();
+  const span = Math.max(1, t1 - t0);
+  const xScale = (t) => padL + ((new Date(t).getTime() - t0) / span) * plotW;
+
+  const sysPath = items.map((r, i) => (i === 0 ? 'M' : 'L') + xScale(r.taken_at).toFixed(1) + ' ' + yScale(r.systolic).toFixed(1)).join(' ');
+  const diaPath = items.map((r, i) => (i === 0 ? 'M' : 'L') + xScale(r.taken_at).toFixed(1) + ' ' + yScale(r.diastolic).toFixed(1)).join(' ');
+
+  // X-axis ticks: 6 evenly spaced labels showing time
+  const ticks = 6;
+  const xTicks = [];
+  for (let i = 0; i < ticks; i++) {
+    const x = padL + (i / (ticks - 1)) * plotW;
+    const t = new Date(t0 + (i / (ticks - 1)) * span);
+    let label;
+    if (_RANGE === 'day') {
+      label = t.getHours().toString().padStart(2,'0') + ':00';
+    } else {
+      label = (t.getMonth()+1) + '/' + t.getDate();
+    }
+    xTicks.push({ x, label });
+  }
+
+  // Y-grid lines at 80, 100, 120, 140
+  const yGrid = [80, 100, 120, 140].map(v => {
+    return `<line class="chart-grid" x1="${padL}" x2="${padL + plotW}" y1="${yScale(v).toFixed(1)}" y2="${yScale(v).toFixed(1)}"/>
+            <text x="${padL - 4}" y="${(yScale(v) + 3).toFixed(1)}" text-anchor="end" class="chart-axis">${v}</text>`;
+  }).join('');
+
+  // Markers + circles
+  const sysMarkers = items.map(r => {
+    const cls = classifyToCls(r.classification);
+    const cx = xScale(r.taken_at).toFixed(1);
+    const cy = yScale(r.systolic).toFixed(1);
+    return `<circle class="chart-marker ${cls}" cx="${cx}" cy="${cy}" r="4"/>`;
+  }).join('');
+  const diaMarkers = items.map(r => {
+    const cls = classifyToCls(r.classification);
+    const cx = xScale(r.taken_at).toFixed(1);
+    const cy = yScale(r.diastolic).toFixed(1);
+    return `<circle class="chart-marker ${cls}" cx="${cx}" cy="${cy}" r="4"/>`;
+  }).join('');
+
+  svg.innerHTML = `
+    ${yGrid}
+    <path class="chart-line-sys" d="${sysPath}"/>
+    <path class="chart-line-dia" d="${diaPath}"/>
+    ${sysMarkers}
+    ${diaMarkers}
+    ${xTicks.map(t => `<text x="${t.x.toFixed(1)}" y="${H - padB + 14}" text-anchor="middle" class="chart-axis">${t.label}</text>`).join('')}
+  `;
+}
+
+function renderDayNight(data) {
+  const s = data.stats || {};
+  $('#dn-day').textContent   = s.day_avg   ? `${s.day_avg.systolic}/${s.day_avg.diastolic}`     : '–/–';
+  $('#dn-night').textContent = s.night_avg ? `${s.night_avg.systolic}/${s.night_avg.diastolic}` : '–/–';
+}
+function renderTarget(data) {
+  const s = data.stats || {};
+  $('#target-pct').textContent = (s.target_pct != null ? s.target_pct : '–') + '%';
+}
+function renderRestingHR(data) {
+  const s = data.stats || {};
+  $('#resting-hr').textContent = s.avg_pulse ?? '–';
+}
+function renderRecent(data) {
+  const items = (data.items || []).slice(0, 12);
+  if (!items.length) {
+    $('#recent-body').innerHTML = '<div class="recent-empty">Noch keine Messungen. Tipp auf „＋ Eintrag" oder sag „Larry, Blutdruck 120 zu 80".</div>';
+    $('#recent-count').textContent = '';
+    return;
+  }
+  $('#recent-count').textContent = items.length;
+  const colorFor = (c) => {
+    if (c === 'Normal') return 'var(--ok)';
+    if (c === 'Elevated') return 'var(--warn)';
+    if (c === 'Hypertension Stage 1') return 'var(--orange)';
+    if (c === 'Hypertension Stage 2') return 'var(--bad)';
+    if (c === 'Crisis') return '#8b0000';
+    return 'var(--text-2)';
+  };
+  $('#recent-body').innerHTML = items.map(r => {
+    const d = new Date(r.taken_at);
+    const when = d.toLocaleString('de-CH', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+    const pulseHtml = r.pulse ? ` <span class="pulse">· ${r.pulse} bpm</span>` : '';
+    return `<div class="recent-item">
+      <div class="dot" style="background:${colorFor(r.classification)}"></div>
+      <div class="when">${when}</div>
+      <div class="vals"><strong>${r.systolic}/${r.diastolic}</strong>${pulseHtml}</div>
+      <button class="del" onclick="delEntry(${r.id})" title="Löschen">×</button>
+    </div>`;
+  }).join('');
+}
+
+function openAddModal() { $('#add-modal').classList.add('open'); setTimeout(() => $('#m-sys').focus(), 100); }
+function closeAddModal() { $('#add-modal').classList.remove('open'); }
+async function saveEntry() {
+  const sys = parseInt($('#m-sys').value, 10);
+  const dia = parseInt($('#m-dia').value, 10);
+  if (!sys || !dia) { alert('Sys + Dia angeben.'); return; }
+  const body = {
+    systolic: sys, diastolic: dia,
+    pulse: parseInt($('#m-pulse').value, 10) || null,
+    body_position: $('#m-pos').value || null,
+    arm: $('#m-arm').value || null,
+    mood: $('#m-mood').value || null,
+    notes: $('#m-notes').value || null,
+    source: 'manual',
+  };
+  try {
+    const r = await fetch('/api/blood-pressure', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'HTTP ' + r.status);
+    closeAddModal();
+    // Clear form
+    $('#m-sys').value = ''; $('#m-dia').value = ''; $('#m-pulse').value = '';
+    $('#m-pos').value = ''; $('#m-arm').value = ''; $('#m-mood').value = ''; $('#m-notes').value = '';
+    loadRange(_RANGE);
+  } catch (e) { alert('Fehler: ' + (e.message || e)); }
+}
+async function delEntry(id) {
+  if (!confirm('Diese Messung löschen?')) return;
+  try {
+    await fetch('/api/blood-pressure?id=' + id, { method: 'DELETE' });
+    loadRange(_RANGE);
+  } catch (e) { alert('Fehler: ' + (e.message || e)); }
+}
+
+document.querySelectorAll('#seg-range button').forEach(b => {
+  b.addEventListener('click', () => loadRange(b.dataset.range));
+});
+
+loadRange('day');
+</script>
+</body>
+</html>

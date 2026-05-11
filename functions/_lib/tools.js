@@ -244,6 +244,51 @@ export const TOOLS = [
     description: 'Entfernt alle bereits erledigten Einträge von der Einkaufsliste. Nur nach expliziter Bestätigung verwenden.',
     input_schema: { type: 'object', properties: {} },
   },
+  // ───── blood pressure ──────────────────────────────────────
+  {
+    name: 'log_blood_pressure',
+    description: 'Erfasst eine Blutdruck-Messung. Nutze dies wenn der User sagt „Blutdruck 135 zu 82", „mein Blutdruck war heute 138 86 puls 72", „BP eintragen 120/80". Sys = oberer Wert (höher), Dia = unterer Wert (tiefer). Pulse optional. Bestätige kurz „Eingetragen, Sir: SYS/DIA, Pulse N — Klassifizierung."',
+    input_schema: {
+      type: 'object',
+      properties: {
+        systolic:  { type: 'integer', description: 'Oberer Wert (Systolisch) in mmHg, 50-260' },
+        diastolic: { type: 'integer', description: 'Unterer Wert (Diastolisch) in mmHg, 30-180' },
+        pulse:     { type: 'integer', description: 'Puls in BPM (optional)' },
+        body_position: { type: 'string', enum: ['sitzend','liegend','stehend'], description: 'Position bei der Messung' },
+        arm:       { type: 'string', enum: ['links','rechts'], description: 'Arm bei der Messung' },
+        mood:      { type: 'string', description: 'Befinden während Messung, z.B. „entspannt", „nach Sport", „gestresst"' },
+        notes:     { type: 'string', description: 'Freitext-Anmerkung' },
+        irregular_heartbeat: { type: 'boolean', description: 'true wenn Herzrhythmusstörung erkannt' },
+      },
+      required: ['systolic', 'diastolic'],
+    },
+  },
+  {
+    name: 'list_recent_blood_pressure',
+    description: 'Liest die letzten N Blutdruckwerte vor. Nutze dies wenn der User fragt „wie war mein Blutdruck heute / diese Woche", „letzte Messung".',
+    input_schema: {
+      type: 'object',
+      properties: {
+        limit: { type: 'integer', description: 'Anzahl Einträge (default 5, max 50)' },
+      },
+    },
+  },
+  {
+    name: 'blood_pressure_stats',
+    description: 'Berechnet Durchschnitt + Trend für einen Zeitraum. Nutze dies wenn der User fragt „wie ist mein Schnitt", „Trend letzte Woche", „bin ich im Zielbereich".',
+    input_schema: {
+      type: 'object',
+      properties: {
+        range: { type: 'string', enum: ['day','week','month','year'], description: 'Zeitraum (default week)' },
+      },
+    },
+  },
+  {
+    name: 'open_blood_pressure_dashboard',
+    description: 'Öffnet das Blutdruck-Dashboard mit Chart. Nutze dies wenn der User sagt „zeig mir den Blutdruck", „öffne BP-Dashboard", „Health-Übersicht".',
+    input_schema: { type: 'object', properties: {} },
+  },
+
   {
     name: 'open_shopping_list',
     description: 'Öffnet die Einkaufsliste in der App. Nutze dies wenn der User sagt „öffne die Einkaufsliste", „zeig mir die Einkaufsliste"  und visuell sehen will.',
@@ -517,6 +562,82 @@ export async function executeTool(name, args, env) {
         const r = await env.DB.prepare("DELETE FROM shopping_list WHERE status = 'done'").run();
         return ok({ cleared: r.meta?.changes || 0 });
       }
+      // ───── blood pressure ────────────────────────────────
+      case 'log_blood_pressure': {
+        const sys = parseInt(args.systolic, 10);
+        const dia = parseInt(args.diastolic, 10);
+        if (!Number.isInteger(sys) || sys < 50 || sys > 260) return fail('systolic must be 50-260');
+        if (!Number.isInteger(dia) || dia < 30 || dia > 180) return fail('diastolic must be 30-180');
+        const pulse = Number.isInteger(parseInt(args.pulse, 10)) ? parseInt(args.pulse, 10) : null;
+        const classify = (s, d) => {
+          if (s >= 180 || d >= 120) return 'Crisis';
+          if (s >= 140 || d >= 90)  return 'Hypertension Stage 2';
+          if (s >= 130 || d >= 80)  return 'Hypertension Stage 1';
+          if (s >= 120 && d < 80)   return 'Elevated';
+          if (s < 120 && d < 80)    return 'Normal';
+          return 'Unknown';
+        };
+        const classification = classify(sys, dia);
+        const r = await env.DB.prepare(
+          'INSERT INTO blood_pressure (systolic, diastolic, pulse, source, body_position, arm, mood, notes, irregular_heartbeat, classification) ' +
+          'VALUES (?, ?, ?, \'voice\', ?, ?, ?, ?, ?, ?)'
+        ).bind(
+          sys, dia, pulse,
+          args.body_position || null,
+          args.arm || null,
+          args.mood || null,
+          args.notes || null,
+          args.irregular_heartbeat ? 1 : 0,
+          classification,
+        ).run();
+        return ok({
+          id: r.meta?.last_row_id,
+          systolic: sys, diastolic: dia, pulse, classification,
+        });
+      }
+      case 'list_recent_blood_pressure': {
+        const limit = Math.min(Math.max(parseInt(args.limit, 10) || 5, 1), 50);
+        const rows = await env.DB.prepare(
+          'SELECT id, systolic, diastolic, pulse, taken_at, classification FROM blood_pressure ORDER BY taken_at DESC LIMIT ?'
+        ).bind(limit).all();
+        return ok({ count: rows.results.length, items: rows.results });
+      }
+      case 'blood_pressure_stats': {
+        const range = ['day','week','month','year'].includes(args.range) ? args.range : 'week';
+        const whereSql = {
+          day:   "WHERE taken_at >= datetime('now', '-1 day')",
+          week:  "WHERE taken_at >= datetime('now', '-7 days')",
+          month: "WHERE taken_at >= datetime('now', '-30 days')",
+          year:  "WHERE taken_at >= datetime('now', '-365 days')",
+        }[range];
+        const rows = await env.DB.prepare(
+          'SELECT systolic, diastolic, pulse, taken_at, classification FROM blood_pressure ' + whereSql + ' LIMIT 1000'
+        ).all();
+        const items = rows.results || [];
+        if (!items.length) return ok({ range, count: 0, message: 'Keine Messungen in diesem Zeitraum.' });
+        let sumS = 0, sumD = 0, sumP = 0, nP = 0, inTarget = 0;
+        for (const r of items) {
+          sumS += r.systolic; sumD += r.diastolic;
+          if (r.pulse) { sumP += r.pulse; nP++; }
+          if (r.systolic < 135 && r.diastolic < 85) inTarget++;
+        }
+        return ok({
+          range, count: items.length,
+          avg_systolic: Math.round(sumS / items.length),
+          avg_diastolic: Math.round(sumD / items.length),
+          avg_pulse: nP ? Math.round(sumP / nP) : null,
+          target_pct: Math.round(inTarget / items.length * 100),
+        });
+      }
+      case 'open_blood_pressure_dashboard': {
+        return JSON.stringify({
+          ok: true,
+          action: 'open_blood_pressure_dashboard',
+          navigate_to: '/blood-pressure.html',
+          spoken: 'Öffne das Blutdruck-Dashboard, Sir.',
+        });
+      }
+
       case 'open_shopping_list': {
         return JSON.stringify({
           ok: true,
