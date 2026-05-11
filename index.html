@@ -1023,10 +1023,59 @@ body:has(#sidebar:not(.collapsed)) .list-subtitle .ls-count::after  { content: "
 .ne-preview h1 { font-size: 26px; }
 .ne-preview h2 { font-size: 21px; }
 .ne-preview h3 { font-size: 17px; color: var(--accent); }
-.ne-preview ul, .ne-preview ol { padding-left: 22px; margin: 6px 0; }
-.ne-preview li { margin: 3px 0; }
-.ne-preview li.todo { list-style: none; margin-left: -22px; }
+.ne-preview ul, .ne-preview ol { padding-left: 22px; margin: 6px 0; list-style: none; }
+.ne-preview li { margin: 4px 0; position: relative; padding-left: 4px; }
+/* Thick clickable bullet on every list item — Logseq-style block marker.
+   Click opens the block context menu. */
+.ne-preview ul > li::before {
+  content: '';
+  position: absolute;
+  left: -16px;
+  top: 9px;
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  background: var(--text-2);
+  transition: all .12s ease;
+  cursor: pointer;
+}
+.ne-preview ul > li:hover::before {
+  background: var(--accent);
+  transform: scale(1.25);
+  box-shadow: 0 0 0 4px rgba(96,165,250,0.12);
+}
+.ne-preview ol > li { counter-increment: ol-item; }
+.ne-preview ol { counter-reset: ol-item; }
+.ne-preview ol > li::before {
+  content: counter(ol-item) '.';
+  position: absolute;
+  left: -22px;
+  top: 0;
+  font-size: 13px;
+  color: var(--text-2);
+}
 .ne-preview li.todo input { margin-right: 6px; vertical-align: middle; pointer-events: none; }
+.ne-preview li.todo::before { background: transparent !important; }
+
+/* Block context menu (shown when clicking a bullet) */
+.ne-block-menu {
+  position: fixed; z-index: 10001;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: 0 10px 32px rgba(0,0,0,.6);
+  min-width: 220px; max-width: 320px; padding: 5px 0;
+  font-size: 13px;
+}
+.ne-block-menu .bm-group {
+  font-size: 10px; letter-spacing: 1.4px; text-transform: uppercase;
+  color: var(--text-2); padding: 8px 14px 4px 14px;
+}
+.ne-block-menu .bm-item {
+  padding: 7px 14px; cursor: pointer; color: var(--text);
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+.ne-block-menu .bm-item:hover { background: var(--surface-2); }
+.ne-block-menu .bm-item.danger:hover { background: rgba(239,68,68,0.12); color: #ef4444; }
+.ne-block-menu .bm-hint { font-size: 11px; color: var(--text-2); }
+.ne-block-menu .bm-sep { height: 1px; background: var(--border); margin: 4px 0; }
 .ne-preview blockquote { border-left: 3px solid var(--accent); margin: 8px 0; padding: 4px 14px; color: var(--text-2); font-style: italic; }
 /* Logseq-style callouts — big icon left (2× text size), vertically
    centered against the body, vertical line set a bit further right. */
@@ -5548,9 +5597,11 @@ function openNoteEditor() {
   ov.classList.add('open');
   ov.setAttribute('aria-hidden', 'false');
   document.body.style.overflow = 'hidden';
-  // Focus the title first if empty, else jump to textarea
   const title = document.getElementById('ne-title');
   const ta = document.getElementById('ne-textarea');
+  // Auto-bullet on first open: empty textarea starts with a bullet so
+  // the outliner pattern is established from the very first keystroke.
+  if (!ta.value) ta.value = '- ';
   setTimeout(() => (title.value ? ta : title).focus(), 50);
 }
 function closeNoteEditor() {
@@ -5630,6 +5681,19 @@ function wireNoteEditor() {
   // Save button
   document.getElementById('ne-save').addEventListener('click', () => saveNoteEditor());
 
+  // Tab from the title field → jump straight into the textarea so the
+  // user can hit Tab once and start typing their first block.
+  title.addEventListener('keydown', (e) => {
+    if (e.key === 'Tab' && !e.shiftKey) {
+      e.preventDefault();
+      if (!ta.value) ta.value = '- ';
+      ta.focus();
+      // Place cursor at end of the existing bullet prefix (so user
+      // doesn't have to manually move past "- ")
+      ta.selectionStart = ta.selectionEnd = ta.value.length;
+    }
+  });
+
   // Keyboard shortcuts: Ctrl+S, Ctrl+B, Ctrl+I, Tab/Shift+Tab, Enter (list continue)
   ta.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
@@ -5674,7 +5738,10 @@ function wireNoteEditor() {
       render(); return;
     }
     if (e.key === 'Enter') {
-      // Continue lists: detect current line pattern, insert same prefix on new line
+      // Continue lists / auto-bullet: detect current line pattern,
+      // insert same prefix on new line. Every "plain" paragraph also
+      // gets an auto bullet so the outliner pattern is enforced
+      // (Logseq behaviour — every block is bulleted).
       const pos = ta.selectionStart;
       const upto = ta.value.slice(0, pos);
       const lineStart = upto.lastIndexOf('\n') + 1;
@@ -5683,7 +5750,6 @@ function wireNoteEditor() {
       if (m) {
         const [, indent, prefix, content] = m;
         if (!content.trim()) {
-          // Empty bullet → remove it (Logseq-style: Enter on empty bullet exits the list)
           e.preventDefault();
           const newVal = ta.value.slice(0, lineStart) + ta.value.slice(pos);
           ta.value = newVal;
@@ -5691,17 +5757,35 @@ function wireNoteEditor() {
           render(); return;
         }
         e.preventDefault();
-        // For numbered lists, increment the number
         let nextPrefix = prefix;
         const numMatch = prefix.match(/^(\d+)\.\s$/);
         if (numMatch) nextPrefix = (parseInt(numMatch[1], 10) + 1) + '. ';
-        // For - [x] → continue as - [ ]
         if (/^[-*+]\s\[[x ]\]\s$/.test(prefix)) nextPrefix = prefix.replace('[x]', '[ ]');
         const ins = '\n' + indent + nextPrefix;
         ta.value = ta.value.slice(0, pos) + ins + ta.value.slice(pos);
         const newPos = pos + ins.length;
         ta.selectionStart = ta.selectionEnd = newPos;
         render();
+        return;
+      }
+      // No list-pattern match → check if we should auto-prefix the new
+      // line with a bullet (skip when inside callout block / code
+      // fences / heading / blockquote).
+      const lineTrim = line.trimStart();
+      const isHeading = /^#{1,6}\s/.test(lineTrim);
+      const before = ta.value.slice(0, pos);
+      const lastBegin = before.lastIndexOf('#+BEGIN_');
+      const lastEnd   = before.lastIndexOf('#+END_');
+      const inCallout = lastBegin >= 0 && lastBegin > lastEnd;
+      const codeFences = (before.match(/```/g) || []).length;
+      const inCode = (codeFences % 2) === 1;
+      if (!inCallout && !inCode && !isHeading && line.trim()) {
+        e.preventDefault();
+        const ins = '\n- ';
+        ta.value = ta.value.slice(0, pos) + ins + ta.value.slice(pos);
+        ta.selectionStart = ta.selectionEnd = pos + ins.length;
+        render();
+        return;
       }
     }
   });
@@ -5718,8 +5802,166 @@ function wireNoteEditor() {
   // < command menu
   wireNoteCommandMenu(ta);
 
+  // Click on bullet → open block context menu
+  preview.addEventListener('click', (e) => {
+    const li = e.target.closest('li');
+    if (!li || !li.parentElement || li.parentElement.tagName !== 'UL') return;
+    // Detect bullet-area click: ::before sits at left:-16px, ~9px wide.
+    // Use the left ~24px of the <li> as the bullet hit area.
+    const rect = li.getBoundingClientRect();
+    const xWithinLi = e.clientX - rect.left;
+    if (xWithinLi > 26 || xWithinLi < -20) return;
+    // Get the block's source text. Match by visible text against ta lines.
+    const blockText = li.textContent.trim();
+    openBlockMenu(blockText, e.clientX, e.clientY, ta);
+  });
+
   // initial render
   render();
+}
+
+// Block context menu — shown when user clicks a list-item bullet in
+// the preview. Operates on the matching line in the textarea.
+function openBlockMenu(blockText, x, y, ta) {
+  closeBlockMenu();
+  // Find the line in the textarea that maps to this block.
+  const lines = ta.value.split('\n');
+  let targetIdx = -1;
+  const needle = blockText.toLowerCase();
+  for (let i = 0; i < lines.length; i++) {
+    const stripped = lines[i].replace(/^(\s*)([-*+]\s\[[ x]\]\s|[-*+]\s|\d+\.\s|>\s)/, '').trim().toLowerCase();
+    if (stripped && (stripped === needle || stripped.includes(needle.slice(0, 30)))) {
+      targetIdx = i; break;
+    }
+  }
+  if (targetIdx < 0) return;
+  const lineText = lines[targetIdx];
+
+  const menu = document.createElement('div');
+  menu.className = 'ne-block-menu';
+  menu.innerHTML = `
+    <div class="bm-group">Block</div>
+    <div class="bm-item" data-act="cursor">Hier den Cursor setzen</div>
+    <div class="bm-item" data-act="copy">Block kopieren</div>
+    <div class="bm-item" data-act="cut">Block ausschneiden</div>
+    <div class="bm-item danger" data-act="delete">Block löschen</div>
+    <div class="bm-sep"></div>
+    <div class="bm-group">Umwandeln</div>
+    <div class="bm-item" data-act="h1">→ Heading 1</div>
+    <div class="bm-item" data-act="h2">→ Heading 2</div>
+    <div class="bm-item" data-act="h3">→ Heading 3</div>
+    <div class="bm-item" data-act="bullet">→ Bullet</div>
+    <div class="bm-item" data-act="todo">→ Todo ☐</div>
+    <div class="bm-sep"></div>
+    <div class="bm-group">Hinweis-Wrap</div>
+    <div class="bm-item" data-act="wrap-note">In Note-Callout packen</div>
+    <div class="bm-item" data-act="wrap-tip">In Tip-Callout packen</div>
+    <div class="bm-item" data-act="wrap-warning">In Warning-Callout packen</div>
+    <div class="bm-item" data-act="wrap-quote">In Quote-Callout packen</div>
+    <div class="bm-sep"></div>
+    <div class="bm-group">AI</div>
+    <div class="bm-item" data-act="ai-improve">Sprache verbessern <span class="bm-hint">AI</span></div>
+    <div class="bm-item" data-act="ai-expand">Bullet ausarbeiten <span class="bm-hint">AI</span></div>
+    <div class="bm-item" data-act="ai-translate">Übersetzen… <span class="bm-hint">AI</span></div>
+  `;
+  // Position
+  document.body.appendChild(menu);
+  const menuRect = menu.getBoundingClientRect();
+  let left = x + 4, top = y + 4;
+  if (left + menuRect.width > window.innerWidth - 8) left = window.innerWidth - menuRect.width - 8;
+  if (top + menuRect.height > window.innerHeight - 8) top = y - menuRect.height - 4;
+  menu.style.left = Math.max(8, left) + 'px';
+  menu.style.top  = Math.max(8, top) + 'px';
+
+  const closer = (e) => {
+    if (!menu.contains(e.target)) closeBlockMenu();
+  };
+  setTimeout(() => document.addEventListener('mousedown', closer), 0);
+  window._neBlockMenuCloser = closer;
+
+  menu.addEventListener('click', (e) => {
+    const item = e.target.closest('.bm-item');
+    if (!item) return;
+    const act = item.dataset.act;
+    handleBlockAction(act, targetIdx, ta);
+    closeBlockMenu();
+  });
+}
+function closeBlockMenu() {
+  document.querySelectorAll('.ne-block-menu').forEach(m => m.remove());
+  if (window._neBlockMenuCloser) {
+    document.removeEventListener('mousedown', window._neBlockMenuCloser);
+    window._neBlockMenuCloser = null;
+  }
+}
+
+async function handleBlockAction(act, lineIdx, ta) {
+  const lines = ta.value.split('\n');
+  const line = lines[lineIdx] || '';
+  const stripped = line.replace(/^(\s*)([-*+]\s\[[ x]\]\s|[-*+]\s|\d+\.\s|>\s|#{1,6}\s)/, '');
+  const setLines = () => {
+    ta.value = lines.join('\n');
+    ta.dispatchEvent(new Event('input'));
+  };
+  const placeCursorAtLine = () => {
+    let pos = 0;
+    for (let i = 0; i < lineIdx; i++) pos += (lines[i] || '').length + 1;
+    pos += (lines[lineIdx] || '').length;
+    ta.selectionStart = ta.selectionEnd = pos;
+    ta.focus();
+  };
+
+  switch (act) {
+    case 'cursor':
+      placeCursorAtLine();
+      return;
+    case 'copy':
+      try { await navigator.clipboard.writeText(stripped); } catch(_) {}
+      return;
+    case 'cut':
+      try { await navigator.clipboard.writeText(stripped); } catch(_) {}
+      lines.splice(lineIdx, 1); setLines(); return;
+    case 'delete':
+      lines.splice(lineIdx, 1); setLines(); return;
+    case 'h1': lines[lineIdx] = '# ' + stripped; setLines(); return;
+    case 'h2': lines[lineIdx] = '## ' + stripped; setLines(); return;
+    case 'h3': lines[lineIdx] = '### ' + stripped; setLines(); return;
+    case 'bullet': lines[lineIdx] = '- ' + stripped; setLines(); return;
+    case 'todo': lines[lineIdx] = '- [ ] ' + stripped; setLines(); return;
+    case 'wrap-note':
+    case 'wrap-tip':
+    case 'wrap-warning':
+    case 'wrap-quote': {
+      const t = act.replace('wrap-', '').toUpperCase();
+      const block = `#+BEGIN_${t}\n${stripped}\n#+END_${t}`;
+      lines.splice(lineIdx, 1, block);
+      setLines(); return;
+    }
+    case 'ai-improve':
+    case 'ai-expand':
+    case 'ai-translate': {
+      const action = act.replace('ai-', '');
+      const lang = (action === 'translate') ? window.prompt('Zielsprache:', 'Englisch') : null;
+      if (action === 'translate' && lang == null) return;
+      try {
+        const r = await fetch('/api/note-assist', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action, text: ta.value, selection: stripped, language: lang }),
+        });
+        const data = await r.json();
+        if (!r.ok || !data.ok) throw new Error(data.error);
+        // Preserve any bullet/heading prefix the line had
+        const prefMatch = line.match(/^(\s*)([-*+]\s\[[ x]\]\s|[-*+]\s|\d+\.\s|>\s|#{1,6}\s)/);
+        const prefix = prefMatch ? prefMatch[1] + prefMatch[2] : '';
+        lines[lineIdx] = prefix + (data.result || stripped).trim();
+        setLines();
+      } catch (e) {
+        alert('AI fehlgeschlagen: ' + (e?.message || e));
+      }
+      return;
+    }
+  }
 }
 
 // ── Text manipulation helpers ─────────────────────────────────
