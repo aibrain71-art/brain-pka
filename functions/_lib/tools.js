@@ -180,6 +180,31 @@ export const TOOLS = [
     },
   },
   {
+    name: 'promote_note_to_recipe',
+    description: 'Wandelt eine bestehende Notiz in ein strukturiertes Rezept um. Nutze dies wenn der User sagt „mach die letzte Notiz zum Rezept", „nimm Notiz X als Rezept ins Kochbuch" o.ä. Larry liest dazu vorher den Body der Notiz (via list_recent_notes oder search_notes), extrahiert die strukturierten Felder selbst und übergibt sie hier — die SQL-UPDATE-Logik passiert dann server-seitig. Original-Titel und related_topics bleiben erhalten.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        id:              { type: 'integer', description: 'Note-ID die konvertiert wird.' },
+        servings:        { type: 'integer', description: 'Anzahl Portionen (Standard 4).' },
+        total_minutes:   { type: 'integer' },
+        prep_minutes:    { type: 'integer' },
+        cook_minutes:    { type: 'integer' },
+        location:        { type: 'string' },
+        equipment:       { type: 'array', items: { type: 'string' } },
+        ingredients:     { type: 'array', items: { type: 'string' }, description: 'Zutaten als ganze Zeilen.' },
+        steps:           { type: 'array', items: { type: 'string' }, description: 'Schritte in Reihenfolge.' },
+        calories_per_serving: { type: 'integer' },
+        protein_g:       { type: 'integer' },
+        carbs_g:         { type: 'integer' },
+        fat_g:           { type: 'integer' },
+        tags:            { type: 'array', items: { type: 'string' } },
+        notes:           { type: 'string' },
+      },
+      required: ['id', 'ingredients', 'steps'],
+    },
+  },
+  {
     name: 'open_cookbook',
     description: 'Öffnet die Kochbuch-Webseite (eine Übersichtsseite mit allen Rezepten, sortiert, mit Inhaltsverzeichnis). Nutze dies wenn der User sagt "öffne Kochbuch", "zeig mir alle Rezepte", "wo sind meine Rezepte", "Kochbuch bitte".',
     input_schema: {
@@ -371,6 +396,53 @@ export async function executeTool(name, args, env) {
           'INSERT INTO notes (slug, title, body, note_type, related_topics, source_meta, garden_type) VALUES (?, ?, ?, ?, ?, ?, ?)'
         ).bind(slug, args.title, body, 'recipe', tags, JSON.stringify({ recipe }), 'Recipe').run();
         return ok({ id: r.meta?.last_row_id, title: args.title, servings: recipe.servings });
+      }
+      case 'promote_note_to_recipe': {
+        const id = parseInt(args.id, 10);
+        if (!id) return fail('id required');
+        if (!Array.isArray(args.ingredients) || args.ingredients.length === 0) return fail('ingredients[] required');
+        if (!Array.isArray(args.steps) || args.steps.length === 0) return fail('steps[] required');
+        const before = await env.DB.prepare('SELECT title, body, source_meta FROM notes WHERE id = ?').bind(id).first();
+        if (!before) return fail('Note not found');
+        const recipe = {
+          servings:      Number.isInteger(args.servings)      ? args.servings      : 4,
+          total_minutes: Number.isInteger(args.total_minutes) ? args.total_minutes : null,
+          prep_minutes:  Number.isInteger(args.prep_minutes)  ? args.prep_minutes  : null,
+          cook_minutes:  Number.isInteger(args.cook_minutes)  ? args.cook_minutes  : null,
+          location:      typeof args.location === 'string'    ? args.location      : null,
+          equipment:     Array.isArray(args.equipment) ? args.equipment.filter(Boolean) : [],
+          ingredients:   args.ingredients.filter(Boolean),
+          steps:         args.steps.filter(Boolean),
+          calories_per_serving: Number.isInteger(args.calories_per_serving) ? args.calories_per_serving : null,
+          protein_g:     Number.isInteger(args.protein_g) ? args.protein_g : null,
+          carbs_g:       Number.isInteger(args.carbs_g) ? args.carbs_g : null,
+          fat_g:         Number.isInteger(args.fat_g) ? args.fat_g : null,
+          tags:          Array.isArray(args.tags) ? args.tags.filter(Boolean) : [],
+          notes:         typeof args.notes === 'string' ? args.notes : '',
+        };
+        // Build the readable body just like create_recipe does — replaces
+        // the original free-form note text so the note view + search work.
+        const bp = [];
+        bp.push(`Für ${recipe.servings} Personen.`);
+        if (recipe.total_minutes) bp.push(`Gesamtzeit: ${recipe.total_minutes} Min.`);
+        if (recipe.location) bp.push(`Wo: ${recipe.location}.`);
+        if (recipe.equipment.length) bp.push(`Geräte: ${recipe.equipment.join(', ')}.`);
+        bp.push('', 'Zutaten:');
+        recipe.ingredients.forEach(i => bp.push('  • ' + i));
+        bp.push('', 'Zubereitung:');
+        recipe.steps.forEach((s, i) => bp.push((i + 1) + '. ' + s));
+        if (recipe.notes) { bp.push('', 'Notizen: ' + recipe.notes); }
+        const newBody = bp.join('\n');
+
+        // Merge with any pre-existing source_meta (preserves linkEntities etc.)
+        let existingMeta = {};
+        try { existingMeta = before.source_meta ? JSON.parse(before.source_meta) : {}; } catch(_) {}
+        const newMeta = { ...existingMeta, recipe };
+
+        await env.DB.prepare(
+          'UPDATE notes SET note_type = \'recipe\', body = ?, source_meta = ?, garden_type = \'Recipe\', updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+        ).bind(newBody, JSON.stringify(newMeta), id).run();
+        return ok({ promoted_id: id, title: before.title, servings: recipe.servings });
       }
       case 'open_cookbook': {
         // Marker result — the browser-side chat handler watches for this
