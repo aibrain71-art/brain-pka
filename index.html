@@ -1028,6 +1028,28 @@ body:has(#sidebar:not(.collapsed)) .list-subtitle .ls-count::after  { content: "
 .ne-preview li.todo { list-style: none; margin-left: -22px; }
 .ne-preview li.todo input { margin-right: 6px; vertical-align: middle; pointer-events: none; }
 .ne-preview blockquote { border-left: 3px solid var(--accent); margin: 8px 0; padding: 4px 14px; color: var(--text-2); font-style: italic; }
+/* GitHub-style callouts (admonitions) */
+.ne-preview .callout {
+  border-left: 4px solid var(--cb-color, var(--accent));
+  background: var(--cb-bg, rgba(96,165,250,0.06));
+  border-radius: 4px;
+  padding: 10px 14px 12px 14px;
+  margin: 12px 0;
+  color: var(--text);
+  font-style: normal;
+}
+.ne-preview .callout-title {
+  display: flex; align-items: center; gap: 8px;
+  font-weight: 700; font-size: 13px; letter-spacing: 0.4px;
+  color: var(--cb-color);
+  margin-bottom: 4px;
+}
+.ne-preview .callout-body { font-size: 14px; line-height: 1.55; color: var(--text); }
+.ne-preview .callout.note     { --cb-color: #58a6ff; --cb-bg: rgba(88,166,255,0.06); }
+.ne-preview .callout.tip      { --cb-color: #3fb950; --cb-bg: rgba(63,185,80,0.07); }
+.ne-preview .callout.warning  { --cb-color: #d29922; --cb-bg: rgba(210,153,34,0.08); }
+.ne-preview .callout.important { --cb-color: #ef4444; --cb-bg: rgba(239,68,68,0.07); }
+.ne-preview .callout.caution  { --cb-color: #e85a18; --cb-bg: rgba(232,90,24,0.08); }
 .ne-preview code { background: var(--surface-2); border-radius: 4px; padding: 1px 5px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
 .ne-preview pre { background: var(--surface-2); border-radius: 6px; padding: 10px 14px; overflow-x: auto; }
 .ne-preview pre code { background: transparent; padding: 0; }
@@ -5714,8 +5736,32 @@ function mdRender(src) {
        .replace(/^# (.+)$/gm, '<h1>$1</h1>');
   // Horizontal rule
   s = s.replace(/^---$/gm, '<hr>');
-  // Blockquote
-  s = s.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
+  // GitHub-style callouts — must run BEFORE the generic blockquote rule.
+  // Matches contiguous lines that all start with "> ", where the first
+  // body line is "[!TYPE]" → render as a styled box; otherwise fall
+  // through to the regular blockquote rule below.
+  s = s.replace(
+    /(?:^&gt; .+$\n?)+/gm,
+    (block) => {
+      const lines = block.split('\n').filter(l => l.startsWith('&gt; '));
+      if (!lines.length) return block;
+      // Strip the "&gt; " prefix from each line
+      const inner = lines.map(l => l.replace(/^&gt; ?/, ''));
+      const m = inner[0].match(/^\[!(NOTE|TIP|WARNING|IMPORTANT|CAUTION)\]\s*$/i);
+      if (!m) {
+        // Regular blockquote (single or multi-line)
+        return '<blockquote>' + inner.join('<br>') + '</blockquote>';
+      }
+      const type = m[1].toLowerCase();
+      const labels = { note: 'Note', tip: 'Tip', warning: 'Warning', important: 'Important', caution: 'Caution' };
+      const icons  = { note: 'ℹ️',  tip: '💡',   warning: '⚠️',     important: '❗',         caution: '🔥' };
+      const body = inner.slice(1).join('<br>') || '<span style="color:var(--text-2);font-style:italic">(leer — füge hier deinen Text ein)</span>';
+      return `<div class="callout ${type}">
+                <div class="callout-title"><span>${icons[type]}</span><span>${labels[type]}</span></div>
+                <div class="callout-body">${body}</div>
+              </div>`;
+    }
+  );
   // Inline code
   s = s.replace(/`([^`\n]+)`/g, '<code>$1</code>');
   // Bold / italic / strike
@@ -5758,11 +5804,27 @@ function mdRender(src) {
   return s;
 }
 
-// ── < command menu — AI-only ─────────────────────────────────
-// Format/Datum/Refs/Blöcke are reachable via the toolbar (B, I, H1-3,
-// bullets, etc.). The "<" trigger is reserved for Anthropic-backed
-// assists where Larry actually does work for the user.
+// ── < command menu — AI + Callout inserts ─────────────────────
+// Format basics (B/I/H1-3/etc) live on the toolbar. "<" triggers a
+// small focused menu of Anthropic-backed assists PLUS GitHub-style
+// callout blocks (Note/Tip/Warning/Important/Caution) which other
+// editors also offer as discoverable inserts.
 const NE_COMMANDS = [
+  // Callout inserts — GitHub Flavored Markdown alert syntax.
+  // Rendered with styled colored boxes in the live preview.
+  { group: 'Hinweise', icon: '💬', label: 'Quote',     match: ['quote','zitat'],
+    insert: '> ', cursorOffset: 0 },
+  { group: 'Hinweise', icon: '💡', label: 'Tip',       match: ['tip','tipp'],
+    insert: '> [!TIP]\n> ', cursorOffset: 0 },
+  { group: 'Hinweise', icon: '⚠️', label: 'Warning',   match: ['warning','warnung'],
+    insert: '> [!WARNING]\n> ', cursorOffset: 0 },
+  { group: 'Hinweise', icon: 'ℹ️', label: 'Note',      match: ['note','hinweis','info'],
+    insert: '> [!NOTE]\n> ', cursorOffset: 0 },
+  { group: 'Hinweise', icon: '❗', label: 'Important', match: ['important','wichtig'],
+    insert: '> [!IMPORTANT]\n> ', cursorOffset: 0 },
+  { group: 'Hinweise', icon: '🔥', label: 'Caution',   match: ['caution','vorsicht'],
+    insert: '> [!CAUTION]\n> ', cursorOffset: 0 },
+  // AI assists below
   { group: 'AI',      icon: '✨', label: 'Zusammenfassen',       match: ['summarize','tldr','zusammenfassen','summary'], ai: 'summarize', mode: 'append' },
   { group: 'AI',      icon: '✍',  label: 'Weiterschreiben',       match: ['continue','weiterschreiben','weiter'], ai: 'continue', mode: 'insert' },
   { group: 'AI',      icon: '📝', label: 'Sprache verbessern',     match: ['improve','verbessern','correct','grammar'], ai: 'improve', mode: 'replace_selection_or_all' },
@@ -5846,7 +5908,7 @@ function renderCommandMenu(ta, menu, keepPosition) {
     // Group items by group, render in order
     const groups = {};
     items.forEach(it => { (groups[it.group] = groups[it.group] || []).push(it); });
-    const order = ['AI'];
+    const order = ['Hinweise', 'AI'];
     let html = '';
     let globalIdx = 0;
     for (const g of order) {
