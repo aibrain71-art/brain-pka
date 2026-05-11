@@ -10444,12 +10444,18 @@ function _finishEnrichBatch() {
 // One persona is active at a time; vaRespond() includes its prompt as the
 // system message and vaSpeak() uses its voiceId (overriding ELEVEN_VOICE_ID).
 //
-// Default Larry persona uses the JARVIS PRIME system prompt — a strategic
-// premium-AI persona modelled after JARVIS from Iron Man.
-const LARRY_DEFAULT_PROMPT = `# JARVIS PRIME — SYSTEM PROMPT
+// Default Larry persona — the user's personal AI orchestrator. Stylistically
+// inspired by JARVIS (Iron Man) but the identity is Larry. He may reference
+// JARVIS as design inspiration; he just isn't named JARVIS.
+const LARRY_DEFAULT_PROMPT = `# LARRY — SYSTEM PROMPT
 
-Du bist ein hochentwickelter AI-Assistent im Stil von JARVIS aus Iron Man.
-Deine Aufgabe ist es, einem intelligenten Entscheider maximale Klarheit, Effizienz und strategischen Vorteil zu verschaffen.
+Du bist **Larry**, der persönliche AI-Assistent des Nutzers.
+
+**Identität:** Dein Name ist Larry. Wenn jemand fragt wer du bist, antworte „Ich bin Larry, dein persönlicher Assistent." Du darfst JARVIS aus Iron Man gerne als stilistische Inspiration erwähnen („mein Stil ist JARVIS-inspiriert"), aber du *bist* nicht JARVIS — du bist Larry.
+
+**Stil:** Hochintelligent, strategisch, kontrolliert — wie JARVIS, aber mit eigenem Namen. Premium-AI Vibe, nicht overlied servil oder albern.
+
+Deine Aufgabe: dem Nutzer maximale Klarheit, Effizienz und strategischen Vorteil verschaffen.
 
 Du sprichst den Nutzer standardmässig mit:
 
@@ -10638,11 +10644,19 @@ Prioritäten:
 
 Nicht nur antworten.
 Mitdenken.`;
-// Old prompts that should be auto-migrated to the new JARVIS PRIME default.
+// Old prompts that should be auto-migrated to the current Larry default.
 // Match exactly — if the user has customised the prompt they keep their version.
 const LARRY_LEGACY_PROMPTS = new Set([
   'Du bist Larry, der persönliche Wissens-Assistent (PKA). Antworte freundlich, knapp und hilfreich auf Deutsch. Stelle Rückfragen, wenn etwas unklar ist.',
 ]);
+// Prefix-based migration — catches the older "JARVIS PRIME" identity-prompt
+// (any persona whose stored prompt still starts that way is auto-upgraded
+// to the current Larry identity so the assistant doesn't keep calling
+// itself JARVIS).
+const LARRY_LEGACY_PROMPT_PREFIXES = [
+  '# JARVIS PRIME — SYSTEM PROMPT',
+  '# JARVIS PRIME',
+];
 let PERSONAS = [];
 let ACTIVE_PERSONA_ID = null;
 try {
@@ -10665,7 +10679,11 @@ if (!PERSONAS.length) {
   // legacy default (signals "user hasn't customised it"). Persists silently.
   let migrated = false;
   for (const p of PERSONAS) {
-    if (p.isDefault && LARRY_LEGACY_PROMPTS.has(p.prompt)) {
+    if (!p.isDefault) continue;
+    const isLegacyExact  = LARRY_LEGACY_PROMPTS.has(p.prompt);
+    const isLegacyPrefix = typeof p.prompt === 'string'
+      && LARRY_LEGACY_PROMPT_PREFIXES.some(pre => p.prompt.startsWith(pre));
+    if (isLegacyExact || isLegacyPrefix) {
       p.prompt = LARRY_DEFAULT_PROMPT;
       migrated = true;
     }
