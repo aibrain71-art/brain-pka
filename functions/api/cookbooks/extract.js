@@ -16,7 +16,13 @@ import { loadCookbookB64 } from '../../_lib/pdf-chunks.js';
 // not the rest of the API surface (blood-pressure, chat, etc.).
 
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
-const PAGES_PER_CHUNK = 95;  // Anthropic limit is 100; leave safety margin
+// PDF-page chunk size for extraction. Smaller chunks = more API
+// calls but FEWER recipes lost to max_tokens truncation. Claude
+// haiku-4-5 can output ~25-30 recipes worth of JSON in one 16k-token
+// response. So 40 pages per chunk (typically ~30-50 recipes per
+// chunk in a military cookbook) is a sweet spot. Anthropic's per-PDF
+// limit is 100 pages, so we stay well under.
+const PAGES_PER_CHUNK = 40;
 
 // Decode base64 → Uint8Array (Workers don't have Buffer)
 function b64ToBytes(b64) {
@@ -160,7 +166,17 @@ WICHTIGE REGELN — SEI INKLUSIV, lieber zu viele als zu wenige Rezepte:
 - Wenn das Dokument KEINE Rezepte enthält oder unleserlich ist: leeres Array [] zurückgeben.
 - Antwort startet mit [ und endet mit ]. Sonst NICHTS.
 
-PRÄZISIONS-CHECK: Wenn du fertig bist, gehe MENTAL nochmal alle Seiten durch und prüfe ob du irgendein Rezept ausgelassen hast. Schweizer Militärküchen-Klassiker wie Dörrbohnen, Älplermagronen, Berner Platte, Riz Casimir dürfen NICHT fehlen.`;
+TOKEN-SPARSAMKEIT (KRITISCH bei vielen Rezepten):
+- HALTE preview KURZ (max 80 Zeichen, 1 Satz).
+- HALTE detailed KURZ (max 200 Zeichen, 1-2 Sätze).
+- equipment[] nur essentielles (max 3 Einträge).
+- tags[] max 3.
+- notes weglassen falls leer.
+Ziel: jedes Rezept ~300-400 Tokens damit max ${maxRecipes} Rezepte in eine Antwort passen.
+
+PRÄZISIONS-CHECK: Wenn du fertig bist, gehe MENTAL nochmal alle Seiten durch und prüfe ob du irgendein Rezept ausgelassen hast. Schweizer Militärküchen-Klassiker wie Dörrbohnen, Älplermagronen, Berner Platte, Riz Casimir dürfen NICHT fehlen.
+
+LIEBER UNVOLLSTÄNDIG als FEHLEND: wenn deine Antwort an die max_tokens-Grenze stösst, KÜRZE Felder (preview/detailed/notes), aber gib LIEBER mehr Rezepte mit weniger Detail als wenige Rezepte mit viel Detail.`;
 
   // Process the requested chunk range (default: chunks startChunk
   // through startChunk+maxChunks-1). Cloudflare Pages free tier has a
