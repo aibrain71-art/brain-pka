@@ -4275,10 +4275,24 @@ async function vaRunSelfTest() {
   }
   log('');
 
-  // ─── 1b. Live audio capture test (3s) ───────────────────────
+  // ─── 1b. Live audio capture test (3s with visible level bar) ─
   if (micPermissionOK && navigator.mediaDevices?.getUserMedia) {
     log('⏺ Audio-Capture-Test läuft (3 Sek) — sprich JETZT laut!');
     print();
+    // Inject a visible live bar UNDER the output pre so the user sees the
+    // mic level in real time during the 3-second test. Bar moves with the
+    // user's voice = mic captures audio. Bar static = mic silent.
+    const out = document.getElementById('selftest-output');
+    const barWrap = document.createElement('div');
+    barWrap.id = 'selftest-mic-bar';
+    barWrap.style.cssText = 'margin:8px 0;padding:10px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px';
+    barWrap.innerHTML = `
+      <div style="font-size:11px;color:var(--text-2);margin-bottom:6px">🎤 Live Pegelmesser — sollte sich bei deiner Stimme bewegen:</div>
+      <div style="height:14px;background:var(--surface-3);border-radius:7px;overflow:hidden;border:1px solid var(--border-2)">
+        <div id="selftest-mic-fill" style="width:0%;height:100%;background:linear-gradient(90deg,var(--success) 0%,var(--accent) 60%,#fbbf24 90%,var(--error) 100%);transition:width 0.08s linear"></div>
+      </div>`;
+    out.after(barWrap);
+    const fill = document.getElementById('selftest-mic-fill');
     let stream, ctx;
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -4288,6 +4302,7 @@ async function vaRunSelfTest() {
       const src = ctx.createMediaStreamSource(stream);
       const an = ctx.createAnalyser();
       an.fftSize = 256;
+      an.smoothingTimeConstant = 0.3;
       src.connect(an);
       const buf = new Uint8Array(an.frequencyBinCount);
       const samples = [];
@@ -4296,12 +4311,15 @@ async function vaRunSelfTest() {
         an.getByteFrequencyData(buf);
         let sum = 0;
         for (let i = 0; i < buf.length; i++) sum += buf[i];
-        samples.push(sum / buf.length);
+        const avg = sum / buf.length;
+        samples.push(avg);
+        const pct = Math.min(100, Math.pow(avg / 200, 0.7) * 110);
+        if (fill) fill.style.width = pct + '%';
         await new Promise(r => setTimeout(r, 50));
       }
       stream.getTracks().forEach(t => t.stop());
       try { await ctx.close(); } catch(_) {}
-      // Remove the "läuft" line and replace with result
+      // Keep the bar visible after the test so the user sees the last state
       lines.pop();
       const max = Math.max(...samples);
       const avg = samples.reduce((a, b) => a + b, 0) / samples.length;
@@ -4320,6 +4338,8 @@ async function vaRunSelfTest() {
       if (ctx) { try { await ctx.close(); } catch(_) {} }
       lines.pop();
       log('✗ Audio-Capture konnte nicht starten: ' + (e?.name || e?.message || e));
+      // Remove the bar since the test couldn't run
+      barWrap.remove();
     }
     log('');
   }
