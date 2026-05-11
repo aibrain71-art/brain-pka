@@ -292,6 +292,10 @@ WICHTIGE REGELN:
     const slug = slugify(r.title) + '-' + Date.now().toString(36) + '-' + Math.floor(Math.random()*1000);
     const tags = Array.isArray(r.topics) ? r.topics.join(',') : '';
 
+    // Try the full INSERT first (with the new cookbook_id/cookbook_page/
+    // servings_base columns from schema-cookbook-shopping.sql). If those
+    // columns don't exist yet (schema not migrated), fall back to the
+    // legacy INSERT that stores cookbook info only in source_meta JSON.
     try {
       const ins = await env.DB.prepare(
         'INSERT INTO notes (slug, title, body, note_type, related_topics, source_meta, garden_type, cookbook_id, cookbook_page, servings_base) ' +
@@ -303,7 +307,25 @@ WICHTIGE REGELN:
       ).run();
       insertedIds.push(ins.meta?.last_row_id);
     } catch (e) {
-      errors.push({ title: r.title, reason: e.message || String(e) });
+      const msg = String(e.message || e);
+      // Fall back to legacy schema (no cookbook_id column)
+      if (msg.includes('no such column') || msg.includes('has no column')) {
+        try {
+          const ins2 = await env.DB.prepare(
+            'INSERT INTO notes (slug, title, body, note_type, related_topics, source_meta, garden_type) ' +
+            'VALUES (?, ?, ?, ?, ?, ?, ?)'
+          ).bind(
+            slug + '-' + Math.floor(Math.random()*10000),  // make slug unique on retry
+            r.title, bodyText, 'recipe', tags,
+            JSON.stringify(meta), 'Recipe'
+          ).run();
+          insertedIds.push(ins2.meta?.last_row_id);
+        } catch (e2) {
+          errors.push({ title: r.title, reason: 'legacy: ' + (e2.message || e2) });
+        }
+      } else {
+        errors.push({ title: r.title, reason: msg });
+      }
     }
   }
 

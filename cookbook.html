@@ -1712,47 +1712,142 @@ async function onImportCookbookUrl() {
   }
 }
 
-async function importRecipesFromBook(id) {
+async function importRecipesFromBook(id, opts = {}) {
+  const dryRun = opts.dryRun === true;
   const t = document.createElement('div');
   t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:9999;background:var(--surface-2);color:var(--text);border:1px solid var(--border);padding:14px 20px;border-radius:10px;font-size:13px;max-width:90vw';
-  t.innerHTML = '🧠 Claude liest das PDF in Chunks à 95 Seiten…';
+  t.innerHTML = dryRun ? '🔍 Dry-Run: Claude analysiert ohne Speichern…' : '🧠 Claude liest das PDF in Chunks à 95 Seiten…';
   document.body.appendChild(t);
 
-  let totalInserted = 0, totalErrors = 0, chunksDone = 0, totalChunks = null;
+  // Capture detailed diagnostics for the result modal
+  const diag = {
+    cookbook_id: id,
+    cookbook_title: '',
+    total_chunks: null,
+    chunks_processed: 0,
+    total_extracted: 0,
+    total_inserted: 0,
+    chunk_results: [],
+    insert_errors: [],
+    api_error: null,
+    dry_run: dryRun,
+  };
+
   let next = 0;
-  let cookbookTitle = '';
-  // Up to 20 iterations as a safety cap (covers 1900-page books)
   for (let iter = 0; iter < 20 && next != null; iter++) {
-    t.innerHTML = `🧠 Chunk ${chunksDone + 1}${totalChunks ? '/' + totalChunks : ''} wird analysiert…`;
+    t.innerHTML = `🧠 Chunk ${diag.chunks_processed + 1}${diag.total_chunks ? '/' + diag.total_chunks : ''} wird analysiert…`;
     try {
       const r = await fetch('/api/cookbooks/extract?id=' + id, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ max_recipes: 200, start_chunk: next, max_chunks: 1 }),
+        body: JSON.stringify({ max_recipes: 200, start_chunk: next, max_chunks: 1, dry_run: dryRun }),
       });
       const data = await r.json();
-      if (!r.ok) throw new Error(data.error || 'HTTP ' + r.status);
-      totalInserted += data.inserted || 0;
-      totalErrors  += (data.errors?.length || 0);
-      chunksDone   += (data.processed_chunks || 1);
-      totalChunks  = data.total_chunks || totalChunks;
-      cookbookTitle = data.cookbook_title || cookbookTitle;
-      next = data.next_chunk;  // null when done
+      if (!r.ok) {
+        diag.api_error = `Chunk ${diag.chunks_processed + 1}: ${data.error || 'HTTP ' + r.status}`;
+        if (data.raw) diag.api_error += '\n\nClaude raw output:\n' + data.raw;
+        break;
+      }
+      diag.total_inserted += data.inserted || 0;
+      diag.total_extracted += data.extracted || 0;
+      diag.insert_errors.push(...(data.errors || []));
+      diag.chunks_processed += (data.processed_chunks || 1);
+      diag.total_chunks = data.total_chunks || diag.total_chunks;
+      diag.cookbook_title = data.cookbook_title || diag.cookbook_title || data.recipes?.[0]?.title || '';
+      diag.chunk_results.push(...(data.chunk_results || []));
+      next = data.next_chunk;
     } catch (e) {
-      t.style.background = '#3a1f1f'; t.style.borderColor = '#5b2a2a';
-      t.innerHTML = '⚠️ Fehler bei Chunk ' + (chunksDone + 1) + ': ' + escapeHtml(e?.message || e) +
-                    '<br><span style="font-size:11px">Bis hier importiert: ' + totalInserted + ' Rezepte.</span>';
-      setTimeout(() => t.remove(), 12000);
-      return;
+      diag.api_error = `Chunk ${diag.chunks_processed + 1}: ${e?.message || e}`;
+      break;
     }
     if (next == null) break;
   }
 
-  t.style.background = '#1f3a25'; t.style.borderColor = '#2a5b34';
-  t.innerHTML = `✓ <strong>${totalInserted}</strong> Rezepte aus „${escapeHtml(cookbookTitle)}" importiert ` +
-                `(${chunksDone}/${totalChunks || chunksDone} Chunks)` +
-                (totalErrors ? `, ${totalErrors} übersprungen` : '') +
-                `.<br><span style="font-size:11px;color:var(--text-2)">Im Tab „Rezepte" verfügbar — alle mit Skalierungs-Slider.</span>`;
-  setTimeout(() => t.remove(), 10000);
+  // Persist for inspection in DevTools and the result modal
+  window._lastExtract = diag;
+  try { localStorage.setItem('lastExtract', JSON.stringify(diag)); } catch(_) {}
+
+  // Build a clear result toast — sticky until user dismisses
+  const ok = diag.total_inserted > 0 || (dryRun && diag.total_extracted > 0);
+  t.style.background = ok ? '#1f3a25' : '#3a1f1f';
+  t.style.borderColor = ok ? '#2a5b34' : '#5b2a2a';
+  const summaryHtml = dryRun
+    ? `🔍 Dry-Run: <strong>${diag.total_extracted}</strong> Rezepte erkannt aus ${diag.chunks_processed}/${diag.total_chunks || '?'} Chunks. Nichts gespeichert.`
+    : (diag.total_inserted > 0
+        ? `✓ <strong>${diag.total_inserted}</strong> Rezepte importiert (${diag.chunks_processed}/${diag.total_chunks || '?'} Chunks${diag.insert_errors.length ? `, ${diag.insert_errors.length} Insert-Fehler` : ''}).`
+        : `⚠️ <strong>0</strong> Rezepte importiert. ${diag.api_error ? 'API: ' + escapeHtml(diag.api_error.slice(0, 80)) : 'Claude hat nichts erkannt oder Insert-Fehler.'}`);
+  t.innerHTML = summaryHtml +
+    `<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
+       <button onclick="showExtractDetails()" style="background:var(--accent);color:#0c1015;border:0;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600">📋 Details</button>
+       <button onclick="this.closest('div').remove()" style="background:transparent;color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:6px;cursor:pointer;font-size:11px">Schliessen</button>
+     </div>`;
+  // No auto-remove — user dismisses manually so they can read it
+}
+
+// Detailed extract-result modal — shown when user clicks "📋 Details"
+function showExtractDetails() {
+  const d = window._lastExtract;
+  if (!d) { alert('Keine Extract-Daten verfügbar.'); return; }
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:10010;display:flex;align-items:center;justify-content:center;padding:20px';
+  const m = document.createElement('div');
+  m.style.cssText = 'background:var(--surface);border:1px solid var(--border);border-radius:10px;max-width:720px;width:100%;max-height:85vh;overflow:auto;padding:22px';
+  const errList = d.insert_errors?.length
+    ? '<div style="margin-top:10px"><strong>Insert-Fehler:</strong><ul style="font-size:11px;margin:6px 0;padding-left:18px;color:#ef4444">' +
+        d.insert_errors.slice(0, 20).map(e => `<li>${escapeHtml(e.title || '?')}: ${escapeHtml(e.reason || '')}</li>`).join('') +
+      (d.insert_errors.length > 20 ? `<li>…und ${d.insert_errors.length - 20} weitere</li>` : '') +
+      '</ul></div>'
+    : '';
+  const chunkList = d.chunk_results?.length
+    ? '<div style="margin-top:10px"><strong>Per Chunk:</strong><ul style="font-size:11px;margin:6px 0;padding-left:18px;color:var(--text-2)">' +
+        d.chunk_results.map(c => `<li>Chunk ${c.chunk}: ${c.pages || ''}${c.error ? ' — ⚠️ ' + escapeHtml(c.error) : ' — ' + (c.recipes_found || 0) + ' erkannt'}</li>`).join('') +
+      '</ul></div>'
+    : '';
+  m.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <h3 style="margin:0;font-family:'Playfair Display',Georgia,serif;font-size:18px">📋 Extract-Diagnose</h3>
+      <button onclick="this.closest('div[style*=\\"position:fixed\\"]').remove()" style="background:transparent;border:0;color:var(--text-2);font-size:22px;cursor:pointer">✕</button>
+    </div>
+    <div style="font-size:13px;line-height:1.6">
+      <div><strong>Kochbuch:</strong> ${escapeHtml(d.cookbook_title || '?')} (ID ${d.cookbook_id})</div>
+      <div><strong>Mode:</strong> ${d.dry_run ? '🔍 Dry-Run (nichts gespeichert)' : '💾 Live-Import'}</div>
+      <div><strong>Chunks verarbeitet:</strong> ${d.chunks_processed} / ${d.total_chunks || '?'}</div>
+      <div><strong>Rezepte erkannt:</strong> ${d.total_extracted}</div>
+      <div><strong>Rezepte importiert:</strong> ${d.total_inserted}</div>
+      <div><strong>Insert-Fehler:</strong> ${d.insert_errors?.length || 0}</div>
+      ${d.api_error ? `<div style="color:#ef4444;margin-top:10px"><strong>API-Fehler:</strong><pre style="background:var(--surface-2);padding:10px;border-radius:6px;font-size:11px;white-space:pre-wrap;margin-top:4px">${escapeHtml(d.api_error)}</pre></div>` : ''}
+      ${chunkList}
+      ${errList}
+    </div>
+    <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
+      <button onclick="importRecipesFromBook(${d.cookbook_id}, { dryRun: true }); this.closest('div[style*=\\"position:fixed\\"]').remove()" style="background:var(--accent);color:#0c1015;border:0;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:600;font-size:12px">🔍 Nochmal Dry-Run</button>
+      <button onclick="checkRecipeCountInDB(${d.cookbook_id})" style="background:transparent;color:var(--text);border:1px solid var(--border);padding:8px 14px;border-radius:6px;cursor:pointer;font-size:12px">🔢 Wieviele in DB?</button>
+      <button onclick="this.closest('div[style*=\\"position:fixed\\"]').remove()" style="background:transparent;color:var(--text);border:1px solid var(--border);padding:8px 14px;border-radius:6px;cursor:pointer;font-size:12px">Schliessen</button>
+    </div>
+  `;
+  ov.appendChild(m);
+  document.body.appendChild(ov);
+}
+
+// Quick DB sanity check: how many recipes does /api/recipes return?
+async function checkRecipeCountInDB(cookbookId) {
+  try {
+    const r = await fetch('/api/recipes');
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'HTTP ' + r.status);
+    const recipes = data.recipes || [];
+    const total = recipes.length;
+    // Try to count recipes from this specific cookbook (via source_meta.cookbook_id)
+    let fromThisBook = 0;
+    for (const r of recipes) {
+      const meta = (() => { try { return r.recipe ? r : null; } catch (_) { return null; } })();
+      // The recipes endpoint returns recipe data already parsed — check source_meta
+      // for cookbook_id. The list view doesn't include source_meta by default, so
+      // we get an approximation here.
+    }
+    alert(`Aktuell in DB: ${total} Rezepte (gesamt, alle Kochbücher).\n\nÖffne den Tab "Rezepte" für die Liste.`);
+  } catch (e) {
+    alert('Fehler: ' + (e?.message || e));
+  }
 }
 
 // ── Shopping list ───────────────────────────────────────────────
