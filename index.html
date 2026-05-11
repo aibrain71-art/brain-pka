@@ -1043,6 +1043,31 @@ body:has(#sidebar:not(.collapsed)) .list-subtitle .ls-count::after  { content: "
   .ne-body.show-preview .ne-preview { display: block; border-top: 1px solid var(--border); border-right: 0; }
 }
 
+/* Command menu (triggered by typing "<" in the editor) */
+.ne-cmd-menu {
+  position: fixed; z-index: 10000;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: 0 8px 28px rgba(0,0,0,.55);
+  min-width: 260px; max-width: 380px; max-height: 340px; overflow-y: auto;
+  padding: 6px 0; display: none;
+}
+.ne-cmd-menu.open { display: block; }
+.ne-cmd-group {
+  font-size: 10px; letter-spacing: 1.4px; text-transform: uppercase;
+  color: var(--text-2); padding: 8px 12px 4px 12px;
+}
+.ne-cmd-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 12px; cursor: pointer; color: var(--text);
+  font-size: 13px;
+}
+.ne-cmd-item.selected, .ne-cmd-item:hover { background: var(--surface-2); }
+.ne-cmd-icon { width: 22px; text-align: center; font-size: 14px; flex-shrink: 0; }
+.ne-cmd-label { flex: 1; }
+.ne-cmd-hint { font-size: 11px; color: var(--text-2); }
+.ne-cmd-empty { padding: 12px; color: var(--text-2); font-style: italic; font-size: 12px; }
+.ne-cmd-ai .ne-cmd-icon { color: #c4831e; }
+
 .add-dropzone {
   margin-top: 18px;
   border: 2px dashed var(--border);
@@ -5606,6 +5631,9 @@ function wireNoteEditor() {
     }
   });
 
+  // < command menu
+  wireNoteCommandMenu(ta);
+
   // initial render
   render();
 }
@@ -5728,6 +5756,325 @@ function mdRender(src) {
     return '<p>' + block.replace(/\n/g, '<br>') + '</p>';
   }).join('\n');
   return s;
+}
+
+// ── < command menu (Logseq-style with AI assists) ─────────────
+// Catalogue: each entry has a `match` keyword(s), label, optional icon,
+// and either `insert` (static text inserted at cursor) or `ai` (calls
+// /api/note-assist with that action). Built-ins first, AI block below.
+const NE_COMMANDS = [
+  // Formatting
+  { group: 'Format',  icon: 'H1', label: 'Heading 1',          match: ['h1','heading 1','title'],    insert: '# ' },
+  { group: 'Format',  icon: 'H2', label: 'Heading 2',          match: ['h2','heading 2'],            insert: '## ' },
+  { group: 'Format',  icon: 'H3', label: 'Heading 3',          match: ['h3','heading 3'],            insert: '### ' },
+  { group: 'Format',  icon: '•',  label: 'Bullet-Liste',        match: ['bullet','liste','-'],        insert: '- ' },
+  { group: 'Format',  icon: '1.', label: 'Nummerierte Liste',   match: ['number','numbered','1.'],    insert: '1. ' },
+  { group: 'Format',  icon: '☐',  label: 'TODO',                match: ['todo','aufgabe'],            insert: '- [ ] ' },
+  { group: 'Format',  icon: '⏳',  label: 'TODO LATER',           match: ['later','spaeter','später'], insert: '- [ ] LATER ' },
+  { group: 'Format',  icon: '⚡',  label: 'TODO NOW',              match: ['now','jetzt'],               insert: '- [ ] NOW ' },
+  { group: 'Format',  icon: '🔄',  label: 'TODO DOING',           match: ['doing','dran'],             insert: '- [ ] DOING ' },
+  { group: 'Format',  icon: '✅',  label: 'DONE',                  match: ['done','erledigt'],          insert: '- [x] ' },
+  { group: 'Format',  icon: '»',  label: 'Zitat',               match: ['quote','zitat'],            insert: '> ' },
+  { group: 'Format',  icon: '⌨',  label: 'Code-Block',          match: ['code','codeblock'],          insert: '```\n\n```', cursorOffset: 4 },
+  { group: 'Format',  icon: '―',  label: 'Trennlinie',          match: ['hr','trenner','divider'],   insert: '\n---\n' },
+  // Date / time
+  { group: 'Datum',   icon: '📅', label: 'Heute',                match: ['heute','today','date'],     insertFn: () => new Date().toISOString().slice(0,10) },
+  { group: 'Datum',   icon: '📅', label: 'Morgen',               match: ['morgen','tomorrow'],        insertFn: () => { const d=new Date(); d.setDate(d.getDate()+1); return d.toISOString().slice(0,10); } },
+  { group: 'Datum',   icon: '🕐', label: 'Aktuelle Zeit',        match: ['zeit','time','jetzt now'],  insertFn: () => new Date().toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' }) },
+  { group: 'Datum',   icon: '📆', label: 'Heute als [[YYYY-MM-DD]]', match: ['ref date','datum ref'], insertFn: () => '[[' + new Date().toISOString().slice(0,10) + ']]' },
+  // Refs / tags
+  { group: 'Refs',    icon: '🔗', label: 'Wiki-Referenz [[…]]',    match: ['ref','page','wiki','link page'], insert: '[[]]', cursorOffset: -2 },
+  { group: 'Refs',    icon: '🏷',  label: 'Tag #…',                 match: ['tag','schlagwort'],           insert: '#', cursorOffset: 0 },
+  { group: 'Refs',    icon: '🌐', label: 'Markdown-Link',          match: ['mdlink','external link'],     insert: '[Text](https://)', cursorOffset: -10 },
+  // Blocks
+  { group: 'Blöcke',  icon: '🧮', label: 'Tabelle 3×2',          match: ['table','tabelle'],          insert: '\n| Spalte 1 | Spalte 2 | Spalte 3 |\n|----------|----------|----------|\n|          |          |          |\n' },
+  { group: 'Blöcke',  icon: '📐', label: 'Mermaid-Diagramm',      match: ['mermaid','diagramm','diagram'], insert: '\n```mermaid\ngraph TD\n  A[Start] --> B[Ende]\n```\n' },
+  { group: 'Blöcke',  icon: 'Σ',  label: 'Mathe-Block',           match: ['math','mathe','formula'],    insert: '\n$$\n\n$$\n', cursorOffset: 4 },
+  // AI assists
+  { group: 'AI',      icon: '✨', label: 'Zusammenfassen',       match: ['summarize','tldr','zusammenfassen','summary'], ai: 'summarize', mode: 'append' },
+  { group: 'AI',      icon: '✍',  label: 'Weiterschreiben',       match: ['continue','weiterschreiben','weiter'], ai: 'continue', mode: 'insert' },
+  { group: 'AI',      icon: '📝', label: 'Sprache verbessern',     match: ['improve','verbessern','correct','grammar'], ai: 'improve', mode: 'replace_selection_or_all' },
+  { group: 'AI',      icon: '🌍', label: 'Übersetzen…',           match: ['translate','uebersetzen','übersetzen'], ai: 'translate', mode: 'replace_selection_or_all', askLanguage: true },
+  { group: 'AI',      icon: '🔍', label: 'Bullet ausarbeiten',    match: ['expand','ausarbeiten','elaborate'], ai: 'expand', mode: 'replace_selection_or_line' },
+  { group: 'AI',      icon: '📋', label: 'In Outline umwandeln',  match: ['outline','gliederung'], ai: 'outline', mode: 'append' },
+  { group: 'AI',      icon: '💡', label: 'Ideen generieren',      match: ['ideas','ideen','brainstorm'], ai: 'ideas', mode: 'append', askPrompt: 'Thema (leer = aus Notiz)' },
+  { group: 'AI',      icon: '🎯', label: 'Titel vorschlagen',     match: ['title','titel'], ai: 'title', mode: 'set_title' },
+  { group: 'AI',      icon: '🔄', label: 'Umformulieren…',         match: ['rewrite','umformulieren'], ai: 'rewrite', mode: 'replace_selection_or_all', askPrompt: 'Stil (z.B. "förmlicher", "einfacher")' },
+];
+
+let _NE_CMD_STATE = { open: false, triggerPos: -1, query: '', filtered: [], selectedIdx: 0 };
+
+function wireNoteCommandMenu(ta) {
+  const menu = document.getElementById('ne-cmd-menu');
+  if (!menu) return;
+
+  // Detect typing of "<" to open menu
+  ta.addEventListener('input', () => {
+    const pos = ta.selectionStart;
+    const upto = ta.value.slice(0, pos);
+    // Find the most recent "<" since whitespace/newline
+    const m = upto.match(/<([\w \-äöüÄÖÜ]*)$/);
+    if (m) {
+      _NE_CMD_STATE.open = true;
+      _NE_CMD_STATE.triggerPos = pos - m[0].length;  // position of "<"
+      _NE_CMD_STATE.query = m[1].toLowerCase();
+      renderCommandMenu(ta, menu);
+    } else if (_NE_CMD_STATE.open) {
+      closeCommandMenu(menu);
+    }
+  });
+
+  ta.addEventListener('keydown', (e) => {
+    if (!_NE_CMD_STATE.open) return;
+    const items = _NE_CMD_STATE.filtered;
+    if (!items.length) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      _NE_CMD_STATE.selectedIdx = (_NE_CMD_STATE.selectedIdx + 1) % items.length;
+      renderCommandMenu(ta, menu, true);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      _NE_CMD_STATE.selectedIdx = (_NE_CMD_STATE.selectedIdx - 1 + items.length) % items.length;
+      renderCommandMenu(ta, menu, true);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      executeCommand(ta, items[_NE_CMD_STATE.selectedIdx]);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      closeCommandMenu(menu);
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      executeCommand(ta, items[_NE_CMD_STATE.selectedIdx]);
+    }
+  });
+
+  // Click outside menu closes it
+  document.addEventListener('mousedown', (e) => {
+    if (_NE_CMD_STATE.open && !menu.contains(e.target) && e.target !== ta) {
+      closeCommandMenu(menu);
+    }
+  });
+}
+function closeCommandMenu(menu) {
+  _NE_CMD_STATE = { open: false, triggerPos: -1, query: '', filtered: [], selectedIdx: 0 };
+  menu.classList.remove('open');
+}
+function renderCommandMenu(ta, menu, keepPosition) {
+  const q = _NE_CMD_STATE.query.trim();
+  const items = NE_COMMANDS.filter(c => {
+    if (!q) return true;
+    return c.match.some(m => m.toLowerCase().includes(q)) || c.label.toLowerCase().includes(q);
+  });
+  _NE_CMD_STATE.filtered = items;
+  if (_NE_CMD_STATE.selectedIdx >= items.length) _NE_CMD_STATE.selectedIdx = 0;
+
+  if (!items.length) {
+    menu.innerHTML = '<div class="ne-cmd-empty">Keine passenden Befehle für „' + (q || '<>') + '"</div>';
+  } else {
+    // Group items by group, render in order
+    const groups = {};
+    items.forEach(it => { (groups[it.group] = groups[it.group] || []).push(it); });
+    const order = ['Format','Datum','Refs','Blöcke','AI'];
+    let html = '';
+    let globalIdx = 0;
+    for (const g of order) {
+      const its = groups[g];
+      if (!its) continue;
+      html += '<div class="ne-cmd-group">' + g + '</div>';
+      for (const it of its) {
+        const sel = (globalIdx === _NE_CMD_STATE.selectedIdx) ? ' selected' : '';
+        const aiCls = it.ai ? ' ne-cmd-ai' : '';
+        const hintHtml = it.ai ? '<span class="ne-cmd-hint">AI</span>' : '';
+        html += `<div class="ne-cmd-item${sel}${aiCls}" data-idx="${globalIdx}">
+                   <span class="ne-cmd-icon">${it.icon}</span>
+                   <span class="ne-cmd-label">${escapeHtml ? escapeHtml(it.label) : it.label}</span>
+                   ${hintHtml}
+                 </div>`;
+        globalIdx++;
+      }
+    }
+    menu.innerHTML = html;
+    // Wire click handlers
+    menu.querySelectorAll('.ne-cmd-item').forEach(el => {
+      el.addEventListener('mousedown', (e) => {
+        e.preventDefault();  // keep textarea focus
+        const idx = parseInt(el.dataset.idx, 10);
+        executeCommand(ta, items[idx]);
+      });
+    });
+    // Scroll selected into view
+    const selEl = menu.querySelector('.ne-cmd-item.selected');
+    if (selEl) selEl.scrollIntoView({ block: 'nearest' });
+  }
+  menu.classList.add('open');
+
+  // Position menu near the caret. Use a mirror div trick to get the
+  // x/y pixel coordinates of the current caret in the textarea.
+  if (!keepPosition) {
+    positionCmdMenu(ta, menu);
+  }
+}
+function positionCmdMenu(ta, menu) {
+  const rect = ta.getBoundingClientRect();
+  const cs = getComputedStyle(ta);
+  const mirror = document.createElement('div');
+  ['font','padding','border','letterSpacing','textTransform'].forEach(p => mirror.style[p] = cs[p]);
+  mirror.style.position = 'fixed';
+  mirror.style.top = rect.top + 'px';
+  mirror.style.left = rect.left + 'px';
+  mirror.style.width = rect.width + 'px';
+  mirror.style.height = 'auto';
+  mirror.style.minHeight = rect.height + 'px';
+  mirror.style.visibility = 'hidden';
+  mirror.style.overflow = 'hidden';
+  mirror.style.whiteSpace = 'pre-wrap';
+  mirror.style.wordBreak = 'break-word';
+  mirror.style.boxSizing = cs.boxSizing;
+  const before = ta.value.slice(0, ta.selectionStart);
+  mirror.textContent = before;
+  const span = document.createElement('span');
+  span.textContent = '​';
+  mirror.appendChild(span);
+  document.body.appendChild(mirror);
+  const spanRect = span.getBoundingClientRect();
+  document.body.removeChild(mirror);
+  let x = spanRect.left;
+  let y = spanRect.top + parseFloat(cs.lineHeight || 20);
+  // Clamp inside viewport
+  const menuW = 320, menuH = Math.min(menu.scrollHeight, 340);
+  if (x + menuW > window.innerWidth - 8)  x = window.innerWidth - menuW - 8;
+  if (y + menuH > window.innerHeight - 8) y = spanRect.top - menuH - 4;
+  // Account for textarea scroll
+  y -= ta.scrollTop;
+  menu.style.left = Math.max(8, x) + 'px';
+  menu.style.top  = Math.max(8, y) + 'px';
+}
+
+async function executeCommand(ta, cmd) {
+  const menu = document.getElementById('ne-cmd-menu');
+  const triggerPos = _NE_CMD_STATE.triggerPos;
+  const cursorPos = ta.selectionStart;
+  closeCommandMenu(menu);
+
+  if (!cmd) return;
+
+  // Remove the "<query" text so the command can replace it.
+  const before = ta.value.slice(0, triggerPos);
+  const after  = ta.value.slice(cursorPos);
+
+  if (cmd.insert !== undefined || cmd.insertFn) {
+    const txt = cmd.insertFn ? cmd.insertFn() : cmd.insert;
+    ta.value = before + txt + after;
+    // Position cursor — cursorOffset is relative to end of inserted text
+    const offset = (typeof cmd.cursorOffset === 'number') ? cmd.cursorOffset : 0;
+    const newPos = before.length + txt.length + offset;
+    ta.selectionStart = ta.selectionEnd = newPos;
+    ta.focus();
+    ta.dispatchEvent(new Event('input'));
+    return;
+  }
+
+  if (cmd.ai) {
+    await runAICommand(ta, cmd, before, after);
+    return;
+  }
+}
+
+async function runAICommand(ta, cmd, before, after) {
+  // Determine input scope
+  const fullText = before + after;  // text WITHOUT the "<query"
+  const ssStart = ta.selectionStart;
+  const ssEnd = ta.selectionEnd;
+  // Optional prompts for translate/rewrite/ideas
+  let language = null, prompt = null;
+  if (cmd.askLanguage) {
+    language = window.prompt('Zielsprache:', 'Englisch');
+    if (language == null) return;
+  }
+  if (cmd.askPrompt) {
+    prompt = window.prompt(cmd.askPrompt + ':', '');
+    if (prompt == null) return;
+  }
+  // Selection-based actions
+  let selection = null;
+  if (cmd.mode === 'replace_selection_or_all' || cmd.mode === 'replace_selection_or_line') {
+    if (ssEnd > ssStart) {
+      selection = ta.value.slice(ssStart, ssEnd);
+    } else if (cmd.mode === 'replace_selection_or_line') {
+      const lineStart = before.lastIndexOf('\n') + 1;
+      const lineEnd = after.indexOf('\n');
+      selection = ta.value.slice(lineStart, lineEnd >= 0 ? before.length + lineEnd : ta.value.length);
+    } else {
+      selection = fullText;
+    }
+  }
+
+  // Show inline loading marker
+  ta.value = before + '⏳ Larry denkt nach…' + after;
+  ta.selectionStart = ta.selectionEnd = before.length;
+
+  let result;
+  try {
+    const r = await fetch('/api/note-assist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: cmd.ai,
+        text: fullText,
+        selection,
+        language,
+        prompt,
+      }),
+    });
+    const data = await r.json();
+    if (!r.ok || !data.ok) throw new Error(data.error || ('HTTP ' + r.status));
+    result = (data.result || '').trim();
+  } catch (e) {
+    // Restore + show error
+    ta.value = before + after;
+    ta.selectionStart = ta.selectionEnd = before.length;
+    alert('AI fehlgeschlagen: ' + (e?.message || e));
+    return;
+  }
+
+  // Strip the loading marker and insert the result based on mode
+  let newVal, newCursor;
+  if (cmd.mode === 'set_title') {
+    document.getElementById('ne-title').value = result.replace(/^["„'`]|["„""'`]$/g, '');
+    newVal = before + after;
+    newCursor = before.length;
+  } else if (cmd.mode === 'append') {
+    const sep = (before && !before.endsWith('\n')) ? '\n\n' : (before ? '' : '');
+    newVal = before + sep + result + after;
+    newCursor = before.length + sep.length + result.length;
+  } else if (cmd.mode === 'insert') {
+    newVal = before + result + after;
+    newCursor = before.length + result.length;
+  } else if (cmd.mode === 'replace_selection_or_all') {
+    if (selection === fullText) {
+      newVal = result;
+      newCursor = result.length;
+    } else if (selection != null && selection.length) {
+      newVal = ta.value.replace(selection, result);
+      // The textarea was just restored to before+after, so this might
+      // not find the selection. Reconstruct manually:
+      newVal = before + result + after;
+      newCursor = before.length + result.length;
+    } else {
+      newVal = before + result + after;
+      newCursor = before.length + result.length;
+    }
+  } else if (cmd.mode === 'replace_selection_or_line') {
+    newVal = before + result + after;
+    newCursor = before.length + result.length;
+  } else {
+    newVal = before + result + after;
+    newCursor = before.length + result.length;
+  }
+  ta.value = newVal;
+  ta.selectionStart = ta.selectionEnd = newCursor;
+  ta.focus();
+  ta.dispatchEvent(new Event('input'));
 }
 
 async function saveNoteEditor() {
@@ -15454,6 +15801,8 @@ document.addEventListener('dblclick', (e) => {
       <span class="ne-stat" id="ne-stat">0 Zeichen · 0 Wörter</span>
     </div>
     <div class="ne-body">
+      <!-- Slash-style command menu, triggered by typing "<" in the textarea -->
+      <div id="ne-cmd-menu" class="ne-cmd-menu" role="listbox" aria-label="Editor-Befehle"></div>
       <textarea id="ne-textarea" class="ne-textarea"
                 placeholder="Hier tippen…&#10;&#10;# Heading mit #&#10;- Bullets mit -&#10;- [ ] Todos mit - [ ]&#10;**fett**, *kursiv*, `code`&#10;[[Note-Name]] für Verbindungen&#10;#tag für Tags&#10;&#10;Tab zum Einrücken, Shift+Tab zum Ausrücken.&#10;Enter setzt Bullet/Number automatisch fort."
                 spellcheck="true" autocomplete="off" autocapitalize="sentences"></textarea>
