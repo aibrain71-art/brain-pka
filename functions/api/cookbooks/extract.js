@@ -1,14 +1,13 @@
-// Bulk recipe extraction: takes a cookbook (PDF stored in D1), sends
-// the whole PDF to Claude as a `document` attachment, asks for ALL
-// recipes as a JSON array, and inserts each one into the `notes`
-// table with note_type='recipe' + cookbook_id + servings_base.
+// Bulk recipe extraction: takes a cookbook (PDF stored as chunks in
+// cookbook_chunks), reassembles the base64, sends to Claude as a
+// `document` attachment, asks for ALL recipes as a JSON array, and
+// inserts each one into the `notes` table with note_type='recipe'
+// + cookbook_id + servings_base.
 //
 // POST /api/cookbooks/extract?id=N
 // Body: { max_recipes?: number, dry_run?: boolean, locale?: 'de'|'fr' }
-//
-// Cloudflare Workers free tier has a 30s CPU/wall limit on Pages
-// Functions — Claude's PDF analysis usually fits, but very large
-// cookbooks may need chunked extraction in a follow-up.
+
+import { loadCookbookB64 } from '../../_lib/pdf-chunks.js';
 
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
 
@@ -35,12 +34,13 @@ export async function onRequestPost({ env, request }) {
   const maxRecipes = Math.min(Math.max(parseInt(body.max_recipes, 10) || 200, 1), 500);
   const dryRun = body.dry_run === true;
 
-  // Load the cookbook
+  // Load the cookbook metadata + reassemble PDF bytes from chunks
   const book = await env.DB.prepare(
-    'SELECT id, title, source, servings_base, pdf_b64 FROM cookbooks WHERE id = ?'
+    'SELECT id, title, source, servings_base FROM cookbooks WHERE id = ?'
   ).bind(cookbookId).first();
   if (!book) return json({ error: 'Cookbook not found' }, 404);
-  if (!book.pdf_b64) return json({ error: 'Cookbook has no PDF body' }, 400);
+  book.pdf_b64 = await loadCookbookB64(env, cookbookId);
+  if (!book.pdf_b64) return json({ error: 'Cookbook has no PDF body (no chunks)' }, 400);
 
   const baseServings = book.servings_base || 100;
   const sourceLabel = book.source || book.title;

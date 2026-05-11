@@ -1,8 +1,10 @@
 // Cookbook URL import: server-side fetches a PDF from a public URL,
-// converts to base64, and stores in the cookbooks table.
+// converts to base64, and stores in the cookbooks table + chunks.
 //
 // POST /api/cookbooks/import-url
 // Body: { url, title?, source?, servings_base? }
+
+import { saveCookbookChunks } from '../../_lib/pdf-chunks.js';
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -59,20 +61,26 @@ export async function onRequestPost({ env, request }) {
   const slug = slugify(title) + '-' + Date.now().toString(36);
 
   try {
+    // Metadata row first (no pdf_b64 in cookbooks anymore — bytes live
+    // in cookbook_chunks).
     const r = await env.DB.prepare(
-      'INSERT INTO cookbooks (slug, title, author, description, pdf_b64, pdf_size_kb, source, servings_base) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+      'INSERT INTO cookbooks (slug, title, author, description, pdf_size_kb, source, servings_base) VALUES (?, ?, ?, ?, ?, ?, ?)'
     ).bind(
       slug, title,
       body.author || null,
       body.description || null,
-      pdf_b64, pdf_size_kb,
+      pdf_size_kb,
       body.source || null,
       Number.isInteger(body.servings_base) ? body.servings_base : 4,
     ).run();
+    const newId = r.meta?.last_row_id;
+    if (!newId) throw new Error('Could not get inserted cookbook id');
+    const chunkCount = await saveCookbookChunks(env, newId, pdf_b64);
     return json({
       ok: true,
-      id: r.meta?.last_row_id,
+      id: newId,
       slug, title, pdf_size_kb,
+      chunks: chunkCount,
       source_url: url,
     });
   } catch (e) {
