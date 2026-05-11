@@ -354,6 +354,51 @@ function buildFullSummary(sections, kind, sourceUrl) {
   return out.join('\n').trim();
 }
 
+// ── Parser for a manually-pasted YouTube transcript ──────────
+// YouTube's "Show transcript" button emits one of two formats:
+//   format A — alternating timestamp / text lines:
+//     0:00
+//     Erster Satz
+//     0:05
+//     Zweiter Satz
+//   format B — "MM:SS  Text" on one line (rarer)
+// We accept both. If no recognisable timestamps are found, the whole
+// blob becomes a single zero-timestamp entry (better than nothing —
+// Claude still gets the content, just without per-line stops).
+function parseManualTranscript(text) {
+  if (!text || typeof text !== 'string') return [];
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const entries = [];
+  const tsRe = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/;
+  const inlineRe = /^(\d{1,2}):(\d{2})(?::(\d{2}))?\s+(.+)$/;
+  let i = 0;
+  while (i < lines.length) {
+    let m = inlineRe.exec(lines[i]);
+    if (m) {
+      const seconds = m[3]
+        ? parseInt(m[1],10)*3600 + parseInt(m[2],10)*60 + parseInt(m[3],10)
+        : parseInt(m[1],10)*60 + parseInt(m[2],10);
+      entries.push({ start: seconds, duration: 0, text: m[4] });
+      i++;
+      continue;
+    }
+    m = tsRe.exec(lines[i]);
+    if (m && i + 1 < lines.length) {
+      const seconds = m[3]
+        ? parseInt(m[1],10)*3600 + parseInt(m[2],10)*60 + parseInt(m[3],10)
+        : parseInt(m[1],10)*60 + parseInt(m[2],10);
+      entries.push({ start: seconds, duration: 0, text: lines[i+1] });
+      i += 2;
+      continue;
+    }
+    i++;
+  }
+  if (entries.length === 0 && text.trim().length > 20) {
+    entries.push({ start: 0, duration: 0, text: text.trim() });
+  }
+  return entries;
+}
+
 // ── Main handler ─────────────────────────────────────────────
 export async function onRequestPost({ request, env }) {
   if (!env.ANTHROPIC_API_KEY) return json({ error: 'ANTHROPIC_API_KEY not configured' }, 500);
@@ -365,46 +410,102 @@ export async function onRequestPost({ request, env }) {
   if (!url) return json({ error: 'url required' }, 400);
   if (!/^https?:\/\//i.test(url)) return json({ error: 'url must start with http:// or https://' }, 400);
 
+  const manualTranscript = typeof body.manual_transcript === 'string' ? body.manual_transcript : null;
+  const saveAsBookmark = body.save_as_bookmark === true;
+
   // Detect type
   const ytId = ytIdFromUrl(url);
   const kind = ytId ? 'youtube' : 'website';
 
-  // Fetch source content
+  // ── Bookmark-only path: skip transcript + Claude entirely ──
+  if (saveAsBookmark) {
+    let oembed = null;
+    if (kind === 'youtube') oembed = await fetchYouTubeOEmbed(url);
+    const title = (oembed?.title || url).slice(0, 200);
+    const slug  = slugify(title) + '-' + Date.now().toString(36);
+    const meta = {
+      isBookmark: true,
+      youtubeId: ytId || null,
+      youtubeCreator: oembed?.author_name || null,
+      youtubeCreatorUrl: oembed?.author_url || null,
+      thumbnailUrl: oembed?.thumbnail_url || null,
+    };
+    const placeholderBody = '📖 Lesezeichen — kein Transkript verarbeitet. Inhalt kann später ergänzt werden indem das Transkript manuell eingefügt wird.';
+    try {
+      const r = await env.DB.prepare(
+        'INSERT INTO notes (slug, title, body, note_type, source_url, source_type, source_meta, garden_type) ' +
+        'VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+      ).bind(slug, title, placeholderBody, 'bookmark', url, kind, JSON.stringify(meta), 'Bookmark').run();
+      return json({
+        ok: true,
+        kind: 'bookmark',
+        id: r.meta?.last_row_id, slug, title,
+        message: 'Lesezeichen gespeichert (ohne Zusammenfassung).',
+      });
+    } catch (e) {
+      return json({ error: 'D1 insert failed: ' + (e.message || e) }, 500);
+    }
+  }
+
+  // ── Standard path: fetch transcript (auto OR manual), analyse, save ──
   let analysisInput;
   let sourceMeta = {};
   if (kind === 'youtube') {
-    const [oembed, transcript] = await Promise.all([
-      fetchYouTubeOEmbed(url),
-      fetchYouTubeTranscript(ytId),
-    ]);
-    if (transcript.error === 'transcript_unavailable' || transcript.error === 'no_captions') {
-      return json({
-        error: transcript.message || 'Transkript nicht verfügbar.',
-        diagnostics: transcript.diagnostics || [],
-      }, 422);
+    const oembed = await fetchYouTubeOEmbed(url);
+    let transcriptEntries = null;
+    let transcriptLang = 'unknown';
+    let diagnostics = [];
+
+    if (manualTranscript) {
+      // User pasted transcript → parse + skip the auto-fetch entirely.
+      transcriptEntries = parseManualTranscript(manualTranscript);
+      transcriptLang = 'manual';
+      if (transcriptEntries.length === 0) {
+        return json({ error: 'Eingefügtes Transkript konnte nicht geparst werden (zu kurz / falsches Format).' }, 400);
+      }
+    } else {
+      // Auto-fetch path
+      const t = await fetchYouTubeTranscript(ytId);
+      if (t.error) {
+        // Surface the failure WITH metadata so the client can offer
+        // "manual paste" / "save as bookmark" choices to the user.
+        return json({
+          status: 'transcript_unavailable',
+          error: t.message || 'Transkript nicht verfügbar.',
+          oembed: oembed ? {
+            title: oembed.title,
+            author_name: oembed.author_name,
+            author_url: oembed.author_url,
+            thumbnail_url: oembed.thumbnail_url,
+          } : null,
+          videoId: ytId,
+          url,
+          diagnostics: t.diagnostics || [],
+        }, 422);
+      }
+      transcriptEntries = t.entries;
+      transcriptLang = t.language || 'unknown';
     }
-    if (transcript.error) {
-      return json({
-        error: 'Transcript fetch failed: ' + transcript.error,
-        diagnostics: transcript.diagnostics || [],
-      }, 502);
+
+    if (!transcriptEntries || transcriptEntries.length === 0) {
+      return json({ error: 'Transcript empty.' }, 422);
     }
-    if (!transcript.entries || transcript.entries.length === 0) {
-      return json({ error: 'Transcript empty — video may have only music or speech recognition failed.' }, 422);
-    }
+
     analysisInput = {
       url, videoId: ytId, oembed,
-      transcript: transcript.entries, language: transcript.language,
+      transcript: transcriptEntries, language: transcriptLang,
     };
     sourceMeta = {
       youtubeId: ytId,
       youtubeCreator: oembed?.author_name || null,
       youtubeCreatorUrl: oembed?.author_url || null,
       thumbnailUrl: oembed?.thumbnail_url || null,
-      transcriptLanguage: transcript.language,
-      transcript: transcript.entries,  // full transcript stored for the Tab UI
+      transcriptLanguage: transcriptLang,
+      transcript: transcriptEntries,
+      transcriptSource: manualTranscript ? 'manual_paste' : 'auto_fetch',
     };
   } else {
+    // Website import — same path as before
     const site = await fetchWebsiteContent(url);
     if (site.error) return json({ error: 'Website fetch failed: ' + site.error }, 502);
     analysisInput = { url, ...site };
@@ -441,6 +542,7 @@ export async function onRequestPost({ request, env }) {
       slug, title, preview, detailed, garden_type, topics: analysis.topics || [],
       sections_count: (analysis.sections || []).length,
       kind,
+      transcript_source: manualTranscript ? 'manual_paste' : 'auto_fetch',
     });
   } catch (e) {
     return json({ error: 'D1 insert failed: ' + (e.message || e) }, 500);

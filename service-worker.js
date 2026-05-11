@@ -1,7 +1,7 @@
 // PKA Service Worker — gives the app offline-cache + PWA-install capability.
 // Cache-first for our own static files, network-first for everything else
 // (Wikipedia / ElevenLabs / YouTube thumbnails) so live data stays fresh.
-const VERSION = 'pka-v66';
+const VERSION = 'pka-v67';
 const CORE = [
   './',
   './index.html',

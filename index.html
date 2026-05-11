@@ -3752,15 +3752,20 @@ async function loadFromD1() {
       // Imported links (source_type=youtube|website) get rendered like the
       // hardcoded Garden cards: icon ▶️ for YouTube, 📰 for websites, with
       // sourceUrl + youtubeId so the existing detail view "play" button works.
+      // Bookmark-only stubs (transcript unavailable) get 📖 to signal that
+      // the entry has no real summary yet.
       const isImportedLink = row.source_type === 'youtube' || row.source_type === 'website';
+      let meta_pre = null;
+      try { meta_pre = row.source_meta ? JSON.parse(row.source_meta) : null; } catch(_) {}
+      const isBookmark = !!meta_pre?.isBookmark;
       let icon = '📝';
       if (row.note_type === 'quote')  icon = '”';
       else if (row.note_type === 'recipe') icon = '🍳';
+      else if (isBookmark) icon = '📖';
       else if (row.source_type === 'youtube') icon = '▶️';
       else if (row.source_type === 'website') icon = '📰';
 
-      let meta = null;
-      try { meta = row.source_meta ? JSON.parse(row.source_meta) : null; } catch(_) {}
+      const meta = meta_pre;
 
       const entry = {
         id: 'd1-note-' + row.id,
@@ -3776,7 +3781,7 @@ async function loadFromD1() {
         topics: splitTags(row.related_topics),
       };
       if (isImportedLink) {
-        entry.garden_type = row.garden_type || (row.source_type === 'youtube' ? 'Video' : 'Article');
+        entry.garden_type = row.garden_type || (isBookmark ? 'Bookmark' : (row.source_type === 'youtube' ? 'Video' : 'Article'));
         entry.sourceUrl = row.source_url || '';
         if (row.source_type === 'youtube' && meta) {
           entry.youtubeId = meta.youtubeId || null;
@@ -3788,6 +3793,12 @@ async function loadFromD1() {
         // "Transkript" tab can show it.
         if (meta?.transcript) entry.transcript = meta.transcript;
         if (row.full_summary)  entry.fullSummary = row.full_summary;
+        if (isBookmark) {
+          entry.isBookmark = true;
+          // Prefix the title with 📖 in the list view so it's clear at
+          // a glance that this entry is a bookmark stub without analysis.
+          if (!entry.title.startsWith('📖')) entry.title = '📖 ' + entry.title;
+        }
       }
       ENTRIES.push(entry);
     }
@@ -4825,11 +4836,22 @@ function resetLogo() {
 // share-target handler when the user shares a URL into the PWA from
 // another app. Shows a progress toast, hits /api/import-link, refreshes
 // the entries list from D1 when done.
-async function importLinkFlow(url) {
+//
+// Failure mode: when YouTube blocks the transcript fetch, the server
+// returns 422 with status='transcript_unavailable' + oembed metadata.
+// We then offer the user a choice dialog: paste transcript manually,
+// save as bookmark stub, or cancel.
+async function importLinkFlow(url, opts = {}) {
   if (!url || !/^https?:\/\//i.test(url)) {
     alert('Bitte eine gültige URL eingeben (mit http:// oder https://).');
     return;
   }
+  // Optional body params: manual_transcript or save_as_bookmark — passed
+  // through from the choice dialog handlers below.
+  const reqBody = { url };
+  if (opts.manual_transcript) reqBody.manual_transcript = opts.manual_transcript;
+  if (opts.save_as_bookmark)  reqBody.save_as_bookmark  = true;
+
   // Quick visual toast — sticks until done, replaced by success/error
   const toast = document.createElement('div');
   toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:9999;background:var(--surface-2);color:var(--text);border:1px solid var(--border);padding:14px 18px;border-radius:10px;font-size:13px;box-shadow:0 4px 16px rgba(0,0,0,.4);max-width:90vw';
@@ -4845,18 +4867,28 @@ async function importLinkFlow(url) {
         return null;
       } catch { return null; }
     })();
-    toast.textContent = ytId ? '🎬 YouTube erkannt — lade Transkript…' : '🌐 Webseite — lade Inhalt…';
+    if (opts.save_as_bookmark)         toast.textContent = '🔖 Speichere als Lesezeichen…';
+    else if (opts.manual_transcript)   toast.textContent = '🧠 Analysiere Transkript mit Claude…';
+    else if (ytId)                     toast.textContent = '🎬 YouTube erkannt — lade Transkript…';
+    else                               toast.textContent = '🌐 Webseite — lade Inhalt…';
 
     const res = await fetch('/api/import-link', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url }),
+      body: JSON.stringify(reqBody),
     });
     const data = await res.json().catch(() => ({}));
+
+    // Special case: transcript unavailable → offer choices via dialog
+    if (res.status === 422 && data.status === 'transcript_unavailable') {
+      toast.remove();
+      showTranscriptUnavailableDialog(url, data);
+      return;
+    }
+
     if (!res.ok) {
       toast.style.background = '#3a1f1f';
       toast.style.borderColor = '#5b2a2a';
-      // Build a richer error display when diagnostics are present
       let html = '⚠️ ' + (data.error || `HTTP ${res.status}`);
       if (Array.isArray(data.diagnostics) && data.diagnostics.length) {
         const diagText = data.diagnostics.map(d => '• ' + d).join('<br>');
@@ -4870,18 +4902,98 @@ async function importLinkFlow(url) {
 
     toast.style.background = '#1f3a25';
     toast.style.borderColor = '#2a5b34';
-    toast.textContent = `✓ „${data.title}" gespeichert (${data.kind}, ${data.sections_count} Abschnitte). Aktualisiere Liste…`;
+    const successLabel = data.kind === 'bookmark'
+      ? `🔖 „${data.title}" als Lesezeichen gespeichert.`
+      : `✓ „${data.title}" gespeichert (${data.kind}${data.sections_count ? ', ' + data.sections_count + ' Abschnitte' : ''}). Aktualisiere Liste…`;
+    toast.textContent = successLabel;
 
     if (typeof loadFromD1 === 'function') {
       await loadFromD1();
     }
-    setTimeout(() => toast.remove(), 3500);
+    setTimeout(() => toast.remove(), 4000);
   } catch (e) {
     toast.style.background = '#3a1f1f';
     toast.style.borderColor = '#5b2a2a';
     toast.textContent = '⚠️ Fehler: ' + (e?.message || e);
     setTimeout(() => toast.remove(), 6000);
   }
+}
+
+// ── Transcript-unavailable dialog ──────────────────────────────
+// Shown when /api/import-link returns 422 with status='transcript_unavailable'.
+// Three choices: paste transcript manually, save as bookmark, cancel.
+function showTranscriptUnavailableDialog(url, data) {
+  const oe = data.oembed || {};
+  // Backdrop
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+  // Modal
+  const m = document.createElement('div');
+  m.style.cssText = 'background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:12px;max-width:560px;width:100%;max-height:90vh;overflow:auto;padding:20px;box-shadow:0 8px 32px rgba(0,0,0,.6)';
+  const title = oe.title || '(unbekannt)';
+  const creator = oe.author_name ? `<div style="color:var(--text-2);font-size:12px;margin-top:4px">${oe.author_name}</div>` : '';
+  m.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:start;gap:12px;margin-bottom:12px">
+      <div>
+        <div style="font-weight:600;font-size:15px">⚠️ Transkript konnte nicht geladen werden</div>
+        ${oe.thumbnail_url ? `<img src="${oe.thumbnail_url}" style="width:160px;border-radius:6px;margin-top:8px">` : ''}
+        <div style="font-weight:600;font-size:13px;margin-top:8px">${title}</div>
+        ${creator}
+      </div>
+      <button id="ti-close" style="background:none;border:0;color:var(--text-2);font-size:20px;cursor:pointer">✕</button>
+    </div>
+    <div style="font-size:12px;color:var(--text-2);line-height:1.5;margin-bottom:14px">YouTube blockt unsere Server-Anfragen. Du hast drei Optionen:</div>
+
+    <button id="ti-paste" style="display:block;width:100%;text-align:left;background:var(--surface-2);border:1px solid var(--border);color:var(--text);padding:14px;border-radius:8px;cursor:pointer;margin-bottom:8px">
+      <div style="font-weight:600;font-size:13px;margin-bottom:4px">📋 Transkript manuell pasten</div>
+      <div style="font-size:11px;color:var(--text-2);line-height:1.4">Im YouTube-Tab auf „…" → „Transkript anzeigen" → Text markieren + Strg+C. Dann hier einfügen. Volle Pipeline mit Stops läuft.</div>
+    </button>
+
+    <button id="ti-bookmark" style="display:block;width:100%;text-align:left;background:var(--surface-2);border:1px solid var(--border);color:var(--text);padding:14px;border-radius:8px;cursor:pointer;margin-bottom:8px">
+      <div style="font-weight:600;font-size:13px;margin-bottom:4px">🔖 Nur als Lesezeichen speichern</div>
+      <div style="font-size:11px;color:var(--text-2);line-height:1.4">Titel + Creator + URL + Thumbnail werden gespeichert, ohne Zusammenfassung. Eintrag bekommt 📖-Badge.</div>
+    </button>
+
+    <button id="ti-cancel" style="display:block;width:100%;text-align:center;background:transparent;border:1px solid var(--border);color:var(--text-2);padding:10px;border-radius:8px;cursor:pointer;margin-top:8px;font-size:12px">Abbrechen</button>
+
+    <div id="ti-paste-area" style="display:none;margin-top:14px">
+      <div style="font-size:12px;color:var(--text-2);margin-bottom:6px">Transkript hier einfügen (YouTube-Format mit Timestamps wird automatisch erkannt):</div>
+      <textarea id="ti-textarea" rows="8" style="width:100%;background:var(--surface-2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:10px;font-size:12px;line-height:1.5;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;resize:vertical"></textarea>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button id="ti-submit" style="flex:1;background:var(--accent);color:#0c1015;border:0;padding:10px;border-radius:6px;font-weight:600;cursor:pointer">Analysieren mit Claude</button>
+        <button id="ti-paste-cancel" style="background:transparent;border:1px solid var(--border);color:var(--text-2);padding:10px 14px;border-radius:6px;cursor:pointer">Zurück</button>
+      </div>
+    </div>
+  `;
+  overlay.appendChild(m);
+  document.body.appendChild(overlay);
+
+  const close = () => overlay.remove();
+  m.querySelector('#ti-close').onclick = close;
+  m.querySelector('#ti-cancel').onclick = close;
+  overlay.onclick = (e) => { if (e.target === overlay) close(); };
+
+  // Toggle paste textarea
+  const pasteArea = m.querySelector('#ti-paste-area');
+  m.querySelector('#ti-paste').onclick = () => {
+    pasteArea.style.display = 'block';
+    m.querySelector('#ti-textarea').focus();
+  };
+  m.querySelector('#ti-paste-cancel').onclick = () => { pasteArea.style.display = 'none'; };
+
+  // Submit pasted transcript
+  m.querySelector('#ti-submit').onclick = () => {
+    const text = m.querySelector('#ti-textarea').value.trim();
+    if (!text || text.length < 30) { alert('Transkript zu kurz (min 30 Zeichen).'); return; }
+    close();
+    importLinkFlow(url, { manual_transcript: text });
+  };
+
+  // Bookmark path
+  m.querySelector('#ti-bookmark').onclick = () => {
+    close();
+    importLinkFlow(url, { save_as_bookmark: true });
+  };
 }
 
 // Mobile share-target handler. When the PWA's manifest declares share_target,
