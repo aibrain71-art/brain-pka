@@ -260,6 +260,17 @@ body.view-graph #detail-panel.open { transform: translateX(0); }
                                               pointer-events: none; }
 
 .va-status { font-size: 13px; color: var(--text-2); text-align: center; max-width: 600px; }
+/* Live mic-level meter — width of the inner fill = input volume (0-100%).
+   Shown only while listening so the user can verify the mic captures audio.
+   Bar moves with their voice → mic OK. Bar static → mic silent / hardware
+   problem. Diagnostic gold. */
+.va-mic-level { width: 220px; max-width: 60%; height: 8px;
+                  background: var(--surface-3); border-radius: 4px;
+                  border: 1px solid var(--border-2); overflow: hidden;
+                  margin-top: 6px; }
+.va-mic-level-fill { width: 0%; height: 100%;
+                      background: linear-gradient(90deg, var(--success) 0%, var(--accent) 60%, #fbbf24 90%, var(--error) 100%);
+                      transition: width 0.08s linear; }
 
 .va-chat { flex: 1; overflow-y: auto; padding: 12px 24px; min-height: 100px;
             display: flex; flex-direction: column; gap: 10px; transition: all .35s; }
@@ -11210,6 +11221,9 @@ function vaStartListening() {
     _vaIsListening = true;
     vaSetBubbleState('listening');
     vaSetStatus('Höre zu… sprich jetzt.');
+    // Start the live mic-level meter so the user can SEE that audio is
+    // arriving. If they speak and the bar doesn't move → hardware/mic issue.
+    vaStartMicLevelMeter();
   };
   // Debounce timer that treats accumulated speech as "final" after a short
   // pause — necessary because some browsers (Chrome/Edge on Windows) rarely
@@ -11281,6 +11295,63 @@ function vaStopListening() {
     try { _vaRecognition.stop(); } catch(_) {}
     _vaRecognition = null;
   }
+  vaStopMicLevelMeter();
+}
+
+// ── Live mic-level meter ──────────────────────────────────────
+// Taps the user's microphone via getUserMedia + AnalyserNode and animates
+// the va-mic-level bar based on input volume. Pure diagnostic UX: if the
+// bar moves while the user speaks → hardware OK + permission OK. If it
+// stays static → mic is muted / wrong device / permission revoked.
+let _vaMicLevelStream = null;
+let _vaMicLevelCtx = null;
+let _vaMicLevelRaf = null;
+async function vaStartMicLevelMeter() {
+  if (_vaMicLevelStream) return;  // already running
+  const bar = document.getElementById('va-mic-level');
+  const fill = bar?.querySelector('.va-mic-level-fill');
+  if (!bar || !fill) return;
+  if (!navigator.mediaDevices?.getUserMedia) return;
+  try {
+    _vaMicLevelStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    _vaMicLevelCtx = new Ctx();
+    if (_vaMicLevelCtx.state === 'suspended') { try { await _vaMicLevelCtx.resume(); } catch(_) {} }
+    const source = _vaMicLevelCtx.createMediaStreamSource(_vaMicLevelStream);
+    const analyser = _vaMicLevelCtx.createAnalyser();
+    analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = 0.3;
+    source.connect(analyser);
+    const buf = new Uint8Array(analyser.frequencyBinCount);
+    bar.style.display = 'block';
+    const tick = () => {
+      if (!_vaMicLevelStream) return;  // stopped
+      analyser.getByteFrequencyData(buf);
+      let sum = 0;
+      for (let i = 0; i < buf.length; i++) sum += buf[i];
+      const avg = sum / buf.length;  // 0-255
+      // Scale + soft compression so quiet speech still shows movement.
+      const pct = Math.min(100, Math.pow(avg / 200, 0.7) * 110);
+      fill.style.width = pct + '%';
+      _vaMicLevelRaf = requestAnimationFrame(tick);
+    };
+    tick();
+  } catch (e) {
+    console.warn('Mic level meter failed:', e?.name || e);
+    bar.style.display = 'none';
+    _vaMicLevelStream = null;
+    _vaMicLevelCtx = null;
+  }
+}
+function vaStopMicLevelMeter() {
+  if (_vaMicLevelRaf) { cancelAnimationFrame(_vaMicLevelRaf); _vaMicLevelRaf = null; }
+  if (_vaMicLevelStream) {
+    _vaMicLevelStream.getTracks().forEach(t => { try { t.stop(); } catch(_) {} });
+    _vaMicLevelStream = null;
+  }
+  if (_vaMicLevelCtx) { try { _vaMicLevelCtx.close(); } catch(_) {} _vaMicLevelCtx = null; }
+  const bar = document.getElementById('va-mic-level');
+  if (bar) bar.style.display = 'none';
 }
 
 // ── Blue-bubble interaction (standard AI voice-assistant pattern) ─
@@ -13431,6 +13502,12 @@ document.addEventListener('dblclick', (e) => {
     <!-- Hidden file input used for mobile camera capture -->
     <input type="file" id="va-camera-input" accept="image/*" capture="environment" style="display:none" onchange="onMobileCameraFile(event)">
     <div class="va-status" id="va-status">Bereit. Klick auf die Bubble zum Sprechen.</div>
+    <!-- Live mic-level indicator — visible only while listening. Bar width
+         tracks the input volume in real-time. If you speak and the bar
+         doesn't move → mic isn't capturing. -->
+    <div id="va-mic-level" class="va-mic-level" style="display:none">
+      <div class="va-mic-level-fill"></div>
+    </div>
   </div>
   <div class="va-chat" id="va-chat-thread"></div>
   <div class="va-input">
