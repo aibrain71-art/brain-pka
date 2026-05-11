@@ -1,0 +1,14 @@
+CREATE TABLE IF NOT EXISTS notes (id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT UNIQUE, title TEXT NOT NULL, body TEXT NOT NULL, note_type TEXT DEFAULT 'note', related_people TEXT, related_topics TEXT, source_journal_id INTEGER, created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE INDEX IF NOT EXISTS idx_notes_created ON notes(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notes_type ON notes(note_type);
+CREATE TABLE IF NOT EXISTS journal (id INTEGER PRIMARY KEY AUTOINCREMENT, entry_date TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL, mood TEXT, source TEXT DEFAULT 'voice', related_people TEXT, related_topics TEXT, related_projects TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE INDEX IF NOT EXISTS idx_journal_date ON journal(entry_date DESC);
+CREATE INDEX IF NOT EXISTS idx_journal_created ON journal(created_at DESC);
+CREATE TABLE IF NOT EXISTS people (id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT UNIQUE, full_name TEXT NOT NULL, known_as TEXT, role_context TEXT, notes TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE INDEX IF NOT EXISTS idx_people_slug ON people(slug);
+CREATE TABLE IF NOT EXISTS tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, details TEXT, status TEXT DEFAULT 'open', priority INTEGER DEFAULT 3, due_date TEXT, tags TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP, completed_at TEXT);
+CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+CREATE INDEX IF NOT EXISTS idx_tasks_priority ON tasks(priority);
+CREATE TABLE IF NOT EXISTS ideas (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, body TEXT, tags TEXT, status TEXT DEFAULT 'spark', created_at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE INDEX IF NOT EXISTS idx_ideas_created ON ideas(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_ideas_status ON ideas(status);

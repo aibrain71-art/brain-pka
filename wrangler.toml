@@ -1,0 +1,16 @@
+# Cloudflare Pages config — binds the D1 database "larry-db" to
+# Pages Functions so /api/notes, /api/journal, /api/people etc. can
+# query SQL via env.DB.
+#
+# After creating the D1 database in the Cloudflare dashboard, paste
+# the database_id below. The name "larry-db" must match the dashboard
+# name exactly.
+
+name = "brain-pka"
+compatibility_date = "2025-05-01"
+pages_build_output_dir = "."
+
+[[d1_databases]]
+binding = "DB"
+database_name = "larry-db"
+database_id = "9a27139f-af63-4fa2-8eb5-6c999ca86e7a"
