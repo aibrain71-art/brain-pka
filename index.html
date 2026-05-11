@@ -11397,11 +11397,35 @@ async function vaStartMicLevelMeter() {
     source.connect(analyser);
     const buf = new Uint8Array(analyser.frequencyBinCount);
     bar.style.display = 'block';
+    // Watchdog state: detect when the analyser returns the same bytes forever
+    // (= context suspended, device switched away, stream went stale).
+    let lastSignature = -1;
+    let stuckFrames = 0;
     const tick = () => {
       if (!_vaMicLevelStream) return;  // stopped
+      // Auto-resume if browser quietly suspended the context (tab idle, etc.)
+      if (_vaMicLevelCtx?.state === 'suspended') {
+        _vaMicLevelCtx.resume().catch(() => {});
+      }
       analyser.getByteFrequencyData(buf);
       let sum = 0;
       for (let i = 0; i < buf.length; i++) sum += buf[i];
+      // A truly live mic ALWAYS has byte-level jitter from noise floor.
+      // If the signature (sum of all bins) doesn't change for >60 frames
+      // (~1s @ 60fps), the analyser is frozen — try a hard restart.
+      if (sum === lastSignature) {
+        stuckFrames++;
+        if (stuckFrames > 90) {  // ~1.5 seconds of frozen data
+          console.warn('Mic level analyser frozen — restarting stream');
+          // Stop + restart asynchronously so we don't recurse inside the RAF
+          const restart = () => { vaStopMicLevelMeter(); vaStartMicLevelMeter(); };
+          setTimeout(restart, 0);
+          return;
+        }
+      } else {
+        lastSignature = sum;
+        stuckFrames = 0;
+      }
       const avg = sum / buf.length;  // 0-255
       // Scale + soft compression so quiet speech still shows movement.
       const pct = Math.min(100, Math.pow(avg / 200, 0.7) * 110);
@@ -11409,6 +11433,15 @@ async function vaStartMicLevelMeter() {
       _vaMicLevelRaf = requestAnimationFrame(tick);
     };
     tick();
+    // Also listen for the stream itself ending (mic device unplugged, OS
+    // revoked permission, OpenWhispr took exclusive access). Attempt to
+    // restart immediately so the user sees the meter come back alive.
+    _vaMicLevelStream.getTracks().forEach(t => {
+      t.addEventListener('ended', () => {
+        console.warn('Mic track ended — restarting meter');
+        setTimeout(() => { vaStopMicLevelMeter(); vaStartMicLevelMeter(); }, 200);
+      });
+    });
   } catch (e) {
     console.warn('Mic level meter failed:', e?.name || e);
     bar.style.display = 'none';
