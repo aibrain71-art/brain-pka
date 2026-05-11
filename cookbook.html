@@ -430,6 +430,7 @@
       <h2>Bibliothek</h2>
       <div class="toc-sub" id="lib-count">…</div>
       <button class="lib-upload-btn" id="lib-upload-btn">＋ Kochbuch hinzufügen</button>
+      <button class="lib-upload-btn" id="lib-url-btn" style="background:transparent;color:var(--text);border:1px dashed var(--border);margin-top:-6px">🔗 Aus URL importieren</button>
       <input type="file" id="lib-upload-input" accept="application/pdf,.pdf" style="display:none">
       <div class="lib-list" id="lib-list">
         <div class="loading">Lade Bücher…</div>
@@ -753,6 +754,7 @@ async function loadLibrary() {
   window._libLoaded = true;
   $('#lib-upload-btn').onclick = () => $('#lib-upload-input').click();
   $('#lib-upload-input').onchange = onUploadCookbook;
+  $('#lib-url-btn').onclick = onImportCookbookUrl;
   try {
     const r = await fetch('/api/cookbooks');
     const data = await r.json();
@@ -981,27 +983,63 @@ async function deleteCookbook(id) {
   } catch (e) { toast('⚠️ ' + e.message, true); }
 }
 
-async function importRecipesFromBook(id) {
-  toast('🧠 Rezepte aus PDF werden mit Claude extrahiert… (kann ~30 Sek dauern pro Block)');
+// URL-Import: server-fetches a PDF from a public URL into D1.
+async function onImportCookbookUrl() {
+  const url = prompt('PDF-URL (muss public sein):', 'https://www.zh.ch/content/dam/zhweb/bilder-dokumente/themen/sicherheit-justiz/zivilschutz/ausbildungsunterlagen/koch/Kochrezepte_für_Militärküche.pdf');
+  if (!url) return;
+  const title = prompt('Titel:', 'Kochrezepte für die Militärküche');
+  if (!title) return;
+  const source = prompt('Quelle / Verlag:', 'Schweizer Armee · Kanton Zürich');
+  const servingsBaseStr = prompt('Basis-Personenzahl (Militärrezepte: 100):', '100');
+  const servings_base = parseInt(servingsBaseStr, 10) || 100;
+
+  const t = document.createElement('div');
+  t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:9999;background:var(--surface-2);color:var(--text);border:1px solid var(--border);padding:12px 18px;border-radius:8px;font-size:13px';
+  t.textContent = '⬇ Server fetcht PDF von URL…';
+  document.body.appendChild(t);
   try {
-    const r = await fetch('/api/cookbooks?id=' + id + '&full=1');
-    const data = await r.json();
-    if (!r.ok) throw new Error(data.error);
-    const book = data.cookbook;
-    // Feed the whole PDF through /api/import-document, which already
-    // handles recipe extraction. Multiple recipes in one PDF → multiple
-    // notes with note_type='recipe' get created.
-    const r2 = await fetch('/api/import-document', {
+    const r = await fetch('/api/cookbooks/import-url', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        kind: 'pdf', filename: book.title + '.pdf', content_base64: book.pdf_b64,
-      }),
+      body: JSON.stringify({ url, title, source, servings_base }),
     });
-    const data2 = await r2.json();
-    if (!r2.ok) throw new Error(data2.error || 'HTTP ' + r2.status);
-    toast('✓ Rezept-Import: „' + data2.title + '" gespeichert. Mehr-Rezepte-Pro-PDF folgt in nächster Iteration.');
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'HTTP ' + r.status);
+    t.style.background = '#1f3a25'; t.style.borderColor = '#2a5b34';
+    t.textContent = '✓ „' + data.title + '" gespeichert (' + Math.round(data.pdf_size_kb/1024 * 10)/10 + ' MB). Jetzt Rezepte extrahieren?';
+    setTimeout(() => t.remove(), 3500);
+    await loadLibrary();
+    openCookbook(data.id);
+    setTimeout(() => {
+      if (confirm('Jetzt alle Rezepte aus „' + data.title + '" automatisch extrahieren? (Claude liest das PDF und erstellt Notiz-Rezepte mit Basis ' + servings_base + ' Pers.)')) {
+        importRecipesFromBook(data.id);
+      }
+    }, 800);
   } catch (e) {
-    toast('⚠️ ' + (e?.message || e), true);
+    t.style.background = '#3a1f1f'; t.style.borderColor = '#5b2a2a';
+    t.textContent = '⚠️ ' + (e?.message || e);
+    setTimeout(() => t.remove(), 10000);
+  }
+}
+
+async function importRecipesFromBook(id) {
+  const t = document.createElement('div');
+  t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:9999;background:var(--surface-2);color:var(--text);border:1px solid var(--border);padding:14px 20px;border-radius:10px;font-size:13px;max-width:90vw';
+  t.textContent = '🧠 Claude liest das ganze PDF und extrahiert alle Rezepte… (kann 30-90 Sek dauern)';
+  document.body.appendChild(t);
+  try {
+    const r = await fetch('/api/cookbooks/extract?id=' + id, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ max_recipes: 250 }),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'HTTP ' + r.status);
+    t.style.background = '#1f3a25'; t.style.borderColor = '#2a5b34';
+    t.innerHTML = `✓ <strong>${data.inserted}</strong> Rezepte aus „${escapeHtml(data.cookbook_title || '')}" importiert${data.errors?.length ? ` (${data.errors.length} übersprungen)` : ''}.<br><span style="font-size:11px;color:var(--text-2)">Im Tab „Rezepte" verfügbar — alle mit Skalierungs-Slider.</span>`;
+    setTimeout(() => t.remove(), 8000);
+  } catch (e) {
+    t.style.background = '#3a1f1f'; t.style.borderColor = '#5b2a2a';
+    t.textContent = '⚠️ ' + (e?.message || e);
+    setTimeout(() => t.remove(), 10000);
   }
 }
 
