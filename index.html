@@ -5758,39 +5758,11 @@ function mdRender(src) {
   return s;
 }
 
-// ── < command menu (Logseq-style with AI assists) ─────────────
-// Catalogue: each entry has a `match` keyword(s), label, optional icon,
-// and either `insert` (static text inserted at cursor) or `ai` (calls
-// /api/note-assist with that action). Built-ins first, AI block below.
+// ── < command menu — AI-only ─────────────────────────────────
+// Format/Datum/Refs/Blöcke are reachable via the toolbar (B, I, H1-3,
+// bullets, etc.). The "<" trigger is reserved for Anthropic-backed
+// assists where Larry actually does work for the user.
 const NE_COMMANDS = [
-  // Formatting
-  { group: 'Format',  icon: 'H1', label: 'Heading 1',          match: ['h1','heading 1','title'],    insert: '# ' },
-  { group: 'Format',  icon: 'H2', label: 'Heading 2',          match: ['h2','heading 2'],            insert: '## ' },
-  { group: 'Format',  icon: 'H3', label: 'Heading 3',          match: ['h3','heading 3'],            insert: '### ' },
-  { group: 'Format',  icon: '•',  label: 'Bullet-Liste',        match: ['bullet','liste','-'],        insert: '- ' },
-  { group: 'Format',  icon: '1.', label: 'Nummerierte Liste',   match: ['number','numbered','1.'],    insert: '1. ' },
-  { group: 'Format',  icon: '☐',  label: 'TODO',                match: ['todo','aufgabe'],            insert: '- [ ] ' },
-  { group: 'Format',  icon: '⏳',  label: 'TODO LATER',           match: ['later','spaeter','später'], insert: '- [ ] LATER ' },
-  { group: 'Format',  icon: '⚡',  label: 'TODO NOW',              match: ['now','jetzt'],               insert: '- [ ] NOW ' },
-  { group: 'Format',  icon: '🔄',  label: 'TODO DOING',           match: ['doing','dran'],             insert: '- [ ] DOING ' },
-  { group: 'Format',  icon: '✅',  label: 'DONE',                  match: ['done','erledigt'],          insert: '- [x] ' },
-  { group: 'Format',  icon: '»',  label: 'Zitat',               match: ['quote','zitat'],            insert: '> ' },
-  { group: 'Format',  icon: '⌨',  label: 'Code-Block',          match: ['code','codeblock'],          insert: '```\n\n```', cursorOffset: 4 },
-  { group: 'Format',  icon: '―',  label: 'Trennlinie',          match: ['hr','trenner','divider'],   insert: '\n---\n' },
-  // Date / time
-  { group: 'Datum',   icon: '📅', label: 'Heute',                match: ['heute','today','date'],     insertFn: () => new Date().toISOString().slice(0,10) },
-  { group: 'Datum',   icon: '📅', label: 'Morgen',               match: ['morgen','tomorrow'],        insertFn: () => { const d=new Date(); d.setDate(d.getDate()+1); return d.toISOString().slice(0,10); } },
-  { group: 'Datum',   icon: '🕐', label: 'Aktuelle Zeit',        match: ['zeit','time','jetzt now'],  insertFn: () => new Date().toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' }) },
-  { group: 'Datum',   icon: '📆', label: 'Heute als [[YYYY-MM-DD]]', match: ['ref date','datum ref'], insertFn: () => '[[' + new Date().toISOString().slice(0,10) + ']]' },
-  // Refs / tags
-  { group: 'Refs',    icon: '🔗', label: 'Wiki-Referenz [[…]]',    match: ['ref','page','wiki','link page'], insert: '[[]]', cursorOffset: -2 },
-  { group: 'Refs',    icon: '🏷',  label: 'Tag #…',                 match: ['tag','schlagwort'],           insert: '#', cursorOffset: 0 },
-  { group: 'Refs',    icon: '🌐', label: 'Markdown-Link',          match: ['mdlink','external link'],     insert: '[Text](https://)', cursorOffset: -10 },
-  // Blocks
-  { group: 'Blöcke',  icon: '🧮', label: 'Tabelle 3×2',          match: ['table','tabelle'],          insert: '\n| Spalte 1 | Spalte 2 | Spalte 3 |\n|----------|----------|----------|\n|          |          |          |\n' },
-  { group: 'Blöcke',  icon: '📐', label: 'Mermaid-Diagramm',      match: ['mermaid','diagramm','diagram'], insert: '\n```mermaid\ngraph TD\n  A[Start] --> B[Ende]\n```\n' },
-  { group: 'Blöcke',  icon: 'Σ',  label: 'Mathe-Block',           match: ['math','mathe','formula'],    insert: '\n$$\n\n$$\n', cursorOffset: 4 },
-  // AI assists
   { group: 'AI',      icon: '✨', label: 'Zusammenfassen',       match: ['summarize','tldr','zusammenfassen','summary'], ai: 'summarize', mode: 'append' },
   { group: 'AI',      icon: '✍',  label: 'Weiterschreiben',       match: ['continue','weiterschreiben','weiter'], ai: 'continue', mode: 'insert' },
   { group: 'AI',      icon: '📝', label: 'Sprache verbessern',     match: ['improve','verbessern','correct','grammar'], ai: 'improve', mode: 'replace_selection_or_all' },
@@ -5874,7 +5846,7 @@ function renderCommandMenu(ta, menu, keepPosition) {
     // Group items by group, render in order
     const groups = {};
     items.forEach(it => { (groups[it.group] = groups[it.group] || []).push(it); });
-    const order = ['Format','Datum','Refs','Blöcke','AI'];
+    const order = ['AI'];
     let html = '';
     let globalIdx = 0;
     for (const g of order) {
