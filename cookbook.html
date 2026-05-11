@@ -1949,15 +1949,20 @@ async function tocAiFallback() {
 function tocShowDebug() {
   const dbg = window._tocDebug;
   if (!dbg) { alert('Noch keine Daten — erst PDF öffnen.'); return; }
+  document.querySelectorAll('[data-modal="toc-debug"]').forEach(el => el.remove());
   const ov = document.createElement('div');
+  ov.dataset.modal = 'toc-debug';
   ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:10005;display:flex;align-items:center;justify-content:center;padding:24px';
+  ov.addEventListener('click', (e) => { if (e.target === ov) ov.remove(); });
+  const escHandler = (e) => { if (e.key === 'Escape') { ov.remove(); document.removeEventListener('keydown', escHandler); } };
+  document.addEventListener('keydown', escHandler);
   const m = document.createElement('div');
   m.style.cssText = 'background:var(--surface);border:1px solid var(--border);border-radius:10px;max-width:760px;width:100%;max-height:80vh;overflow:auto;padding:22px';
   const sample = (dbg.allLines || []).slice(0, 200).map(l => '[S.' + l.page + '] ' + l.text).join('\n');
   m.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
       <h3 style="margin:0;font-family:'Playfair Display',Georgia,serif;font-size:18px">🔍 TOC-Diagnose</h3>
-      <button onclick="this.closest('div[style*=\\"position:fixed\\"]').remove()" style="background:transparent;border:0;color:var(--text-2);font-size:22px;cursor:pointer">✕</button>
+      <button onclick="this.closest('[data-modal]').remove()" style="background:transparent;border:0;color:var(--text-2);font-size:28px;cursor:pointer;padding:0 8px;line-height:1" title="Schliessen (Esc)">✕</button>
     </div>
     <div style="font-size:12px;color:var(--text-2);margin-bottom:12px;line-height:1.6">
       Gescannt: ${dbg.pageCount} Seiten · ${dbg.allLines?.length || 0} Zeilen · Strategie: ${dbg.scannedBy || 'unbekannt'}<br>
@@ -1968,7 +1973,7 @@ function tocShowDebug() {
     <pre style="background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:12px;font-size:11px;font-family:ui-monospace,SFMono-Regular,monospace;max-height:50vh;overflow:auto;white-space:pre-wrap;color:var(--text)">${escapeHtml(sample)}</pre>
     <div style="margin-top:14px;display:flex;gap:8px">
       <button onclick="navigator.clipboard?.writeText(\`${sample.replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`).then(()=>this.textContent='✓ Kopiert')" style="background:var(--accent);color:#0c1015;border:0;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:600;font-size:12px">📋 Text kopieren</button>
-      <button onclick="this.closest('div[style*=\\"position:fixed\\"]').remove()" style="background:transparent;color:var(--text);border:1px solid var(--border);padding:8px 14px;border-radius:6px;cursor:pointer;font-size:12px">Schliessen</button>
+      <button onclick="this.closest('[data-modal]').remove()" style="background:var(--accent);color:white;border:0;padding:8px 18px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">Schliessen</button>
     </div>
   `;
   ov.appendChild(m);
@@ -2409,8 +2414,17 @@ async function importRecipesFromBook(id, opts = {}) {
 function showExtractDetails() {
   const d = window._lastExtract;
   if (!d) { alert('Keine Extract-Daten verfügbar.'); return; }
+  // Remove any already-open Details modal so re-opening doesn't stack
+  document.querySelectorAll('[data-modal="extract-details"]').forEach(el => el.remove());
   const ov = document.createElement('div');
+  ov.dataset.modal = 'extract-details';
   ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:10010;display:flex;align-items:center;justify-content:center;padding:20px';
+  // Click on backdrop OR Esc closes the modal — fixes
+  // "kann Extraktdiagnose nicht schliessen" (closest-by-style-string
+  // selector failed because browsers normalize style with spaces).
+  ov.addEventListener('click', (e) => { if (e.target === ov) ov.remove(); });
+  const escHandler = (e) => { if (e.key === 'Escape') { ov.remove(); document.removeEventListener('keydown', escHandler); } };
+  document.addEventListener('keydown', escHandler);
   const m = document.createElement('div');
   m.style.cssText = 'background:var(--surface);border:1px solid var(--border);border-radius:10px;max-width:720px;width:100%;max-height:85vh;overflow:auto;padding:22px';
   const errList = d.insert_errors?.length
@@ -2464,7 +2478,7 @@ function showExtractDetails() {
   m.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
       <h3 style="margin:0;font-family:'Playfair Display',Georgia,serif;font-size:18px">📋 Extract-Diagnose</h3>
-      <button onclick="this.closest('div[style*=\\"position:fixed\\"]').remove()" style="background:transparent;border:0;color:var(--text-2);font-size:22px;cursor:pointer">✕</button>
+      <button onclick="this.closest('[data-modal]').remove()" style="background:transparent;border:0;color:var(--text-2);font-size:28px;cursor:pointer;padding:0 8px;line-height:1" title="Schliessen (Esc)">✕</button>
     </div>
     <div style="font-size:13px;line-height:1.6">
       <div><strong>Kochbuch:</strong> ${escapeHtml(d.cookbook_title || '?')} (ID ${d.cookbook_id})</div>
@@ -2480,9 +2494,9 @@ function showExtractDetails() {
       ${errList}
     </div>
     <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
-      <button onclick="importRecipesFromBook(${d.cookbook_id}, { dryRun: true }); this.closest('div[style*=\\"position:fixed\\"]').remove()" style="background:var(--accent);color:#0c1015;border:0;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:600;font-size:12px">🔍 Nochmal Dry-Run</button>
+      <button onclick="importRecipesFromBook(${d.cookbook_id}, { dryRun: true }); this.closest('[data-modal]').remove()" style="background:var(--accent);color:#0c1015;border:0;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:600;font-size:12px">🔍 Nochmal Dry-Run</button>
       <button onclick="checkRecipeCountInDB(${d.cookbook_id})" style="background:transparent;color:var(--text);border:1px solid var(--border);padding:8px 14px;border-radius:6px;cursor:pointer;font-size:12px">🔢 Wieviele in DB?</button>
-      <button onclick="this.closest('div[style*=\\"position:fixed\\"]').remove()" style="background:transparent;color:var(--text);border:1px solid var(--border);padding:8px 14px;border-radius:6px;cursor:pointer;font-size:12px">Schliessen</button>
+      <button onclick="this.closest('[data-modal]').remove()" style="background:var(--accent);color:white;border:0;padding:8px 18px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">Schliessen</button>
     </div>
   `;
   ov.appendChild(m);
