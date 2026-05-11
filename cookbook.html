@@ -30,27 +30,44 @@
   header.masthead {
     background: linear-gradient(180deg, #1c2531 0%, #141a23 100%);
     border-bottom: 2px solid var(--accent);
-    padding: 28px 24px;
+    padding: 16px 24px 22px;
   }
   header.masthead .row {
     max-width: 1280px; margin: 0 auto;
-    display: flex; justify-content: space-between; align-items: end; gap: 24px; flex-wrap: wrap;
+    display: flex; align-items: flex-start; gap: 18px; flex-wrap: wrap;
   }
+  header.masthead .row > div:first-child { flex: 1; min-width: 200px; }
   header.masthead h1 {
     margin: 0; font-family: 'Playfair Display', Georgia, serif;
-    font-size: clamp(28px, 5vw, 48px); font-weight: 800; letter-spacing: -0.5px;
+    font-size: clamp(26px, 5vw, 44px); font-weight: 800; letter-spacing: -0.5px;
     color: var(--accent-2);
   }
   header.masthead .tagline {
-    color: var(--text-2); font-size: 13px; letter-spacing: 2px; text-transform: uppercase;
-    margin-top: 6px;
+    color: var(--text-2); font-size: 12px; letter-spacing: 2px; text-transform: uppercase;
+    margin-top: 4px;
   }
   header.masthead a.back {
-    color: var(--text-2); text-decoration: none; font-size: 13px;
-    border: 1px solid var(--border); padding: 8px 14px; border-radius: 18px;
+    display: inline-flex; align-items: center; gap: 8px;
+    color: var(--text); text-decoration: none;
+    font-size: 14px; font-weight: 600;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    padding: 10px 18px; border-radius: 24px;
     transition: all .15s;
+    flex-shrink: 0; margin-top: 6px;
   }
-  header.masthead a.back:hover { color: var(--text); border-color: var(--accent); }
+  header.masthead a.back:hover {
+    background: var(--accent); color: #0c1015;
+    border-color: var(--accent);
+  }
+  header.masthead a.back .arrow { font-size: 18px; line-height: 1; }
+  /* Floating fallback for in-fullscreen quick exit */
+  .fs-back-fallback {
+    position: fixed; top: 14px; left: 14px; z-index: 10001;
+    display: none;
+  }
+  .lib-viewer.fullscreen ~ .fs-back-fallback,
+  .lib-viewer.fullscreen .fs-back-fallback { display: none; }
 
   /* Stats strip */
   .stats {
@@ -491,11 +508,13 @@
 
 <header class="masthead">
   <div class="row">
+    <a class="back" href="./" title="Zurück zur Brain-PKA Hauptseite">
+      <span class="arrow">←</span><span>Zurück zur App</span>
+    </a>
     <div>
       <h1>📕 Kochbuch</h1>
       <div class="tagline">Persönliche Rezeptsammlung · Brain PKA</div>
     </div>
-    <a class="back" href="./">← Zurück zur App</a>
   </div>
   <nav class="tabs" id="cookbook-tabs">
     <button class="tab active" data-tab="recipes">📝 Rezepte</button>
