@@ -1040,9 +1040,15 @@ body:has(#sidebar:not(.collapsed)) .list-subtitle .ls-count::after  { content: "
 }
 .ne-preview .callout-title {
   display: flex; align-items: center; gap: 8px;
-  font-weight: 700; font-size: 13px; letter-spacing: 0.4px;
+  font-weight: 700; font-size: 12px; letter-spacing: 0.6px;
+  text-transform: uppercase;
   color: var(--cb-color);
-  margin-bottom: 4px;
+  margin-bottom: 6px;
+}
+.ne-preview .callout-title > span:first-child {
+  width: 16px; height: 16px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 14px; line-height: 1; flex-shrink: 0;
 }
 .ne-preview .callout-body { font-size: 14px; line-height: 1.55; color: var(--text); }
 .ne-preview .callout.note     { --cb-color: #58a6ff; --cb-bg: rgba(88,166,255,0.06); }
@@ -1099,7 +1105,11 @@ body:has(#sidebar:not(.collapsed)) .list-subtitle .ls-count::after  { content: "
   font-size: 13px;
 }
 .ne-cmd-item.selected, .ne-cmd-item:hover { background: var(--surface-2); }
-.ne-cmd-icon { width: 22px; text-align: center; font-size: 14px; flex-shrink: 0; }
+.ne-cmd-icon {
+  width: 20px; height: 20px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 14px; line-height: 1; flex-shrink: 0;
+}
 .ne-cmd-label { flex: 1; }
 .ne-cmd-hint { font-size: 11px; color: var(--text-2); }
 .ne-cmd-empty { padding: 12px; color: var(--text-2); font-style: italic; font-size: 12px; }
@@ -5622,8 +5632,34 @@ function wireNoteEditor() {
     }
     if (e.key === 'Tab') {
       e.preventDefault();
-      if (e.shiftKey) outdentSelection(ta);
-      else indentSelection(ta);
+      if (e.shiftKey) {
+        outdentSelection(ta);
+        render(); return;
+      }
+      // Inside a #+BEGIN_TYPE block? → Tab jumps past the matching
+      // #+END_TYPE so the user can press Enter and continue typing
+      // below the block, instead of indenting.
+      const pos = ta.selectionStart;
+      const before = ta.value.slice(0, pos);
+      const lastBegin = before.lastIndexOf('#+BEGIN_');
+      const lastEnd   = before.lastIndexOf('#+END_');
+      const insideCallout = lastBegin >= 0 && lastBegin > lastEnd;
+      if (insideCallout) {
+        const after = ta.value.slice(pos);
+        const m = after.match(/^[\s\S]*?#\+END_[A-Z]+[ \t]*(\n|$)/);
+        if (m) {
+          let newPos = pos + m[0].length;
+          // Ensure we land on a new empty line below the END marker
+          if (ta.value[newPos] !== '\n') {
+            ta.value = ta.value.slice(0, newPos) + '\n' + ta.value.slice(newPos);
+            newPos += 1;
+          }
+          ta.selectionStart = ta.selectionEnd = newPos;
+          render(); return;
+        }
+      }
+      // Default: indent
+      indentSelection(ta);
       render(); return;
     }
     if (e.key === 'Enter') {
