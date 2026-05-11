@@ -516,6 +516,37 @@
     background: rgba(196,131,30,0.18); color: #6b4d18;
     border-radius: 12px; font-size: 10px; letter-spacing: 1px; text-transform: uppercase;
   }
+
+  /* Recipe hero image — emoji-based placeholder when no real image */
+  .recipe { position: relative; }
+  .recipe-image {
+    height: 110px; border-radius: 10px;
+    margin: -16px -20px 18px -20px;  /* bleed to card edge */
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, #efe4cc 0%, #e2d3aa 100%);
+    font-size: 56px; line-height: 1; user-select: none;
+    border-bottom: 2px solid var(--accent);
+    overflow: hidden; position: relative;
+  }
+  .recipe-image.has-photo {
+    background-size: cover; background-position: center;
+    font-size: 0; /* hide the emoji when real image */
+  }
+  @media (max-width: 600px) {
+    .recipe-image { margin: -26px -24px 18px -24px; }
+  }
+
+  /* Swiss Armed Forces badge — top right, only for military recipes */
+  .swiss-mil-badge {
+    position: absolute; top: 14px; right: 14px; z-index: 2;
+    width: 44px; height: 44px; border-radius: 6px;
+    background: white; box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+    display: flex; align-items: center; justify-content: center;
+    padding: 4px;
+  }
+  .swiss-mil-badge svg { width: 100%; height: 100%; }
+  /* When the badge is present, push the source-tag down so they don't overlap */
+  .recipe.from-military .recipe-source-tag { margin-right: 56px; }
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -676,12 +707,102 @@ function parseIngredient(line) {
 function formatScaledIngredient(parsed, factor) {
   if (parsed.qty == null) return parsed.raw;
   let newQty = parsed.qty * factor;
-  // Round nicely — integers for >=10, 1 decimal for >=1, 2 decimals for <1
+  let unit = parsed.unit || '';
+  const u = unit.toLowerCase();
+
+  // Auto-convert units when the scaled value falls outside a sensible
+  // range. Down: kg<1 → g, l<1 → dl, dl<1 → ml. Up: g≥1000 → kg,
+  // ml≥1000 → l. Preserves the original unit's case when keeping it.
+  if (u === 'kg' && newQty < 1) {
+    newQty = newQty * 1000;
+    unit = 'g';
+  } else if (u === 'g' && newQty >= 1000) {
+    newQty = newQty / 1000;
+    unit = 'kg';
+  } else if (u === 'l' && newQty < 0.1) {
+    newQty = newQty * 1000;
+    unit = 'ml';
+  } else if (u === 'l' && newQty < 1) {
+    newQty = newQty * 10;
+    unit = 'dl';
+  } else if (u === 'dl' && newQty < 0.1) {
+    newQty = newQty * 100;
+    unit = 'ml';
+  } else if (u === 'dl' && newQty >= 10) {
+    newQty = newQty / 10;
+    unit = 'l';
+  } else if (u === 'ml' && newQty >= 1000) {
+    newQty = newQty / 1000;
+    unit = 'l';
+  } else if ((u === 'cl') && newQty < 0.1) {
+    newQty = newQty * 10;
+    unit = 'ml';
+  } else if ((u === 'cl') && newQty >= 100) {
+    newQty = newQty / 100;
+    unit = 'l';
+  }
+
+  // Round nicely based on the magnitude of the converted value
   let qStr;
-  if (newQty >= 10) qStr = String(Math.round(newQty));
+  if (newQty >= 100) qStr = String(Math.round(newQty));
+  else if (newQty >= 10) qStr = newQty.toFixed(0);
   else if (newQty >= 1) qStr = newQty.toFixed(1).replace(/\.0$/, '');
-  else qStr = newQty.toFixed(2).replace(/0$/, '').replace(/\.$/, '');
-  return (parsed.unit ? qStr + ' ' + parsed.unit : qStr) + ' ' + parsed.item;
+  else qStr = newQty.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+
+  return (unit ? qStr + ' ' + unit : qStr) + ' ' + parsed.item;
+}
+
+// Pick a food emoji that visually matches a recipe based on its title
+// + tags. Falls back to a generic plate emoji for unknown content.
+function pickFoodEmoji(title, tags) {
+  const t = (title + ' ' + (tags || []).join(' ')).toLowerCase();
+  const map = [
+    ['suppe|soup|brühe|consommé|bouillon', '🍲'],
+    ['salat|salad', '🥗'],
+    ['pasta|spaghetti|nudel|lasagne|ravioli|penne', '🍝'],
+    ['pizza', '🍕'],
+    ['burger|hamburger', '🍔'],
+    ['sandwich|toast', '🥪'],
+    ['kartoffel|potato|pommes|rösti', '🥔'],
+    ['reis|rice|risotto|pilaf', '🍚'],
+    ['fisch|fish|lachs|salmon|forelle|hering|thun', '🐟'],
+    ['meeresfrüchte|garnele|crevette|shrimp|hummer', '🦐'],
+    ['huhn|hähnchen|poulet|chicken|geflügel', '🍗'],
+    ['rind|beef|steak|braten', '🥩'],
+    ['schwein|pork|wurst|speck|schinken|bacon', '🥓'],
+    ['ei|egg|omelett|frittata', '🍳'],
+    ['käse|cheese|fondue|raclette', '🧀'],
+    ['brot|bread|brötchen|baguette', '🍞'],
+    ['kuchen|cake|torte|gebäck', '🍰'],
+    ['schokolade|chocolate|brownie', '🍫'],
+    ['dessert|pudding|crème|crème brûlée', '🍮'],
+    ['obst|frucht|fruit|apfel|birne|banane|beere', '🍎'],
+    ['gemüse|vegetable|brokkoli|karotte|spinat', '🥦'],
+    ['tee|tea|kaffee|coffee', '☕'],
+    ['saft|smoothie|drink|getränk', '🥤'],
+    ['eintopf|stew|gulasch|chili|curry', '🍛'],
+    ['quiche|tarte|pie|kuchen pikant', '🥧'],
+  ];
+  for (const [pattern, emoji] of map) {
+    if (new RegExp('\\b(' + pattern + ')\\b', 'i').test(t)) return emoji;
+  }
+  return '🍽';
+}
+
+// Swiss army-style coat-of-arms badge (Swiss flag in a rounded square).
+// Inline SVG so we don't need an external asset.
+const SWISS_MIL_BADGE_SVG = `
+<svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-label="Schweizer Armee">
+  <rect width="32" height="32" rx="3" fill="#d52b1e"/>
+  <rect x="13" y="6" width="6" height="20" fill="white"/>
+  <rect x="6" y="13" width="20" height="6" fill="white"/>
+</svg>`;
+
+function isMilitaryRecipe(r) {
+  const s = (r.source || '').toLowerCase();
+  const t = (r.title || '').toLowerCase();
+  const tags = (r.tags || []).join(' ').toLowerCase();
+  return /militär|militaer|armee|army|schweizer\s+armee/.test(s + ' ' + t + ' ' + tags);
 }
 
 function renderRecipe(r) {
@@ -689,6 +810,13 @@ function renderRecipe(r) {
   const anchor = slugForAnchor(r.title, r.id);
   const baseServings = r.servings_base || rec.servings || 4;
   const initialServings = rec.servings || baseServings;
+  const isMil = isMilitaryRecipe(r);
+  const heroEmoji = pickFoodEmoji(r.title, r.tags);
+  const heroImageUrl = rec.image_url || r.image_url || null;
+  const heroBg = heroImageUrl
+    ? `<div class="recipe-image has-photo" style="background-image:url('${escapeHtml(heroImageUrl)}')"></div>`
+    : `<div class="recipe-image">${heroEmoji}</div>`;
+  const milBadge = isMil ? `<div class="swiss-mil-badge" title="Schweizer Armee · Kochrezepte für die Militärküche">${SWISS_MIL_BADGE_SVG}</div>` : '';
   const sourceTag = r.source ? `<div class="recipe-source-tag">📖 ${escapeHtml(r.source)}</div>` : '';
 
   const chips = [];
@@ -729,9 +857,11 @@ function renderRecipe(r) {
 
   // Inline scale state on the article — read by the +/- and "add to shop" handlers
   return `
-    <article class="recipe" id="${anchor}" data-title="${escapeHtml(r.title.toLowerCase())}"
+    <article class="recipe${isMil ? ' from-military' : ''}" id="${anchor}" data-title="${escapeHtml(r.title.toLowerCase())}"
              data-recipe-id="${r.id}" data-base="${baseServings}" data-servings="${initialServings}"
              data-ingredients='${escapeHtml(JSON.stringify(ingredients))}'>
+      ${milBadge}
+      ${heroBg}
       ${sourceTag}
       <h2>${escapeHtml(r.title)}</h2>
       <div class="meta-row">
