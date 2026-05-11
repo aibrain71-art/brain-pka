@@ -478,26 +478,35 @@
 
   /* Recipe scaling controls (inside the existing article.recipe) */
   .recipe-scale {
-    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
     margin: 16px 0; padding: 12px 14px;
     background: rgba(196,131,30,0.08); border-left: 3px solid var(--accent);
     border-radius: 0 8px 8px 0;
   }
-  .recipe-scale label { font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: #5a5a5a; }
-  .recipe-scale .scale-num {
-    background: white; color: var(--ink); border: 1px solid #ddd0b2;
-    border-radius: 6px; padding: 4px 10px; min-width: 60px; text-align: center;
-    font-family: 'Playfair Display', Georgia, serif; font-size: 18px; font-weight: 700;
+  .recipe-scale label { font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: #5a5a5a; margin-right: 4px; }
+  .recipe-scale .preset {
+    background: white; color: var(--ink); border: 1.5px solid #ddd0b2;
+    padding: 6px 12px; border-radius: 18px; cursor: pointer;
+    font-size: 13px; font-weight: 600; transition: all .12s;
+    display: inline-flex; align-items: center; gap: 4px;
   }
-  .recipe-scale button {
-    background: var(--accent); color: white; border: 0; width: 28px; height: 28px;
-    border-radius: 50%; font-size: 16px; cursor: pointer; font-weight: 700;
+  .recipe-scale .preset:hover { border-color: var(--accent); background: rgba(196,131,30,0.06); }
+  .recipe-scale .preset.active {
+    background: var(--accent); color: white; border-color: var(--accent);
+    box-shadow: 0 2px 6px rgba(196,131,30,0.3);
   }
-  .recipe-scale button:hover { filter: brightness(1.1); }
-  .recipe-scale .scale-hint { font-size: 11px; color: #6b6b6b; flex: 1; }
+  .recipe-scale .custom-input {
+    background: white; color: var(--ink); border: 1.5px solid #ddd0b2;
+    padding: 6px 10px; border-radius: 18px; width: 70px;
+    font-size: 13px; font-weight: 600; text-align: center;
+    font-family: inherit;
+  }
+  .recipe-scale .custom-input:focus { outline: none; border-color: var(--accent); }
+  .recipe-scale .custom-input.active { border-color: var(--accent); background: rgba(196,131,30,0.08); }
+  .recipe-scale .scale-hint { font-size: 11px; color: #6b6b6b; flex: 1; min-width: 80px; }
   .recipe-scale .add-to-shop-btn {
     background: #1f8c3a; color: white; border: 0; padding: 8px 14px;
-    border-radius: 6px; font-weight: 600; font-size: 12px; width: auto; height: auto;
+    border-radius: 6px; font-weight: 600; font-size: 12px;
     cursor: pointer;
   }
   .recipe-scale .add-to-shop-btn:hover { filter: brightness(1.1); }
@@ -729,11 +738,16 @@ function renderRecipe(r) {
         ${chips.map(c => `<span class="meta-chip"><span class="meta-emoji">${c.e}</span>${escapeHtml(c.t)}</span>`).join('')}
       </div>
       <div class="recipe-scale" data-scale-for="${r.id}">
-        <label>Personen</label>
-        <button onclick="scaleRecipe(${r.id}, -1)">−</button>
-        <span class="scale-num" data-scale-display>${initialServings}</span>
-        <button onclick="scaleRecipe(${r.id}, +1)">+</button>
-        <span class="scale-hint">Basis: ${baseServings}${baseServings >= 50 ? ' (z.B. Militärrezept für 100 Mann)' : ''}</span>
+        <label>Portionen</label>
+        <button class="preset" data-servings="1" onclick="setRecipeServings(${r.id}, 1)">👤 1</button>
+        <button class="preset" data-servings="2" onclick="setRecipeServings(${r.id}, 2)">👥 2</button>
+        <button class="preset" data-servings="4" onclick="setRecipeServings(${r.id}, 4)">👨‍👩‍👧‍👦 4</button>
+        <input type="number" class="custom-input" min="1" max="500"
+               value="${initialServings}"
+               onchange="setRecipeServings(${r.id}, parseInt(this.value,10) || 1)"
+               oninput="setRecipeServings(${r.id}, parseInt(this.value,10) || 1)"
+               title="Beliebige Personenzahl eingeben">
+        <span class="scale-hint">Basis: ${baseServings}${baseServings >= 50 ? ' (Militärrezept)' : ''}</span>
         <button class="add-to-shop-btn" onclick="addRecipeToShopping(${r.id})">🛒 Auf Einkaufsliste</button>
       </div>
       <div class="body-grid">
@@ -752,21 +766,47 @@ function renderRecipe(r) {
     </article>`;
 }
 
-// Adjust servings via +/- buttons → recompute ingredient quantities in place
-function scaleRecipe(recipeId, delta) {
+// Set the recipe's serving count to a specific value (used by 1/2/4
+// preset buttons AND the custom input). Updates the ingredient list
+// + highlights the matching preset button (or the input if a custom
+// value was entered).
+function setRecipeServings(recipeId, servings) {
   const art = document.querySelector('article.recipe[data-recipe-id="' + recipeId + '"]');
   if (!art) return;
+  servings = Math.max(1, Math.min(500, parseInt(servings, 10) || 1));
   const base = parseInt(art.dataset.base, 10) || 4;
-  let servings = parseInt(art.dataset.servings, 10) || base;
-  servings = Math.max(1, Math.min(500, servings + delta));
   art.dataset.servings = servings;
-  art.querySelector('[data-scale-display]').textContent = servings;
+  // Update active highlight on the scale row
+  const scaleRow = art.querySelector('.recipe-scale');
+  if (scaleRow) {
+    scaleRow.querySelectorAll('.preset').forEach(b => {
+      b.classList.toggle('active', parseInt(b.dataset.servings, 10) === servings);
+    });
+    const inp = scaleRow.querySelector('.custom-input');
+    if (inp) {
+      // Only sync the input value when it doesn't already have it
+      // (avoid stealing focus / cursor while user is typing)
+      if (document.activeElement !== inp) inp.value = servings;
+      // Highlight input when value is NOT one of the presets (1/2/4)
+      const isCustom = ![1, 2, 4].includes(servings);
+      inp.classList.toggle('active', isCustom);
+    }
+  }
+  // Re-scale all ingredients
   const factor = servings / base;
   const ingredients = JSON.parse(art.dataset.ingredients || '[]');
   art.querySelectorAll('ul.ingredients li').forEach((li, i) => {
     if (!ingredients[i]) return;
     li.textContent = formatScaledIngredient(ingredients[i], factor);
   });
+}
+
+// Backwards-compat (in case anything still calls scaleRecipe)
+function scaleRecipe(recipeId, delta) {
+  const art = document.querySelector('article.recipe[data-recipe-id="' + recipeId + '"]');
+  if (!art) return;
+  const cur = parseInt(art.dataset.servings, 10) || 4;
+  setRecipeServings(recipeId, cur + delta);
 }
 
 // Push current (scaled) ingredient list into the shopping list backend
@@ -872,6 +912,18 @@ async function loadRecipes() {
     }
     $('#recipes').innerHTML = recs.map(renderRecipe).join('');
     wireSearch();
+    // Sync preset-button active state to the initial servings value
+    // so the matching pill is highlighted on first render.
+    document.querySelectorAll('article.recipe').forEach(art => {
+      const servings = parseInt(art.dataset.servings, 10) || 4;
+      const row = art.querySelector('.recipe-scale');
+      if (!row) return;
+      row.querySelectorAll('.preset').forEach(b => {
+        b.classList.toggle('active', parseInt(b.dataset.servings, 10) === servings);
+      });
+      const inp = row.querySelector('.custom-input');
+      if (inp) inp.classList.toggle('active', ![1, 2, 4].includes(servings));
+    });
   } catch (e) {
     $('#recipes').innerHTML = `<div class="empty"><h2>Fehler</h2><p>${escapeHtml(e?.message || String(e))}</p></div>`;
   }
