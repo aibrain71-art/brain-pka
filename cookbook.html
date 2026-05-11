@@ -259,9 +259,36 @@
   .lib-toc-wrap { border-top: 1px solid var(--border); padding-top: 12px; }
   .lib-toc-head { font-size: 11px; letter-spacing: 1.4px; text-transform: uppercase; color: var(--text-2); margin-bottom: 8px; }
   ol.lib-toc { list-style: none; padding: 0; margin: 0; }
-  ol.lib-toc li { padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 12px; cursor: pointer; }
-  ol.lib-toc li:hover { color: var(--accent-2); }
-  ol.lib-toc li:last-child { border-bottom: 0; }
+  ol.lib-toc li {
+    padding: 7px 10px; margin: 1px 0;
+    font-size: 12px; cursor: pointer;
+    border-radius: 4px; border: 1px solid transparent;
+    transition: all .12s;
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    user-select: none;
+  }
+  ol.lib-toc li:hover {
+    background: var(--surface-2);
+    border-color: var(--accent);
+    color: var(--accent-2);
+  }
+  ol.lib-toc li:active { transform: scale(.98); }
+  ol.lib-toc li .toc-pg {
+    color: var(--text-2); font-size: 11px; font-variant-numeric: tabular-nums;
+    background: rgba(255,255,255,0.03); padding: 1px 6px; border-radius: 4px;
+    flex-shrink: 0;
+  }
+  ol.lib-toc li:hover .toc-pg { color: var(--accent-2); }
+  .toc-offset-hint {
+    font-size: 11px; color: var(--text-2); margin-top: 8px; padding-top: 8px;
+    border-top: 1px solid var(--border); display: flex; align-items: center; gap: 6px;
+  }
+  .toc-offset-hint button {
+    background: var(--surface-2); border: 1px solid var(--border); color: var(--text);
+    width: 22px; height: 22px; border-radius: 4px; cursor: pointer; font-size: 12px;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .toc-offset-hint button:hover { border-color: var(--accent); }
 
   section.lib-viewer {
     background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
@@ -917,17 +944,23 @@ function pdfZoom(delta) {
   renderPdfPage();
 }
 
+// Active TOC for the currently-open cookbook + page offset (delta
+// between the book's printed page number and the actual PDF page
+// index — covers frontmatter, cover, copyright). Persisted per book.
+let _TOC_ENTRIES = [];
+let _TOC_SOURCE = null;
+let _PAGE_OFFSET = 0;
+
 async function renderPdfOutline() {
   const wrap = $('#lib-toc-wrap');
   const list = $('#lib-toc');
   const head = wrap.querySelector('.lib-toc-head');
   if (head) head.textContent = '📑 Kapitel — wird ermittelt…';
+  _TOC_ENTRIES = []; _TOC_SOURCE = null;
 
-  // Strategy 1: PDF's built-in outline (bookmarks) — many cookbooks
-  // don't have these, so we fall back to text-scanning.
+  // Strategy 1: PDF's built-in outline (bookmarks)
   const outline = await _PDF_DOC.getOutline().catch(() => null);
   let flat = null;
-  let source = null;
   if (outline && outline.length) {
     flat = [];
     (function walk(items, depth) {
@@ -936,16 +969,24 @@ async function renderPdfOutline() {
         if (it.items?.length) walk(it.items, depth + 1);
       });
     })(outline, 0);
-    source = 'bookmarks';
+    // Resolve each bookmark to a page number up-front so click is sync
+    for (const e of flat) {
+      if (e.dest) {
+        try {
+          const destRef = Array.isArray(e.dest) ? e.dest[0] : await _PDF_DOC.getDestination(e.dest).then(d => d?.[0]);
+          if (destRef) e.page = (await _PDF_DOC.getPageIndex(destRef)) + 1;
+        } catch (_) {}
+      }
+    }
+    _TOC_SOURCE = 'bookmarks';
   }
 
-  // Strategy 2: scan first 20 pages for a printed table of contents
-  // ("Inhaltsverzeichnis"-style page) and parse title→page entries.
+  // Strategy 2: scan first 20 pages for a printed TOC
   if (!flat || flat.length < 3) {
     const scanned = await scanFirstPagesForTOC(20);
     if (scanned && scanned.length >= 2) {
       flat = scanned;
-      source = 'auto-scan';
+      _TOC_SOURCE = 'auto-scan';
     }
   }
 
@@ -955,29 +996,112 @@ async function renderPdfOutline() {
     return;
   }
   wrap.style.display = '';
-  if (head) head.textContent = source === 'bookmarks' ? '📑 Kapitel' : '📑 Inhaltsverzeichnis (erkannt)';
+  _TOC_ENTRIES = flat;
 
-  list.innerHTML = flat.map((it, i) => `<li data-i="${i}" style="padding-left:${(it.depth || 0) * 14}px">${escapeHtml(it.title)}${it.page ? '<span style="float:right;color:var(--text-2);font-size:11px">S. ' + it.page + '</span>' : ''}</li>`).join('');
-  list.querySelectorAll('li').forEach(li => {
-    li.addEventListener('click', async () => {
-      const idx = parseInt(li.dataset.i, 10);
-      const it = flat[idx];
-      // Auto-scan entries carry .page directly. Bookmark entries carry
-      // .dest which needs resolving via PDF.js.
-      if (Number.isInteger(it.page) && it.page > 0) {
-        _PDF_PAGE = Math.min(_PDF_DOC.numPages, it.page);
-        renderPdfPage();
-        return;
+  // For auto-scan: detect page offset between printed and PDF page
+  // (e.g. book printed page 5 → PDF page 13 because of 8 frontmatter
+  // pages). Try cached offset first, then auto-detect, fall back to 0.
+  if (_TOC_SOURCE === 'auto-scan') {
+    const cacheKey = 'pdfOffset_' + _PDF_BOOK.id;
+    const cached = parseInt(localStorage.getItem(cacheKey) || '', 10);
+    if (Number.isFinite(cached)) {
+      _PAGE_OFFSET = cached;
+    } else {
+      _PAGE_OFFSET = await detectPageOffset(flat);
+      try { localStorage.setItem(cacheKey, String(_PAGE_OFFSET)); } catch(_) {}
+    }
+  } else {
+    _PAGE_OFFSET = 0;  // bookmarks already point to actual PDF pages
+  }
+
+  drawTocList();
+}
+
+function drawTocList() {
+  const list = $('#lib-toc');
+  const head = $('#lib-toc-wrap').querySelector('.lib-toc-head');
+  const labelTxt = _TOC_SOURCE === 'bookmarks'
+    ? '📑 Kapitel · ' + _TOC_ENTRIES.length + ' Einträge'
+    : '📑 Inhaltsverzeichnis · ' + _TOC_ENTRIES.length + ' Einträge (auto-erkannt)';
+  if (head) head.textContent = labelTxt;
+
+  list.innerHTML = _TOC_ENTRIES.map((it, i) => {
+    const pageNum = (it.page || 0);
+    const pdfPage = pageNum + (_TOC_SOURCE === 'auto-scan' ? _PAGE_OFFSET : 0);
+    return `<li data-i="${i}" data-pdf-page="${pdfPage}" style="padding-left:${(it.depth || 0) * 14 + 10}px"
+                onclick="jumpToTocEntry(${i})"
+                title="Springe zu Seite ${pdfPage} (gedruckte Seite ${pageNum})">
+              <span>${escapeHtml(it.title)}</span>
+              ${pageNum ? `<span class="toc-pg">${pageNum}</span>` : ''}
+            </li>`;
+  }).join('');
+
+  // Show offset adjuster only for auto-scan (bookmarks already exact)
+  if (_TOC_SOURCE === 'auto-scan') {
+    const wrap = $('#lib-toc-wrap');
+    let hint = wrap.querySelector('.toc-offset-hint');
+    if (!hint) {
+      hint = document.createElement('div');
+      hint.className = 'toc-offset-hint';
+      wrap.appendChild(hint);
+    }
+    hint.innerHTML = `
+      <span>Seiten-Versatz:</span>
+      <button onclick="adjustTocOffset(-1)" title="Versatz reduzieren">−</button>
+      <span id="toc-offset-val" style="min-width:30px;text-align:center;font-variant-numeric:tabular-nums;font-weight:600">${_PAGE_OFFSET >= 0 ? '+' + _PAGE_OFFSET : _PAGE_OFFSET}</span>
+      <button onclick="adjustTocOffset(+1)" title="Versatz erhöhen">+</button>
+      <span style="font-size:10px;color:var(--text-2);margin-left:auto" title="Wenn ein Klick auf die falsche Seite springt, passe den Versatz an">?</span>
+    `;
+  }
+}
+
+function jumpToTocEntry(idx) {
+  const it = _TOC_ENTRIES[idx];
+  if (!it) return;
+  let target;
+  if (_TOC_SOURCE === 'bookmarks' && Number.isInteger(it.page)) {
+    target = it.page;
+  } else if (Number.isInteger(it.page)) {
+    target = it.page + _PAGE_OFFSET;
+  }
+  if (!Number.isFinite(target) || target < 1) return;
+  _PDF_PAGE = Math.min(_PDF_DOC.numPages, Math.max(1, target));
+  renderPdfPage();
+}
+
+function adjustTocOffset(delta) {
+  _PAGE_OFFSET += delta;
+  try { localStorage.setItem('pdfOffset_' + _PDF_BOOK.id, String(_PAGE_OFFSET)); } catch(_) {}
+  drawTocList();
+}
+
+// Best-effort offset detector: scan early PDF pages for a page-number
+// footer matching the first TOC entry's printed page number. If found,
+// offset = pdf-page - printed-page. Caps the search to avoid burning
+// the worker timeout.
+async function detectPageOffset(tocEntries) {
+  const first = tocEntries.find(e => Number.isInteger(e.page) && e.page > 0 && e.page < 100);
+  if (!first) return 0;
+  const target = first.page;
+  const scanLimit = Math.min(_PDF_DOC.numPages, Math.max(30, target * 2 + 15));
+  for (let p = 1; p <= scanLimit; p++) {
+    try {
+      const page = await _PDF_DOC.getPage(p);
+      const txt = await page.getTextContent();
+      const lines = textContentToLines(txt);
+      if (!lines.length) continue;
+      // Page-number footers are usually short standalone digits in the
+      // last/first few lines.
+      const candidates = [...lines.slice(-3), ...lines.slice(0, 2)];
+      for (const ln of candidates) {
+        const m = ln.trim().match(/^(\d{1,4})$/);
+        if (m && parseInt(m[1], 10) === target) {
+          return p - target;
+        }
       }
-      const dest = it.dest;
-      if (!dest) return;
-      const destRef = Array.isArray(dest) ? dest[0] : (typeof dest === 'string' ? await _PDF_DOC.getDestination(dest).then(d => d?.[0]) : null);
-      if (!destRef) return;
-      const pageNum = await _PDF_DOC.getPageIndex(destRef).then(i => i + 1);
-      _PDF_PAGE = pageNum;
-      renderPdfPage();
-    });
-  });
+    } catch (_) { /* ignore */ }
+  }
+  return 0;
 }
 
 // Heuristic: scan the first N pages, look for an "Inhaltsverzeichnis"
