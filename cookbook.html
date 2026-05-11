@@ -799,10 +799,12 @@ const SWISS_MIL_BADGE_SVG = `
 </svg>`;
 
 function isMilitaryRecipe(r) {
-  const s = (r.source || '').toLowerCase();
-  const t = (r.title || '').toLowerCase();
-  const tags = (r.tags || []).join(' ').toLowerCase();
-  return /militär|militaer|armee|army|schweizer\s+armee/.test(s + ' ' + t + ' ' + tags);
+  const fields = [
+    r.source, r.title, r.cookbook_title,
+    (r.tags || []).join(' '),
+    r.garden_type, r.recipe?.notes || '',
+  ].join(' ').toLowerCase();
+  return /militär|militaer|armee|army|schweizer\s+armee|kantonspolizei|zivilschutz/.test(fields);
 }
 
 function renderRecipe(r) {

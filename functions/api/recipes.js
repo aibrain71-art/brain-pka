@@ -10,15 +10,35 @@ export async function onRequestGet({ env }) {
     });
   }
   try {
+    // Also fetch cookbooks so we can resolve source labels per-recipe.
+    // Map cookbook_id → { title, source } for fast lookup.
+    let cookbookMap = {};
+    try {
+      const cb = await env.DB.prepare('SELECT id, title, source FROM cookbooks').all();
+      for (const c of (cb.results || [])) cookbookMap[c.id] = { title: c.title, source: c.source };
+    } catch (_) { /* cookbooks table may not exist on older schemas */ }
+
     const rows = await env.DB.prepare(
-      "SELECT id, slug, title, body, related_topics, source_meta, created_at FROM notes WHERE note_type = 'recipe' ORDER BY title COLLATE NOCASE ASC"
+      "SELECT id, slug, title, body, related_topics, source_meta, garden_type, created_at FROM notes WHERE note_type = 'recipe' ORDER BY title COLLATE NOCASE ASC"
     ).all();
     const recipes = (rows.results || []).map(row => {
-      let recipe = null;
+      let recipe = null, meta = null;
       try {
-        const meta = row.source_meta ? JSON.parse(row.source_meta) : null;
+        meta = row.source_meta ? JSON.parse(row.source_meta) : null;
         recipe = meta?.recipe || null;
       } catch(_) {}
+      // Resolve source info: prefer cookbook table → source_meta → garden_type
+      let source = null, cookbook_id = null, cookbook_page = null, cookbook_title = null;
+      if (meta?.cookbook_id) {
+        cookbook_id = meta.cookbook_id;
+        cookbook_page = meta.cookbook_page || null;
+        cookbook_title = meta.cookbook_title || cookbookMap[cookbook_id]?.title || null;
+        source = cookbookMap[cookbook_id]?.source || meta.cookbook_title || null;
+      }
+      if (!source && meta?.cookbook_title) {
+        cookbook_title = meta.cookbook_title;
+        source = meta.cookbook_title;
+      }
       return {
         id: row.id,
         slug: row.slug,
@@ -27,6 +47,11 @@ export async function onRequestGet({ env }) {
         tags: row.related_topics
           ? String(row.related_topics).split(/[,;]/).map(t => t.trim()).filter(Boolean)
           : [],
+        garden_type: row.garden_type || null,
+        source,             // human-readable label like "Schweizer Armee · Kanton Zürich"
+        cookbook_id,
+        cookbook_page,
+        cookbook_title,
         created_at: row.created_at,
         recipe,
       };
