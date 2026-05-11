@@ -1028,14 +1028,14 @@ body:has(#sidebar:not(.collapsed)) .list-subtitle .ls-count::after  { content: "
 .ne-preview li.todo { list-style: none; margin-left: -22px; }
 .ne-preview li.todo input { margin-right: 6px; vertical-align: middle; pointer-events: none; }
 .ne-preview blockquote { border-left: 3px solid var(--accent); margin: 8px 0; padding: 4px 14px; color: var(--text-2); font-style: italic; }
-/* Logseq-style callouts — pixel-tight: icon left, vertical line
-   immediately after icon column, text right. No background, no title. */
+/* Logseq-style callouts — big icon left (2× text size), vertically
+   centered against the body, vertical line set a bit further right. */
 .ne-preview .callout {
   display: flex;
-  align-items: stretch;
+  align-items: center;          /* icon vertically centered with body */
   gap: 0;
-  padding: 2px 0;
-  margin: 10px 0;
+  padding: 4px 0;
+  margin: 12px 0;
   background: transparent;
   border: 0;
   color: var(--text);
@@ -1043,16 +1043,15 @@ body:has(#sidebar:not(.collapsed)) .list-subtitle .ls-count::after  { content: "
 }
 .ne-preview .callout-icon {
   flex-shrink: 0;
-  width: 32px;
+  width: 52px;                  /* wider column → line sits further right */
   display: flex;
-  align-items: flex-start;
+  align-items: center;          /* SVG vertically centered inside column */
   justify-content: center;
-  padding-top: 2px;
   color: var(--cb-color, var(--text-2));
   user-select: none;
 }
 .ne-preview .callout-icon svg {
-  width: 22px; height: 22px;
+  width: 30px; height: 30px;    /* ~2× the 15px body text */
   display: block;
   stroke: currentColor;
   fill: none;
@@ -1060,7 +1059,7 @@ body:has(#sidebar:not(.collapsed)) .list-subtitle .ls-count::after  { content: "
 .ne-preview .callout-body {
   flex: 1;
   border-left: 1px solid var(--border);
-  padding: 0 0 0 14px;
+  padding: 6px 0 6px 18px;
   font-size: 15px;
   line-height: 1.6;
   color: var(--text);
