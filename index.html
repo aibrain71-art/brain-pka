@@ -5737,25 +5737,38 @@ function mdRender(src) {
   // Horizontal rule
   s = s.replace(/^---$/gm, '<hr>');
   // GitHub-style callouts — must run BEFORE the generic blockquote rule.
-  // Matches contiguous lines that all start with "> ", where the first
-  // body line is "[!TYPE]" → render as a styled box; otherwise fall
-  // through to the regular blockquote rule below.
+  // Matches contiguous lines that start with "&gt;" (with or without
+  // trailing space + content). When the first body line is "[!TYPE]"
+  // we render a styled box; otherwise it falls through to a regular
+  // blockquote.
   s = s.replace(
-    /(?:^&gt; .+$\n?)+/gm,
+    /(?:^&gt;[ ]?.*(?:\n|$))+/gm,
     (block) => {
-      const lines = block.split('\n').filter(l => l.startsWith('&gt; '));
-      if (!lines.length) return block;
-      // Strip the "&gt; " prefix from each line
-      const inner = lines.map(l => l.replace(/^&gt; ?/, ''));
-      const m = inner[0].match(/^\[!(NOTE|TIP|WARNING|IMPORTANT|CAUTION)\]\s*$/i);
+      const lines = block.replace(/\n$/, '').split('\n');
+      // Strip the leading "&gt;" + optional space — supports both
+      // "> text" and bare ">" empty-quote lines.
+      const inner = lines.map(l => l.replace(/^&gt;[ ]?/, ''));
+      // Detect the [!TYPE] marker on line 1 (after potential nested
+      // "> " prefixes — the user may have invoked the menu while inside
+      // an existing blockquote, in which case the line is "> [!TIP]"
+      // and inner becomes "> [!TIP]" → strip again).
+      let first = inner[0] || '';
+      while (first.startsWith('&gt;')) first = first.replace(/^&gt;[ ]?/, '');
+      const m = first.match(/^\[!(NOTE|TIP|WARNING|IMPORTANT|CAUTION)\]\s*$/i);
       if (!m) {
-        // Regular blockquote (single or multi-line)
         return '<blockquote>' + inner.join('<br>') + '</blockquote>';
       }
       const type = m[1].toLowerCase();
       const labels = { note: 'Note', tip: 'Tip', warning: 'Warning', important: 'Important', caution: 'Caution' };
       const icons  = { note: 'ℹ️',  tip: '💡',   warning: '⚠️',     important: '❗',         caution: '🔥' };
-      const body = inner.slice(1).join('<br>') || '<span style="color:var(--text-2);font-style:italic">(leer — füge hier deinen Text ein)</span>';
+      // Body lines after the marker — also strip any leading nested "> "
+      const bodyLines = inner.slice(1).map(l => {
+        let cleaned = l;
+        while (cleaned.startsWith('&gt;')) cleaned = cleaned.replace(/^&gt;[ ]?/, '');
+        return cleaned;
+      });
+      const body = bodyLines.join('<br>').trim() ||
+                   '<span style="color:var(--text-2);font-style:italic">(leer — füge hier deinen Text ein)</span>';
       return `<div class="callout ${type}">
                 <div class="callout-title"><span>${icons[type]}</span><span>${labels[type]}</span></div>
                 <div class="callout-body">${body}</div>
@@ -6018,11 +6031,28 @@ async function executeCommand(ta, cmd) {
   const after  = ta.value.slice(cursorPos);
 
   if (cmd.insert !== undefined || cmd.insertFn) {
-    const txt = cmd.insertFn ? cmd.insertFn() : cmd.insert;
-    ta.value = before + txt + after;
-    // Position cursor — cursorOffset is relative to end of inserted text
+    let txt = cmd.insertFn ? cmd.insertFn() : cmd.insert;
+    let prefix = '';
+    // For blockquote / callout inserts (start with "> "), force a clean
+    // paragraph break so the new block isn't sucked into the existing
+    // line's blockquote context (otherwise "> [!TIP]" inserted while the
+    // cursor sits on "> some text" becomes "> > [!TIP]" which is a
+    // nested blockquote, not a callout).
+    if (txt.startsWith('> ')) {
+      // What does the "before" end with?
+      if (before.length === 0) {
+        // empty doc — no prefix needed
+      } else if (before.endsWith('\n\n')) {
+        // already at a fresh paragraph
+      } else if (before.endsWith('\n')) {
+        prefix = '\n';
+      } else {
+        prefix = '\n\n';
+      }
+    }
+    ta.value = before + prefix + txt + after;
     const offset = (typeof cmd.cursorOffset === 'number') ? cmd.cursorOffset : 0;
-    const newPos = before.length + txt.length + offset;
+    const newPos = before.length + prefix.length + txt.length + offset;
     ta.selectionStart = ta.selectionEnd = newPos;
     ta.focus();
     ta.dispatchEvent(new Event('input'));
