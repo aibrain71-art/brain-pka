@@ -156,8 +156,15 @@
     border-left: 4px solid var(--accent);
     padding: 32px 36px; box-shadow: 0 6px 24px rgba(0,0,0,0.5);
     scroll-margin-top: 24px;
+    position: relative; /* recipe-number-stamp anchors here */
   }
-  @media (max-width: 600px) { article.recipe { padding: 24px 22px; } }
+  /* When a recipe has a number stamp on the left edge, push content
+     a bit to the right so the title doesn't overlap the stamp. */
+  article.recipe.has-number { padding-left: 56px; }
+  @media (max-width: 600px) {
+    article.recipe { padding: 24px 22px; }
+    article.recipe.has-number { padding-left: 42px; }
+  }
 
   article.recipe h2 {
     margin: 0;
@@ -574,6 +581,35 @@
     background: var(--accent); color: white;
     border-radius: 0; font-size: 10px; letter-spacing: 1.5px;
     text-transform: uppercase; font-weight: 700;
+  }
+
+  /* Recipe number — printed sideways on the page margin in many
+     cookbooks (Schweizer Militär-Kochbuch, Schuhbeck, etc.). We
+     reproduce that with a vertical red stamp on the left edge of
+     the card so the number stays visible without competing with
+     the title. */
+  .recipe-number-stamp {
+    position: absolute;
+    top: 18px; left: -2px;
+    background: var(--accent); color: white;
+    padding: 8px 4px 8px 4px;
+    font-family: 'Permanent Marker', cursive;
+    font-size: 16px; line-height: 1;
+    letter-spacing: 1px;
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    z-index: 3;
+    box-shadow: 2px 2px 0 rgba(0,0,0,0.4);
+    pointer-events: none;
+    min-height: 36px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .recipe-number-stamp::before {
+    content: '№ ';
+    font-size: 11px; opacity: 0.85;
+  }
+  @media (max-width: 600px) {
+    .recipe-number-stamp { font-size: 13px; padding: 6px 3px; }
   }
 
   /* Recipe top row — source label on the left, both icons on the right
@@ -1086,11 +1122,20 @@ function renderRecipe(r) {
 
   const notesHtml = rec.notes ? `<div class="recipe-notes">${escapeHtml(rec.notes)}</div>` : '';
 
+  // Recipe number printed sideways on the page margin (military/Schuhbeck
+  // style). Stored in rec.recipe_number (string, e.g. "245"). Shown as a
+  // vertical red stamp on the left edge of the card.
+  const recipeNumber = rec.recipe_number || r.recipe_number || null;
+  const numberStamp = recipeNumber
+    ? `<div class="recipe-number-stamp" title="Rezept-Nr. im Original">${escapeHtml(String(recipeNumber))}</div>`
+    : '';
+
   // Inline scale state on the article — read by the +/- and "add to shop" handlers
   return `
-    <article class="recipe${isMil ? ' from-military' : ''}" id="${anchor}" data-title="${escapeHtml(r.title.toLowerCase())}"
+    <article class="recipe${isMil ? ' from-military' : ''}${recipeNumber ? ' has-number' : ''}" id="${anchor}" data-title="${escapeHtml(r.title.toLowerCase())}"
              data-recipe-id="${r.id}" data-base="${baseServings}" data-servings="${initialServings}"
              data-ingredients='${escapeHtml(JSON.stringify(ingredients))}'>
+      ${numberStamp}
       <div class="recipe-header-row">
         <div class="source-side">${sourceTag}</div>
         <div class="icons-side">
@@ -1662,11 +1707,29 @@ async function renderPdfOutline() {
     _TOC_SOURCE = 'bookmarks';
   }
 
-  // Strategy 2: scan first 20 pages for a printed TOC
+  // Strategy 2: scan first 40 pages for a printed TOC.
+  // Was 20 — bumped because big cookbooks (Schweizer Militär: 600+ pages)
+  // can have a multi-page TOC starting on a Roman-numeral frontmatter page
+  // (V, VI, VII…) that listing-detection misses when scan is too shallow.
   if (!flat || flat.length < 3) {
-    const scanned = await scanFirstPagesForTOC(20);
+    if (head) head.textContent = '📑 Scanne 40 Seiten nach Inhaltsverzeichnis…';
+    const scanned = await scanFirstPagesForTOC(40);
     if (scanned && scanned.length >= 2) {
       flat = scanned;
+      _TOC_SOURCE = 'auto-scan';
+    }
+  }
+
+  // Strategy 3 (auto): For LONG PDFs (>100 pages) where regex failed,
+  // automatically trigger the AI fallback — these are almost always
+  // recipe collections with a printed TOC; manual click was a bad UX.
+  if ((!flat || !flat.length) && _PDF_DOC.numPages > 100) {
+    if (head) head.textContent = '🧠 Auto-Scan leer — Claude analysiert TOC-Seiten…';
+    const list = $('#lib-toc');
+    list.innerHTML = '<li style="color:var(--text-2);font-style:italic">Bitte warten — AI liest die ersten 40 Seiten…</li>';
+    const aiEntries = await detectTocViaAI();
+    if (aiEntries && aiEntries.length >= 2) {
+      flat = aiEntries;
       _TOC_SOURCE = 'auto-scan';
     }
   }
@@ -1678,14 +1741,15 @@ async function renderPdfOutline() {
     const list = $('#lib-toc');
     list.innerHTML = `
       <li style="cursor:default;color:var(--text-2);font-style:italic;flex-direction:column;align-items:flex-start;gap:6px">
-        <span>Auto-Scan hat nichts gefunden.</span>
+        <span>Auto-Scan + AI haben nichts gefunden.</span>
         ${window._tocDebug ? '<span style="font-size:11px">Gescannt: ' + window._tocDebug.pageCount + ' Seiten · ' + (window._tocDebug.allLines?.length || 0) + ' Zeilen</span>' : ''}
+        <span style="font-size:11px">PDF könnte gescannt/Bild-basiert sein.</span>
       </li>
-      <li style="cursor:pointer;justify-content:center;border-color:var(--accent);background:var(--accent);color:#0c1015;font-weight:600;margin-top:8px" onclick="tocRescanDeeper()">
-        🔄 Tiefer scannen (40 Seiten)
+      <li style="cursor:pointer;justify-content:center;border-color:var(--accent);background:var(--accent);color:#0c1015;font-weight:600;margin-top:8px" onclick="tocRescanDeeper(80)">
+        🔄 Tiefer scannen (80 Seiten)
       </li>
       <li style="cursor:pointer;justify-content:center;border-color:var(--border)" onclick="tocAiFallback()">
-        🧠 Mit AI erkennen
+        🧠 AI nochmal versuchen
       </li>
       <li style="cursor:pointer;justify-content:center;border-color:var(--border)" onclick="tocShowDebug()">
         🔍 Diagnose anzeigen
@@ -1840,13 +1904,14 @@ function adjustTocOffset(delta) {
 
 // === TOC fallback actions ===
 
-// Re-scan with a wider page window (40 instead of 20)
-async function tocRescanDeeper() {
+// Re-scan with a wider page window (configurable depth, default 80)
+async function tocRescanDeeper(depth) {
+  const pages = Math.max(20, Math.min(150, parseInt(depth, 10) || 80));
   const head = $('#lib-toc-wrap').querySelector('.lib-toc-head');
   const list = $('#lib-toc');
-  if (head) head.textContent = '📑 Scanne 40 Seiten…';
+  if (head) head.textContent = '📑 Scanne ' + pages + ' Seiten…';
   list.innerHTML = '<li style="color:var(--text-2);font-style:italic">…</li>';
-  const scanned = await scanFirstPagesForTOC(40);
+  const scanned = await scanFirstPagesForTOC(pages);
   if (scanned && scanned.length >= 2) {
     _TOC_ENTRIES = scanned;
     _TOC_SOURCE = 'auto-scan';
@@ -1855,7 +1920,7 @@ async function tocRescanDeeper() {
     drawTocList();
   } else {
     if (head) head.textContent = '📑 Kein Inhaltsverzeichnis erkannt';
-    list.innerHTML = '<li style="cursor:default;color:var(--text-2);font-style:italic">Auch bei 40 Seiten nichts gefunden.</li><li style="cursor:pointer;justify-content:center;border-color:var(--accent);background:var(--accent);color:#0c1015;font-weight:600" onclick="tocAiFallback()">🧠 Mit AI erkennen</li>';
+    list.innerHTML = '<li style="cursor:default;color:var(--text-2);font-style:italic">Auch bei ' + pages + ' Seiten nichts gefunden.</li><li style="cursor:pointer;justify-content:center;border-color:var(--accent);background:var(--accent);color:#0c1015;font-weight:600" onclick="tocAiFallback()">🧠 Mit AI erkennen</li>';
   }
 }
 
@@ -2064,17 +2129,19 @@ async function detectTocViaAI() {
     alert('Erst PDF laden + Auto-Scan durchlaufen lassen.');
     return null;
   }
-  // Compose first ~20 pages of text, capped
-  const blob = dbg.allLines.map(l => l.text).join('\n').slice(0, 16000);
+  // Compose extracted text. Bumped from 16k → 60k chars because big
+  // cookbook TOCs (Schweizer Militär: 600+ recipes) span many pages
+  // of frontmatter and easily exceed 16k chars.
+  const blob = dbg.allLines.map(l => '[S.' + l.page + '] ' + l.text).join('\n').slice(0, 60000);
   // Reuse the chat endpoint (has tools off), with a structured ask
   try {
     const r = await fetch('/api/chat', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'claude-haiku-4-5',
-        max_tokens: 4000,
-        system: 'Du analysierst extrahierten Text aus den ersten 20 Seiten eines Kochbuch-PDFs. Identifiziere das Inhaltsverzeichnis und liefere AUSSCHLIESSLICH ein JSON-Array zurück (kein Markdown, kein \`\`\`-Block, NUR pures JSON):\n\n[{"title":"Suppen","page":23,"depth":0},{"title":"Kartoffelsuppe","page":24,"depth":1}, ...]\n\nRegeln:\n- title = der lesbare Eintrags-Name (Kapitel oder Rezept). Ohne führende Nummerierung.\n- page = die GEDRUCKTE Seitenzahl wie sie im Inhaltsverzeichnis steht (NICHT die PDF-Seite).\n- depth = 0 für Kapitel, 1 für Unterpunkte, 2 für tiefer.\n- 0-200 Einträge.\n- Wenn KEIN Inhaltsverzeichnis erkennbar: leeres Array [].',
-        messages: [{ role: 'user', content: 'Extrahiere alle TOC-Einträge aus diesem Text:\n\n' + blob }],
+        max_tokens: 8000,
+        system: 'Du analysierst extrahierten Text aus den ersten Seiten eines Kochbuch-PDFs (Frontmatter + Inhaltsverzeichnis). Erkenne das Inhaltsverzeichnis und liefere AUSSCHLIESSLICH ein JSON-Array zurück (kein Markdown, kein \`\`\`-Block, NUR pures JSON):\n\n[{"title":"Suppen","page":23,"depth":0},{"title":"Kartoffelsuppe","page":24,"depth":1}, ...]\n\nKONTEXT: Der Text kann viele Seiten umfassen (Frontmatter + Inhaltsverzeichnis + erste Kapitel-Anfänge). Das Inhaltsverzeichnis steht oft auf Seiten mit römischer Nummerierung (I, II, III, IV, V…) oder ganz am Anfang. In Militär- oder Profi-Kochbüchern startet das TOC manchmal erst auf Seite III oder V und kann bis Seite XV gehen.\n\nREGELN:\n- title = der lesbare Eintrags-Name (Kapitel oder Rezept). Ohne führende Nummerierung wie "1." oder "12.3".\n- page = die GEDRUCKTE Seitenzahl wie sie im Inhaltsverzeichnis steht (NICHT die PDF-Seite). Zahl. Wenn nur römische Zahlen vorhanden sind, ignoriere diesen Eintrag.\n- depth = 0 für Hauptkapitel, 1 für Unterpunkte/Rezepte unter einem Kapitel, 2 für tiefer.\n- Erfasse ALLE Einträge die du erkennst — auch wenn das mehrere hundert Rezepte sind (Schweizer Militär hat z.B. 600+). LIEBER mehr als weniger.\n- Wenn KEIN Inhaltsverzeichnis erkennbar: leeres Array [].\n- Antwort startet mit [ und endet mit ]. Sonst NICHTS.',
+        messages: [{ role: 'user', content: 'Extrahiere alle TOC-Einträge aus diesem Text. Die "[S.N]" Präfixe zeigen, auf welcher PDF-Seite die Zeile gefunden wurde (ignorier sie für den TOC-Inhalt selbst):\n\n' + blob }],
       }),
     });
     const data = await r.json();
@@ -2305,6 +2372,24 @@ function showExtractDetails() {
         d.chunk_results.map(c => `<li>Chunk ${c.chunk}: ${c.pages || ''}${c.error ? ' — ⚠️ ' + escapeHtml(c.error) : ' — ' + (c.recipes_found || 0) + ' erkannt'}</li>`).join('') +
       '</ul></div>'
     : '';
+  // Full identified-recipe list — was missing before, this is what the
+  // user asked for: "zähl die rezepte auch". Sortable by page, with the
+  // recipe_number badge if present (military cookbook page-margin №).
+  const allRecipes = (d.all_recipes || []).slice();
+  allRecipes.sort((a, b) => (a.page || 0) - (b.page || 0));
+  const recipesList = allRecipes.length
+    ? `<div style="margin-top:14px">
+         <strong>Alle erkannten Rezepte (${allRecipes.length}):</strong>
+         <div style="font-size:11px;margin:8px 0;max-height:42vh;overflow:auto;background:var(--surface-2);border:1px solid var(--border);padding:10px;border-radius:0;font-family:ui-monospace,SFMono-Regular,monospace">
+           ${allRecipes.map((r, i) => `<div style="padding:2px 0;border-bottom:1px dotted #2a2a2a">
+             <span style="display:inline-block;min-width:34px;color:var(--text-2)">${i + 1}.</span>
+             ${r.recipe_number ? `<span style="display:inline-block;background:var(--accent);color:white;padding:1px 6px;font-size:10px;font-weight:700;margin-right:6px">№ ${escapeHtml(String(r.recipe_number))}</span>` : ''}
+             <strong style="color:var(--text)">${escapeHtml(r.title || '?')}</strong>
+             ${r.page ? `<span style="color:var(--text-2);float:right">S. ${r.page}</span>` : ''}
+           </div>`).join('')}
+         </div>
+       </div>`
+    : '';
   m.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
       <h3 style="margin:0;font-family:'Playfair Display',Georgia,serif;font-size:18px">📋 Extract-Diagnose</h3>
@@ -2319,6 +2404,7 @@ function showExtractDetails() {
       <div><strong>Insert-Fehler:</strong> ${d.insert_errors?.length || 0}</div>
       ${d.api_error ? `<div style="color:#ef4444;margin-top:10px"><strong>API-Fehler:</strong><pre style="background:var(--surface-2);padding:10px;border-radius:6px;font-size:11px;white-space:pre-wrap;margin-top:4px">${escapeHtml(d.api_error)}</pre></div>` : ''}
       ${chunkList}
+      ${recipesList}
       ${errList}
     </div>
     <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">

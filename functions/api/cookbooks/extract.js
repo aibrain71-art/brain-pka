@@ -125,6 +125,7 @@ Antwort EXAKT in dieser Form (KEIN Text drumherum, KEIN \`\`\`json-Block — pur
   {
     "title": "Knapper Rezept-Titel (max 80 Zeichen)",
     "page": 23,
+    "recipe_number": "245",
     "preview": "Kurze 1-Satz-Einleitung max 200 Zeichen",
     "detailed": "Beschreibung 300-600 Zeichen, 2-3 Sätze, worum es geht",
     "garden_type": "Recipe",
@@ -147,6 +148,11 @@ Antwort EXAKT in dieser Form (KEIN Text drumherum, KEIN \`\`\`json-Block — pur
     }
   }
 ]
+
+REZEPT-NUMMER (wichtig bei Militär-Kochbüchern):
+- Viele Kochbücher (besonders das Schweizer Militär-Kochbuch) haben am Seitenrand QUER GEDRUCKT eine fortlaufende Rezept-Nummer (z.B. "245", "246"). Erfasse diese als String in "recipe_number".
+- Wenn keine sichtbar ist → "recipe_number": null.
+- Format: nur die Ziffern (ohne "Nr." oder "№"), als String damit führende Nullen erhalten bleiben.
 
 WICHTIGE REGELN — SEI INKLUSIV, lieber zu viele als zu wenige Rezepte:
 - ALLE Rezepte aus dem Dokument extrahieren (bis max ${maxRecipes}).
@@ -254,7 +260,14 @@ LIEBER UNVOLLSTÄNDIG als FEHLEND: wenn deine Antwort an die max_tokens-Grenze s
       processed_chunks: chunkRange.length,
       next_chunk: nextChunk,
       extracted: allParsedRecipes.length,
-      recipes: allParsedRecipes.slice(0, 10).map(r => ({ title: r.title, page: r.page })),
+      // Return ALL recipes in the dry-run response (not just first 10) so
+      // the user sees the full identification list in the Details modal —
+      // we use slim records to stay under the response-size budget.
+      recipes: allParsedRecipes.map(r => ({
+        title: r.title,
+        page: r.page,
+        recipe_number: r.recipe_number || r.recipe?.recipe_number || null,
+      })),
       chunk_results: chunkResults,
     });
   }
@@ -296,6 +309,13 @@ LIEBER UNVOLLSTÄNDIG als FEHLEND: wenn deine Antwort an die max_tokens-Grenze s
       fat_g:         Number.isInteger(r.recipe.fat_g) ? r.recipe.fat_g : null,
       tags:          Array.isArray(r.recipe.tags) ? r.recipe.tags.filter(Boolean) : [],
       notes:         typeof r.recipe.notes === 'string' ? r.recipe.notes : '',
+      // Recipe number printed sideways on the page margin (military
+      // cookbook style). Kept as string to preserve leading zeros.
+      recipe_number: (typeof r.recipe_number === 'string' && r.recipe_number.trim())
+                       ? r.recipe_number.trim()
+                       : (typeof r.recipe?.recipe_number === 'string' && r.recipe.recipe_number.trim())
+                         ? r.recipe.recipe_number.trim()
+                         : null,
     };
     const meta = {
       recipe,
@@ -364,7 +384,14 @@ LIEBER UNVOLLSTÄNDIG als FEHLEND: wenn deine Antwort an die max_tokens-Grenze s
     extracted: parsed.length,
     inserted: insertedIds.length,
     errors,
-    sample: parsed.slice(0, 3).map(r => ({ title: r.title, page: r.page, servings: r.recipe?.servings })),
+    // Pass full title list back for the toast/Details so the user sees
+    // every recipe that was identified (not just 3 sample titles)
+    recipes: parsed.map(r => ({
+      title: r.title,
+      page: r.page,
+      recipe_number: r.recipe_number || r.recipe?.recipe_number || null,
+      servings: r.recipe?.servings,
+    })),
     chunk_results: chunkResults,
   });
 }
