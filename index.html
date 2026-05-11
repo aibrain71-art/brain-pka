@@ -1050,6 +1050,21 @@ body:has(#sidebar:not(.collapsed)) .list-subtitle .ls-count::after  { content: "
 .ne-preview .callout.warning  { --cb-color: #d29922; --cb-bg: rgba(210,153,34,0.08); }
 .ne-preview .callout.important { --cb-color: #ef4444; --cb-bg: rgba(239,68,68,0.07); }
 .ne-preview .callout.caution  { --cb-color: #e85a18; --cb-bg: rgba(232,90,24,0.08); }
+.ne-preview .callout.pinned   { --cb-color: #a78bfa; --cb-bg: rgba(167,139,250,0.07); }
+/* Quote + Example: framed box without coloured title bar (matches Logseq look) */
+.ne-preview .callout.quote,
+.ne-preview .callout.example {
+  --cb-color: var(--border);
+  --cb-bg: var(--surface-2);
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  background: rgba(255,255,255,0.02);
+  padding: 12px 16px;
+  font-style: italic;
+}
+.ne-preview .callout.example { font-style: normal; }
 .ne-preview code { background: var(--surface-2); border-radius: 4px; padding: 1px 5px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
 .ne-preview pre { background: var(--surface-2); border-radius: 6px; padding: 10px 14px; overflow-x: auto; }
 .ne-preview pre code { background: transparent; padding: 0; }
@@ -5736,6 +5751,27 @@ function mdRender(src) {
        .replace(/^# (.+)$/gm, '<h1>$1</h1>');
   // Horizontal rule
   s = s.replace(/^---$/gm, '<hr>');
+  // Logseq / Org-mode-style block callouts — must run BEFORE blockquote.
+  // Matches  #+BEGIN_TYPE\n…body…\n#+END_TYPE  for any of the known
+  // callout types. The body can be any text (rendered with <br> for
+  // line breaks). Quote / Example just render as framed boxes without
+  // an icon header; the rest get colored title bars.
+  s = s.replace(
+    /^#\+BEGIN_(NOTE|TIP|WARNING|IMPORTANT|CAUTION|PINNED|EXAMPLE|QUOTE)\s*\n([\s\S]*?)\n?^#\+END_\1\s*$/gmi,
+    (_, type, body) => {
+      const t = type.toLowerCase();
+      const labels = { note:'Note', tip:'Tip', warning:'Warning', important:'Important', caution:'Caution', pinned:'Pinned', example:'Example', quote:'Quote' };
+      const icons  = { note:'ℹ️',   tip:'💡',  warning:'⚠️',     important:'❗',         caution:'🔥',   pinned:'📌',     example:'🧪',     quote:'💬' };
+      const bodyHtml = body.trim()
+        ? body.split('\n').map(l => l).join('<br>')
+        : '<span style="color:var(--text-2);font-style:italic">(leer)</span>';
+      const showTitle = (t !== 'quote' && t !== 'example');
+      return `<div class="callout ${t}">
+                ${showTitle ? `<div class="callout-title"><span>${icons[t]}</span><span>${labels[t]}</span></div>` : ''}
+                <div class="callout-body">${bodyHtml}</div>
+              </div>`;
+    }
+  );
   // GitHub-style callouts — must run BEFORE the generic blockquote rule.
   // Matches contiguous lines that start with "&gt;" (with or without
   // trailing space + content). When the first body line is "[!TYPE]"
@@ -5827,19 +5863,17 @@ function mdRender(src) {
 // Format basics (B/I/H1-3/bullets/etc.) live on the toolbar — neither
 // trigger surfaces them, to keep both menus short and focused.
 const NE_COMMANDS = [
-  // Callout inserts — trigger "<"
-  { trigger: '<', group: 'Hinweise', icon: '💬', label: 'Quote',     match: ['quote','zitat'],
-    insert: '> ', cursorOffset: 0 },
-  { trigger: '<', group: 'Hinweise', icon: '💡', label: 'Tip',       match: ['tip','tipp'],
-    insert: '> [!TIP]\n> ', cursorOffset: 0 },
-  { trigger: '<', group: 'Hinweise', icon: '⚠️', label: 'Warning',   match: ['warning','warnung'],
-    insert: '> [!WARNING]\n> ', cursorOffset: 0 },
-  { trigger: '<', group: 'Hinweise', icon: 'ℹ️', label: 'Note',      match: ['note','hinweis','info'],
-    insert: '> [!NOTE]\n> ', cursorOffset: 0 },
-  { trigger: '<', group: 'Hinweise', icon: '❗', label: 'Important', match: ['important','wichtig'],
-    insert: '> [!IMPORTANT]\n> ', cursorOffset: 0 },
-  { trigger: '<', group: 'Hinweise', icon: '🔥', label: 'Caution',   match: ['caution','vorsicht'],
-    insert: '> [!CAUTION]\n> ', cursorOffset: 0 },
+  // Callout inserts — trigger "<" — Logseq / Org-mode block syntax.
+  // Inserts a BEGIN/END pair with the cursor between them so the user
+  // can immediately type the content framed by the directive.
+  { trigger: '<', group: 'Hinweise', icon: '💬', label: 'Quote',     match: ['quote','zitat'],         logseq: 'QUOTE' },
+  { trigger: '<', group: 'Hinweise', icon: '💡', label: 'Tip',       match: ['tip','tipp'],            logseq: 'TIP' },
+  { trigger: '<', group: 'Hinweise', icon: '⚠️', label: 'Warning',   match: ['warning','warnung'],     logseq: 'WARNING' },
+  { trigger: '<', group: 'Hinweise', icon: 'ℹ️', label: 'Note',      match: ['note','hinweis','info'], logseq: 'NOTE' },
+  { trigger: '<', group: 'Hinweise', icon: '❗', label: 'Important', match: ['important','wichtig'],   logseq: 'IMPORTANT' },
+  { trigger: '<', group: 'Hinweise', icon: '🔥', label: 'Caution',   match: ['caution','vorsicht'],    logseq: 'CAUTION' },
+  { trigger: '<', group: 'Hinweise', icon: '📌', label: 'Pinned',    match: ['pinned','pin','wichtig pinnen'], logseq: 'PINNED' },
+  { trigger: '<', group: 'Hinweise', icon: '🧪', label: 'Example',   match: ['example','beispiel'],    logseq: 'EXAMPLE' },
   // AI assists — trigger "\"
   { trigger: '/', group: 'AI', icon: '✨', label: 'Zusammenfassen',       match: ['summarize','tldr','zusammenfassen','summary'], ai: 'summarize', mode: 'append' },
   { trigger: '/', group: 'AI', icon: '✍',  label: 'Weiterschreiben',       match: ['continue','weiterschreiben','weiter'], ai: 'continue', mode: 'insert' },
@@ -6030,16 +6064,26 @@ async function executeCommand(ta, cmd) {
   const before = ta.value.slice(0, triggerPos);
   const after  = ta.value.slice(cursorPos);
 
-  if (cmd.insert !== undefined || cmd.insertFn) {
-    let txt = cmd.insertFn ? cmd.insertFn() : cmd.insert;
+  if (cmd.insert !== undefined || cmd.insertFn || cmd.logseq) {
+    let txt;
+    let cursorOffset = (typeof cmd.cursorOffset === 'number') ? cmd.cursorOffset : 0;
+    if (cmd.logseq) {
+      // Build a Logseq-style block with the cursor between BEGIN/END
+      const T = cmd.logseq;
+      const begin = `#+BEGIN_${T}`;
+      const end   = `#+END_${T}`;
+      txt = `${begin}\n\n${end}`;
+      // Cursor lands on the empty middle line — that's at index begin.length+1
+      // from the start of txt. Relative to end of txt: -(end.length + 1).
+      cursorOffset = -(end.length + 1);
+    } else {
+      txt = cmd.insertFn ? cmd.insertFn() : cmd.insert;
+    }
     let prefix = '';
-    // For blockquote / callout inserts (start with "> "), force a clean
-    // paragraph break so the new block isn't sucked into the existing
-    // line's blockquote context (otherwise "> [!TIP]" inserted while the
-    // cursor sits on "> some text" becomes "> > [!TIP]" which is a
-    // nested blockquote, not a callout).
-    if (txt.startsWith('> ')) {
-      // What does the "before" end with?
+    // For block-level inserts (start with "> " or "#+BEGIN_"), force a
+    // clean paragraph break so the new block doesn't get sucked into the
+    // current line's context.
+    if (txt.startsWith('> ') || txt.startsWith('#+BEGIN_')) {
       if (before.length === 0) {
         // empty doc — no prefix needed
       } else if (before.endsWith('\n\n')) {
@@ -6051,8 +6095,7 @@ async function executeCommand(ta, cmd) {
       }
     }
     ta.value = before + prefix + txt + after;
-    const offset = (typeof cmd.cursorOffset === 'number') ? cmd.cursorOffset : 0;
-    const newPos = before.length + prefix.length + txt.length + offset;
+    const newPos = before.length + prefix.length + txt.length + cursorOffset;
     ta.selectionStart = ta.selectionEnd = newPos;
     ta.focus();
     ta.dispatchEvent(new Event('input'));
