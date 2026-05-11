@@ -1,0 +1,17 @@
+CREATE TABLE IF NOT EXISTS cookbooks (id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT UNIQUE, title TEXT NOT NULL, author TEXT, description TEXT, pdf_b64 TEXT, pdf_size_kb INTEGER, page_count INTEGER, chapters_json TEXT, source TEXT, logo_url TEXT, servings_base INTEGER DEFAULT 4, created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE INDEX IF NOT EXISTS idx_cookbooks_title ON cookbooks(title COLLATE NOCASE);
+CREATE INDEX IF NOT EXISTS idx_cookbooks_created ON cookbooks(created_at DESC);
+ALTER TABLE notes ADD COLUMN cookbook_id INTEGER;
+ALTER TABLE notes ADD COLUMN cookbook_page INTEGER;
+ALTER TABLE notes ADD COLUMN servings_base INTEGER;
+CREATE INDEX IF NOT EXISTS idx_notes_cookbook ON notes(cookbook_id);
+CREATE TABLE IF NOT EXISTS shopping_list (id INTEGER PRIMARY KEY AUTOINCREMENT, item TEXT NOT NULL, qty_value REAL, qty_unit TEXT, source_recipe_id INTEGER, source_recipe_title TEXT, notes TEXT, status TEXT DEFAULT 'open', priority INTEGER DEFAULT 3, added_at TEXT DEFAULT CURRENT_TIMESTAMP, done_at TEXT);
+CREATE INDEX IF NOT EXISTS idx_shopping_status ON shopping_list(status, added_at DESC);
+CREATE INDEX IF NOT EXISTS idx_shopping_recipe ON shopping_list(source_recipe_id);
+CREATE TABLE IF NOT EXISTS shop_locations (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, chain TEXT, address TEXT, lat REAL NOT NULL, lng REAL NOT NULL, radius_m INTEGER DEFAULT 150, active INTEGER DEFAULT 1, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE INDEX IF NOT EXISTS idx_shops_chain ON shop_locations(chain);
+INSERT OR IGNORE INTO shop_locations (name, chain, address, lat, lng, radius_m) VALUES ('Coop Lenzburg', 'Coop', 'Bahnhofstrasse, 5600 Lenzburg', 47.3899, 8.1755, 200);
+INSERT OR IGNORE INTO shop_locations (name, chain, address, lat, lng, radius_m) VALUES ('Migros Lenzburg', 'Migros', 'Hauptstrasse, 5600 Lenzburg', 47.3895, 8.1742, 200);
+INSERT OR IGNORE INTO shop_locations (name, chain, address, lat, lng, radius_m) VALUES ('Voi Lenzburg', 'Voi', 'Burgstrasse, 5600 Lenzburg', 47.3902, 8.1759, 150);
+INSERT OR IGNORE INTO shop_locations (name, chain, address, lat, lng, radius_m) VALUES ('Spar Lenzburg', 'Spar', 'Lenzburg', 47.3890, 8.1750, 200);
+INSERT OR IGNORE INTO shop_locations (name, chain, address, lat, lng, radius_m) VALUES ('Volg Staufen', 'Volg', 'Staufen AG', 47.3940, 8.1620, 150);

@@ -192,10 +192,199 @@
   .loading { padding: 60px; text-align: center; color: var(--text-2); font-style: italic; }
 
   footer { padding: 36px 24px; text-align: center; color: var(--text-2); font-size: 11px; letter-spacing: 1px; border-top: 1px solid var(--border); }
+
+  /* Tab navigation */
+  nav.tabs {
+    display: flex; gap: 8px; max-width: 1280px; margin: 18px auto 0 auto; padding: 0 24px;
+    flex-wrap: wrap;
+  }
+  nav.tabs .tab {
+    background: transparent; color: var(--text-2); border: 1px solid var(--border);
+    border-radius: 20px; padding: 8px 16px; cursor: pointer; font-size: 13px;
+    transition: all .15s;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  nav.tabs .tab:hover { color: var(--text); border-color: var(--accent); }
+  nav.tabs .tab.active {
+    background: var(--accent); color: #0c1015; border-color: var(--accent); font-weight: 700;
+  }
+  nav.tabs .tab .badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
+    background: rgba(255,255,255,.18); color: inherit; font-size: 10px; font-weight: 700;
+  }
+  .tab-pane { display: none; }
+  .tab-pane.active { display: block; }
+
+  /* Library tab */
+  main.library-main {
+    max-width: 1400px; margin: 0 auto;
+    display: grid; grid-template-columns: 320px 1fr; gap: 24px;
+    padding: 32px 24px;
+  }
+  @media (max-width: 920px) {
+    main.library-main { grid-template-columns: 1fr; }
+    aside.lib-sidebar { position: static; max-height: none; }
+  }
+  aside.lib-sidebar {
+    position: sticky; top: 24px; align-self: start;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 18px; max-height: calc(100vh - 48px); overflow-y: auto;
+  }
+  aside.lib-sidebar h2 { margin: 0 0 4px 0; font-family: 'Playfair Display', Georgia, serif; font-size: 18px; }
+  .lib-upload-btn {
+    width: 100%; padding: 10px; margin: 8px 0 12px 0;
+    background: var(--accent); color: #0c1015; border: 0; border-radius: 8px;
+    cursor: pointer; font-weight: 700; font-size: 13px; transition: filter .12s;
+  }
+  .lib-upload-btn:hover { filter: brightness(1.15); }
+  .lib-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+  .lib-item {
+    display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px;
+    cursor: pointer; transition: all .12s;
+  }
+  .lib-item:hover { border-color: var(--accent); }
+  .lib-item.selected { border-color: var(--accent-2); background: rgba(196,131,30,0.07); }
+  .lib-item-icon { font-size: 20px; flex-shrink: 0; }
+  .lib-item-body { flex: 1; min-width: 0; }
+  .lib-item-title { font-size: 13px; font-weight: 600; color: var(--text); text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
+  .lib-item-sub { font-size: 11px; color: var(--text-2); margin-top: 2px; }
+  .lib-item-actions { display: flex; gap: 4px; flex-shrink: 0; }
+  .lib-item-actions button {
+    background: transparent; border: 0; color: var(--text-2); cursor: pointer;
+    padding: 4px 6px; border-radius: 4px;
+  }
+  .lib-item-actions button:hover { background: rgba(255,255,255,0.05); color: var(--text); }
+  .lib-toc-wrap { border-top: 1px solid var(--border); padding-top: 12px; }
+  .lib-toc-head { font-size: 11px; letter-spacing: 1.4px; text-transform: uppercase; color: var(--text-2); margin-bottom: 8px; }
+  ol.lib-toc { list-style: none; padding: 0; margin: 0; }
+  ol.lib-toc li { padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 12px; cursor: pointer; }
+  ol.lib-toc li:hover { color: var(--accent-2); }
+  ol.lib-toc li:last-child { border-bottom: 0; }
+
+  section.lib-viewer {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    min-height: 70vh; overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .pdf-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 16px; border-bottom: 1px solid var(--border);
+    background: var(--surface-2); flex-wrap: wrap; gap: 10px;
+  }
+  .pdf-header h3 { margin: 0; font-family: 'Playfair Display', Georgia, serif; font-size: 18px; }
+  .pdf-header .pdf-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .pdf-actions button {
+    background: var(--surface); color: var(--text); border: 1px solid var(--border);
+    padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px;
+  }
+  .pdf-actions button:hover { border-color: var(--accent); }
+  .pdf-actions button.primary { background: var(--accent); color: #0c1015; border-color: var(--accent); font-weight: 600; }
+  .pdf-canvas-wrap {
+    flex: 1; overflow: auto; padding: 16px; background: #1c1c1c;
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+  }
+  .pdf-canvas-wrap canvas {
+    background: white; box-shadow: 0 4px 16px rgba(0,0,0,.5);
+    max-width: 100%; height: auto;
+  }
+  .pdf-pager {
+    display: flex; align-items: center; justify-content: center; gap: 14px;
+    padding: 10px 16px; background: var(--surface-2); border-top: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .pdf-pager button {
+    background: var(--surface); color: var(--text); border: 1px solid var(--border);
+    padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 13px;
+  }
+  .pdf-pager button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .pdf-pager input.page-input { width: 60px; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 4px 6px; font-size: 13px; text-align: center; }
+
+  /* Search hit highlight overlay */
+  .pdf-search-hits { position: absolute; pointer-events: none; }
+  .pdf-search-hit { background: rgba(255,235,0,0.4); border-radius: 2px; }
+
+  /* Shopping list */
+  main.shop-main {
+    max-width: 900px; margin: 0 auto; padding: 32px 24px;
+  }
+  .shop-section { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 22px; }
+  .shop-head { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 14px; margin-bottom: 14px; }
+  .shop-head h2 { margin: 0; font-family: 'Playfair Display', Georgia, serif; font-size: 22px; }
+  .shop-controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .shop-input {
+    background: var(--surface-2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 8px 12px; font-size: 13px; min-width: 280px;
+  }
+  .shop-input:focus { outline: none; border-color: var(--accent); }
+  .shop-btn {
+    background: var(--accent); color: #0c1015; border: 0; padding: 8px 14px;
+    border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600;
+  }
+  .shop-btn:hover { filter: brightness(1.1); }
+  .shop-btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--border); font-weight: 400; }
+  .shop-btn.small { padding: 4px 10px; font-size: 11px; }
+  .shop-stats { font-size: 12px; color: var(--text-2); margin-bottom: 14px; }
+  .shop-geofence {
+    background: rgba(63,185,80,0.12); border: 1px solid #3fb950; border-radius: 8px;
+    padding: 12px 14px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    margin-bottom: 14px; font-size: 13px; color: #c4e6c8;
+  }
+  .shop-list { display: flex; flex-direction: column; gap: 4px; }
+  .shop-item {
+    display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+    background: var(--surface-2); border-radius: 6px;
+    transition: opacity .15s;
+  }
+  .shop-item.done { opacity: 0.5; }
+  .shop-item.done .shop-item-text { text-decoration: line-through; }
+  .shop-item input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; }
+  .shop-item-text { flex: 1; font-size: 14px; }
+  .shop-item-recipe { font-size: 10px; color: var(--accent-2); text-transform: uppercase; letter-spacing: 0.6px; margin-top: 2px; }
+  .shop-item-qty { color: var(--text-2); font-size: 13px; margin-right: 6px; }
+  .shop-item-delete {
+    background: transparent; border: 0; color: var(--text-2); cursor: pointer;
+    padding: 4px 8px; border-radius: 4px; font-size: 15px;
+  }
+  .shop-item-delete:hover { color: #ef4444; background: rgba(239,68,68,0.1); }
+
+  /* Recipe scaling controls (inside the existing article.recipe) */
+  .recipe-scale {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    margin: 16px 0; padding: 12px 14px;
+    background: rgba(196,131,30,0.08); border-left: 3px solid var(--accent);
+    border-radius: 0 8px 8px 0;
+  }
+  .recipe-scale label { font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: #5a5a5a; }
+  .recipe-scale .scale-num {
+    background: white; color: var(--ink); border: 1px solid #ddd0b2;
+    border-radius: 6px; padding: 4px 10px; min-width: 60px; text-align: center;
+    font-family: 'Playfair Display', Georgia, serif; font-size: 18px; font-weight: 700;
+  }
+  .recipe-scale button {
+    background: var(--accent); color: white; border: 0; width: 28px; height: 28px;
+    border-radius: 50%; font-size: 16px; cursor: pointer; font-weight: 700;
+  }
+  .recipe-scale button:hover { filter: brightness(1.1); }
+  .recipe-scale .scale-hint { font-size: 11px; color: #6b6b6b; flex: 1; }
+  .recipe-scale .add-to-shop-btn {
+    background: #1f8c3a; color: white; border: 0; padding: 8px 14px;
+    border-radius: 6px; font-weight: 600; font-size: 12px; width: auto; height: auto;
+    cursor: pointer;
+  }
+  .recipe-scale .add-to-shop-btn:hover { filter: brightness(1.1); }
+
+  .recipe-source-tag {
+    display: inline-block; margin-bottom: 8px; padding: 3px 10px;
+    background: rgba(196,131,30,0.18); color: #6b4d18;
+    border-radius: 12px; font-size: 10px; letter-spacing: 1px; text-transform: uppercase;
+  }
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs" type="module"></script>
 </head>
 <body>
 
@@ -207,26 +396,85 @@
     </div>
     <a class="back" href="./">← Zurück zur App</a>
   </div>
+  <nav class="tabs" id="cookbook-tabs">
+    <button class="tab active" data-tab="recipes">📝 Rezepte</button>
+    <button class="tab" data-tab="library">📚 Bibliothek</button>
+    <button class="tab" data-tab="shopping">🛒 Einkaufsliste <span id="shop-count" class="badge" style="display:none">0</span></button>
+  </nav>
 </header>
 
-<div class="stats" id="stats">
-  <div class="loading">Lade Statistik…</div>
+<!-- TAB: Rezepte -->
+<div data-tab-pane="recipes" class="tab-pane active">
+  <div class="stats" id="stats">
+    <div class="loading">Lade Statistik…</div>
+  </div>
+
+  <main>
+    <aside class="toc">
+      <h2>Inhalt</h2>
+      <div class="toc-sub" id="toc-count">…</div>
+      <input class="toc-search" type="search" placeholder="Rezept suchen…" id="toc-search" autocomplete="off">
+      <ol id="toc-list"><li class="loading">Lade…</li></ol>
+    </aside>
+
+    <section class="recipes" id="recipes">
+      <div class="loading">Lade Rezepte aus der Datenbank…</div>
+    </section>
+  </main>
 </div>
 
-<main>
-  <aside class="toc">
-    <h2>Inhalt</h2>
-    <div class="toc-sub" id="toc-count">…</div>
-    <input class="toc-search" type="search" placeholder="Rezept suchen…" id="toc-search" autocomplete="off">
-    <ol id="toc-list"><li class="loading">Lade…</li></ol>
-  </aside>
+<!-- TAB: Bibliothek (PDF Kochbücher) -->
+<div data-tab-pane="library" class="tab-pane">
+  <main class="library-main">
+    <aside class="lib-sidebar">
+      <h2>Bibliothek</h2>
+      <div class="toc-sub" id="lib-count">…</div>
+      <button class="lib-upload-btn" id="lib-upload-btn">＋ Kochbuch hinzufügen</button>
+      <input type="file" id="lib-upload-input" accept="application/pdf,.pdf" style="display:none">
+      <div class="lib-list" id="lib-list">
+        <div class="loading">Lade Bücher…</div>
+      </div>
+      <div class="lib-toc-wrap" id="lib-toc-wrap" style="display:none">
+        <div class="lib-toc-head">📑 Kapitel</div>
+        <input class="toc-search" type="search" placeholder="Im PDF suchen…" id="lib-search" autocomplete="off">
+        <ol class="lib-toc" id="lib-toc"></ol>
+      </div>
+    </aside>
+    <section class="lib-viewer" id="lib-viewer">
+      <div class="empty">
+        <h2>Bibliothek leer</h2>
+        <p>Klicke „＋ Kochbuch hinzufügen" links, um ein Kochbuch-PDF zu laden. Ideal für das Militär-Rezeptbuch oder andere Sammlungen. Nach dem Hochladen kannst du Rezepte automatisch in deine persönliche Sammlung übernehmen (skaliert auf deine Portionen).</p>
+      </div>
+    </section>
+  </main>
+</div>
 
-  <section class="recipes" id="recipes">
-    <div class="loading">Lade Rezepte aus der Datenbank…</div>
-  </section>
-</main>
+<!-- TAB: Einkaufsliste -->
+<div data-tab-pane="shopping" class="tab-pane">
+  <main class="shop-main">
+    <section class="shop-section">
+      <div class="shop-head">
+        <h2>🛒 Einkaufsliste</h2>
+        <div class="shop-controls">
+          <input class="shop-input" id="shop-quick-input" type="text" placeholder="Schnell hinzufügen + Enter (z.B. „2 l Milch")" autocomplete="off">
+          <button class="shop-btn" id="shop-add-btn">＋ Hinzufügen</button>
+          <button class="shop-btn ghost" id="shop-clear-done-btn">Erledigte löschen</button>
+        </div>
+      </div>
+      <div class="shop-stats" id="shop-stats">…</div>
+      <div class="shop-geofence" id="shop-geofence" style="display:none">
+        <strong>📍 Du bist hier:</strong>
+        <span id="shop-geofence-name"></span>
+        <button class="shop-btn ghost small" onclick="dismissGeofence()">Verstecken</button>
+      </div>
+      <div class="shop-list" id="shop-list">
+        <div class="loading">Lade Einkaufsliste…</div>
+      </div>
+    </section>
+  </main>
+</div>
 
-<footer>© Brain PKA · alphanumerisch sortiert</footer>
+<footer>© Brain PKA · sortiert nach Titel</footer>
 
 <script>
 const $ = (sel) => document.querySelector(sel);
@@ -256,19 +504,66 @@ function renderStats(stats) {
   ).join('');
 }
 
+// ── Ingredient quantity scaling ─────────────────────────────────
+// Parses "500 g Mehl" → { qty: 500, unit: "g", item: "Mehl" }, scales
+// the qty by a factor, and re-formats nicely. Handles common Swiss
+// recipe phrasings: "1.5 kg", "2 EL", "1/2 TL", "200 ml", "3 Stück",
+// "eine Prise", "etwas Öl". Items without a numeric quantity are
+// passed through unchanged so things like "Salz nach Bedarf" stay
+// readable.
+function parseIngredient(line) {
+  const txt = String(line || '').trim();
+  // "1/2 TL Salz" or "1 1/2 EL Öl"
+  let m = txt.match(/^(\d+(?:[.,]\d+)?(?:\s+\d+\/\d+)?|\d+\/\d+)\s*([a-zA-ZäöüÄÖÜ]+\.?|EL|TL|cl|dl|ml|l|g|kg|mg|Prise|Stk|Stück|Stueck|Pck|Pkg|Tasse|Tassen|Glas|Bund|Dose|Becher)?\s+(.+)$/);
+  if (m) {
+    let qStr = m[1].replace(',', '.');
+    let qty;
+    if (qStr.includes(' ')) {
+      // mixed: "1 1/2"
+      const [whole, frac] = qStr.split(' ');
+      const [n, d] = frac.split('/').map(parseFloat);
+      qty = parseFloat(whole) + (n / d);
+    } else if (qStr.includes('/')) {
+      const [n, d] = qStr.split('/').map(parseFloat);
+      qty = n / d;
+    } else {
+      qty = parseFloat(qStr);
+    }
+    return { qty, unit: m[2] || '', item: m[3].trim(), raw: txt };
+  }
+  return { qty: null, unit: '', item: txt, raw: txt };
+}
+
+function formatScaledIngredient(parsed, factor) {
+  if (parsed.qty == null) return parsed.raw;
+  let newQty = parsed.qty * factor;
+  // Round nicely — integers for >=10, 1 decimal for >=1, 2 decimals for <1
+  let qStr;
+  if (newQty >= 10) qStr = String(Math.round(newQty));
+  else if (newQty >= 1) qStr = newQty.toFixed(1).replace(/\.0$/, '');
+  else qStr = newQty.toFixed(2).replace(/0$/, '').replace(/\.$/, '');
+  return (parsed.unit ? qStr + ' ' + parsed.unit : qStr) + ' ' + parsed.item;
+}
+
 function renderRecipe(r) {
   const rec = r.recipe || {};
   const anchor = slugForAnchor(r.title, r.id);
+  const baseServings = r.servings_base || rec.servings || 4;
+  const initialServings = rec.servings || baseServings;
+  const sourceTag = r.source ? `<div class="recipe-source-tag">📖 ${escapeHtml(r.source)}</div>` : '';
+
   const chips = [];
-  if (rec.servings) chips.push({ e: '👥', t: rec.servings + ' Pers.' });
   if (rec.total_minutes) chips.push({ e: '⏱', t: rec.total_minutes + ' Min gesamt' });
   if (rec.prep_minutes) chips.push({ e: '🔪', t: rec.prep_minutes + ' Min Prep' });
   if (rec.cook_minutes) chips.push({ e: '🔥', t: rec.cook_minutes + ' Min Garen' });
   if (rec.location) chips.push({ e: '📍', t: rec.location });
   if (Array.isArray(rec.equipment) && rec.equipment.length) chips.push({ e: '🛠', t: rec.equipment.join(' · ') });
 
-  const ingredientsHtml = Array.isArray(rec.ingredients) && rec.ingredients.length
-    ? '<ul class="ingredients">' + rec.ingredients.map(i => '<li>' + escapeHtml(i) + '</li>').join('') + '</ul>'
+  const ingredients = Array.isArray(rec.ingredients) ? rec.ingredients.map(parseIngredient) : [];
+  const ingredientsHtml = ingredients.length
+    ? '<ul class="ingredients">' + ingredients.map((p, i) =>
+        '<li data-i="' + i + '">' + escapeHtml(formatScaledIngredient(p, initialServings / baseServings)) + '</li>'
+      ).join('') + '</ul>'
     : '<p style="color:#8a7a5a;font-style:italic">Keine Zutatenliste hinterlegt.</p>';
 
   const stepsHtml = Array.isArray(rec.steps) && rec.steps.length
@@ -293,11 +588,23 @@ function renderRecipe(r) {
 
   const notesHtml = rec.notes ? `<div class="recipe-notes">${escapeHtml(rec.notes)}</div>` : '';
 
+  // Inline scale state on the article — read by the +/- and "add to shop" handlers
   return `
-    <article class="recipe" id="${anchor}" data-title="${escapeHtml(r.title.toLowerCase())}">
+    <article class="recipe" id="${anchor}" data-title="${escapeHtml(r.title.toLowerCase())}"
+             data-recipe-id="${r.id}" data-base="${baseServings}" data-servings="${initialServings}"
+             data-ingredients='${escapeHtml(JSON.stringify(ingredients))}'>
+      ${sourceTag}
       <h2>${escapeHtml(r.title)}</h2>
       <div class="meta-row">
         ${chips.map(c => `<span class="meta-chip"><span class="meta-emoji">${c.e}</span>${escapeHtml(c.t)}</span>`).join('')}
+      </div>
+      <div class="recipe-scale" data-scale-for="${r.id}">
+        <label>Personen</label>
+        <button onclick="scaleRecipe(${r.id}, -1)">−</button>
+        <span class="scale-num" data-scale-display>${initialServings}</span>
+        <button onclick="scaleRecipe(${r.id}, +1)">+</button>
+        <span class="scale-hint">Basis: ${baseServings}${baseServings >= 50 ? ' (z.B. Militärrezept für 100 Mann)' : ''}</span>
+        <button class="add-to-shop-btn" onclick="addRecipeToShopping(${r.id})">🛒 Auf Einkaufsliste</button>
       </div>
       <div class="body-grid">
         <div>
@@ -313,6 +620,62 @@ function renderRecipe(r) {
       ${notesHtml}
       ${tagsHtml}
     </article>`;
+}
+
+// Adjust servings via +/- buttons → recompute ingredient quantities in place
+function scaleRecipe(recipeId, delta) {
+  const art = document.querySelector('article.recipe[data-recipe-id="' + recipeId + '"]');
+  if (!art) return;
+  const base = parseInt(art.dataset.base, 10) || 4;
+  let servings = parseInt(art.dataset.servings, 10) || base;
+  servings = Math.max(1, Math.min(500, servings + delta));
+  art.dataset.servings = servings;
+  art.querySelector('[data-scale-display]').textContent = servings;
+  const factor = servings / base;
+  const ingredients = JSON.parse(art.dataset.ingredients || '[]');
+  art.querySelectorAll('ul.ingredients li').forEach((li, i) => {
+    if (!ingredients[i]) return;
+    li.textContent = formatScaledIngredient(ingredients[i], factor);
+  });
+}
+
+// Push current (scaled) ingredient list into the shopping list backend
+async function addRecipeToShopping(recipeId) {
+  const art = document.querySelector('article.recipe[data-recipe-id="' + recipeId + '"]');
+  if (!art) return;
+  const base = parseInt(art.dataset.base, 10) || 4;
+  const servings = parseInt(art.dataset.servings, 10) || base;
+  const factor = servings / base;
+  const ingredients = JSON.parse(art.dataset.ingredients || '[]');
+  const title = art.querySelector('h2')?.textContent || 'Rezept';
+  const items = ingredients.map(p => {
+    if (p.qty != null) {
+      return { item: p.item, qty_value: p.qty * factor, qty_unit: p.unit, recipe_id: recipeId, recipe_title: title };
+    }
+    return { item: p.raw, recipe_id: recipeId, recipe_title: title };
+  });
+  try {
+    const r = await fetch('/api/shopping-list?bulk=1', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items }),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'HTTP ' + r.status);
+    toast(`✓ ${data.added} Zutaten für ${servings} Pers. zur Einkaufsliste hinzugefügt`);
+    refreshShoppingBadge();
+  } catch (e) {
+    toast('⚠️ ' + (e?.message || e), true);
+  }
+}
+
+function toast(msg, isError) {
+  const t = document.createElement('div');
+  t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:9999;background:' +
+    (isError ? '#3a1f1f' : '#1f3a25') + ';color:var(--text);border:1px solid ' +
+    (isError ? '#5b2a2a' : '#2a5b34') + ';padding:12px 18px;border-radius:8px;font-size:13px;box-shadow:0 4px 16px rgba(0,0,0,.4)';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 4000);
 }
 
 function renderTOC(recipes) {
@@ -338,11 +701,31 @@ function wireSearch() {
   });
 }
 
-async function init() {
+// ── Tabs ────────────────────────────────────────────────────────
+function wireTabs() {
+  document.querySelectorAll('#cookbook-tabs .tab').forEach(btn => {
+    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+  });
+  // Hash routing — /cookbook.html#shopping opens shopping tab
+  if (location.hash) {
+    const wanted = location.hash.replace(/^#/, '');
+    if (['recipes','library','shopping'].includes(wanted)) switchTab(wanted);
+  }
+}
+function switchTab(name) {
+  document.querySelectorAll('#cookbook-tabs .tab').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  document.querySelectorAll('[data-tab-pane]').forEach(p => p.classList.toggle('active', p.dataset.tabPane === name));
+  if (name === 'library' && !window._libLoaded) loadLibrary();
+  if (name === 'shopping') refreshShoppingList();
+  history.replaceState(null, '', '#' + name);
+}
+
+// ── Recipes tab init ────────────────────────────────────────────
+async function loadRecipes() {
   try {
     const r = await fetch('/api/recipes');
     if (!r.ok) {
-      document.body.innerHTML += `<div class="empty"><h2>Fehler beim Laden</h2><p>${r.status}: ${escapeHtml(await r.text())}</p></div>`;
+      $('#recipes').innerHTML = `<div class="empty"><h2>Fehler beim Laden</h2><p>${r.status}: ${escapeHtml(await r.text())}</p></div>`;
       return;
     }
     const data = await r.json();
@@ -353,7 +736,7 @@ async function init() {
       $('#recipes').innerHTML = `
         <div class="empty">
           <h2>Noch keine Rezepte</h2>
-          <p>Sag zu Larry: <i>„Larry, neues Rezept: Bolognese für 4 Personen, du brauchst…"</i> und er legt es strukturiert hier ab.</p>
+          <p>Sag zu Larry: <i>„Larry, neues Rezept: Bolognese für 4 Personen, du brauchst…"</i> oder lade ein Kochbuch in der Bibliothek hoch.</p>
         </div>`;
       return;
     }
@@ -362,6 +745,417 @@ async function init() {
   } catch (e) {
     $('#recipes').innerHTML = `<div class="empty"><h2>Fehler</h2><p>${escapeHtml(e?.message || String(e))}</p></div>`;
   }
+}
+
+// ── Library (cookbook PDFs) ─────────────────────────────────────
+let _PDF_DOC = null, _PDF_PAGE = 1, _PDF_SCALE = 1.3, _PDF_BOOK = null;
+async function loadLibrary() {
+  window._libLoaded = true;
+  $('#lib-upload-btn').onclick = () => $('#lib-upload-input').click();
+  $('#lib-upload-input').onchange = onUploadCookbook;
+  try {
+    const r = await fetch('/api/cookbooks');
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'HTTP ' + r.status);
+    const books = data.cookbooks || [];
+    $('#lib-count').textContent = books.length + ' Buch' + (books.length === 1 ? '' : 'er');
+    if (!books.length) {
+      $('#lib-list').innerHTML = '<div style="color:var(--text-2);font-size:12px;text-align:center;padding:12px">Noch keine Bücher.</div>';
+      return;
+    }
+    $('#lib-list').innerHTML = books.map(b => `
+      <div class="lib-item" data-book-id="${b.id}" onclick="openCookbook(${b.id})">
+        <span class="lib-item-icon">📕</span>
+        <div class="lib-item-body">
+          <div class="lib-item-title">${escapeHtml(b.title)}</div>
+          <div class="lib-item-sub">${b.page_count ? b.page_count + ' Seiten · ' : ''}${b.pdf_size_kb ? Math.round(b.pdf_size_kb/1024 * 10)/10 + ' MB' : ''}${b.source ? ' · ' + escapeHtml(b.source) : ''}</div>
+        </div>
+        <div class="lib-item-actions">
+          <button onclick="event.stopPropagation(); importRecipesFromBook(${b.id})" title="Rezepte aus Buch extrahieren (Claude analysiert)">📥</button>
+          <button onclick="event.stopPropagation(); deleteCookbook(${b.id})" title="Löschen">🗑</button>
+        </div>
+      </div>
+    `).join('');
+  } catch (e) {
+    $('#lib-list').innerHTML = '<div style="color:#ef4444;font-size:12px;padding:10px">Fehler: ' + escapeHtml(e?.message || e) + '</div>';
+  }
+}
+
+async function onUploadCookbook(ev) {
+  const f = ev.target.files?.[0];
+  if (!f) return;
+  if (!f.type.includes('pdf') && !f.name.toLowerCase().endsWith('.pdf')) {
+    toast('Nur PDFs akzeptiert.', true); return;
+  }
+  if (f.size > 18 * 1024 * 1024) {
+    toast('PDF zu gross (max 18 MB).', true); return;
+  }
+  const title = prompt('Titel des Kochbuchs:', f.name.replace(/\.pdf$/i, ''));
+  if (!title) return;
+  const source = prompt('Quelle / Verlag (optional, z.B. „Schweizer Armee Logistikbasis"):', '');
+  const servingsBaseStr = prompt('Standard-Personenzahl (Militärrezepte: 100, Privatkochbuch: 4):', '4');
+  const servings_base = parseInt(servingsBaseStr, 10) || 4;
+
+  const tst = toast('🔄 Lese PDF…', false);
+  setTimeout(() => tst?.remove?.(), 100);
+  const t = document.createElement('div');
+  t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:9999;background:var(--surface-2);color:var(--text);border:1px solid var(--border);padding:12px 18px;border-radius:8px;font-size:13px';
+  t.textContent = '🔄 Lese PDF…';
+  document.body.appendChild(t);
+  try {
+    const b64 = await fileToBase64(f);
+    t.textContent = '⬆ Lade hoch…';
+    const r = await fetch('/api/cookbooks', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, source, servings_base, pdf_b64: b64 }),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'HTTP ' + r.status);
+    t.textContent = '✓ „' + data.title + '" gespeichert (' + Math.round(data.pdf_size_kb/1024 * 10)/10 + ' MB)';
+    setTimeout(() => t.remove(), 3500);
+    ev.target.value = '';
+    await loadLibrary();
+    openCookbook(data.id);
+  } catch (e) {
+    t.style.background = '#3a1f1f'; t.style.borderColor = '#5b2a2a';
+    t.textContent = '⚠️ ' + (e?.message || e);
+    setTimeout(() => t.remove(), 6000);
+  }
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => {
+      const m = String(r.result).match(/^data:[^;]+;base64,(.+)$/);
+      if (!m) reject(new Error('PDF konnte nicht gelesen werden'));
+      else resolve(m[1]);
+    };
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(file);
+  });
+}
+
+async function openCookbook(id) {
+  document.querySelectorAll('.lib-item').forEach(el => el.classList.toggle('selected', parseInt(el.dataset.bookId, 10) === id));
+  $('#lib-viewer').innerHTML = '<div class="loading">Lade PDF…</div>';
+  try {
+    const r = await fetch('/api/cookbooks?id=' + id + '&full=1');
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'HTTP ' + r.status);
+    _PDF_BOOK = data.cookbook;
+    const bytes = base64ToUint8(_PDF_BOOK.pdf_b64);
+    const pdfjs = window.pdfjsLib || (await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs'));
+    pdfjs.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs';
+    _PDF_DOC = await pdfjs.getDocument({ data: bytes }).promise;
+    _PDF_PAGE = 1;
+    renderPdfViewer();
+    await renderPdfPage();
+    await renderPdfOutline();
+  } catch (e) {
+    $('#lib-viewer').innerHTML = '<div class="empty"><h2>Fehler</h2><p>' + escapeHtml(e?.message || e) + '</p></div>';
+  }
+}
+
+function base64ToUint8(b64) {
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return arr;
+}
+
+function renderPdfViewer() {
+  $('#lib-viewer').innerHTML = `
+    <div class="pdf-header">
+      <h3>${escapeHtml(_PDF_BOOK.title)}</h3>
+      <div class="pdf-actions">
+        <button onclick="importRecipesFromBook(${_PDF_BOOK.id})" class="primary">📥 Rezepte importieren</button>
+        <button onclick="pdfZoom(-0.2)">−</button>
+        <button onclick="pdfZoom(+0.2)">+</button>
+      </div>
+    </div>
+    <div class="pdf-canvas-wrap" id="pdf-canvas-wrap">
+      <canvas id="pdf-canvas"></canvas>
+    </div>
+    <div class="pdf-pager">
+      <button onclick="pdfPage(-1)" id="pdf-prev">‹</button>
+      <span>Seite <input class="page-input" id="pdf-page-input" type="number" min="1" value="${_PDF_PAGE}"> / <span id="pdf-page-total">?</span></span>
+      <button onclick="pdfPage(+1)" id="pdf-next">›</button>
+    </div>`;
+  $('#pdf-page-input').addEventListener('change', (e) => {
+    const p = parseInt(e.target.value, 10);
+    if (p && _PDF_DOC && p <= _PDF_DOC.numPages) { _PDF_PAGE = p; renderPdfPage(); }
+  });
+  $('#pdf-page-total').textContent = _PDF_DOC.numPages;
+  $('#lib-search').oninput = () => searchPdf($('#lib-search').value);
+}
+
+async function renderPdfPage() {
+  if (!_PDF_DOC) return;
+  const page = await _PDF_DOC.getPage(_PDF_PAGE);
+  const viewport = page.getViewport({ scale: _PDF_SCALE });
+  const canvas = $('#pdf-canvas');
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+  const ctx = canvas.getContext('2d');
+  await page.render({ canvasContext: ctx, viewport }).promise;
+  $('#pdf-page-input').value = _PDF_PAGE;
+  $('#pdf-prev').disabled = _PDF_PAGE <= 1;
+  $('#pdf-next').disabled = _PDF_PAGE >= _PDF_DOC.numPages;
+}
+function pdfPage(delta) {
+  if (!_PDF_DOC) return;
+  const next = Math.max(1, Math.min(_PDF_DOC.numPages, _PDF_PAGE + delta));
+  if (next === _PDF_PAGE) return;
+  _PDF_PAGE = next;
+  renderPdfPage();
+}
+function pdfZoom(delta) {
+  _PDF_SCALE = Math.max(0.5, Math.min(3, _PDF_SCALE + delta));
+  renderPdfPage();
+}
+
+async function renderPdfOutline() {
+  const outline = await _PDF_DOC.getOutline().catch(() => null);
+  const wrap = $('#lib-toc-wrap');
+  const list = $('#lib-toc');
+  if (!outline || !outline.length) {
+    wrap.style.display = 'none';
+    return;
+  }
+  wrap.style.display = '';
+  const flat = [];
+  function walk(items, depth) {
+    items.forEach(it => {
+      flat.push({ title: it.title, dest: it.dest, depth });
+      if (it.items?.length) walk(it.items, depth + 1);
+    });
+  }
+  walk(outline, 0);
+  list.innerHTML = flat.map((it, i) => `<li data-i="${i}" style="padding-left:${it.depth * 14}px">${escapeHtml(it.title)}</li>`).join('');
+  list.querySelectorAll('li').forEach(li => {
+    li.addEventListener('click', async () => {
+      const idx = parseInt(li.dataset.i, 10);
+      const dest = flat[idx].dest;
+      if (!dest) return;
+      const destRef = Array.isArray(dest) ? dest[0] : (typeof dest === 'string' ? await _PDF_DOC.getDestination(dest).then(d => d?.[0]) : null);
+      if (!destRef) return;
+      const pageNum = await _PDF_DOC.getPageIndex(destRef).then(i => i + 1);
+      _PDF_PAGE = pageNum;
+      renderPdfPage();
+    });
+  });
+}
+
+async function searchPdf(query) {
+  // Naive full-text search across pages — extracts text content, finds
+  // hits with their page numbers, renders a list above the page nav.
+  if (!_PDF_DOC || !query || query.length < 2) return;
+  // Show a small in-sidebar hit list — quick + dirty
+  const hits = [];
+  for (let p = 1; p <= _PDF_DOC.numPages; p++) {
+    const page = await _PDF_DOC.getPage(p);
+    const txt = await page.getTextContent();
+    const str = txt.items.map(i => i.str).join(' ').toLowerCase();
+    if (str.includes(query.toLowerCase())) hits.push(p);
+    if (hits.length > 60) break;
+  }
+  // Replace lib-toc temporarily with hits
+  const list = $('#lib-toc');
+  list.innerHTML = hits.length
+    ? hits.map(p => `<li onclick="(function(){_PDF_PAGE=${p};renderPdfPage();})()">Seite ${p}</li>`).join('')
+    : '<li style="color:var(--text-2);font-style:italic">Keine Treffer.</li>';
+}
+
+async function deleteCookbook(id) {
+  if (!confirm('Kochbuch wirklich löschen?')) return;
+  try {
+    const r = await fetch('/api/cookbooks?id=' + id, { method: 'DELETE' });
+    if (!r.ok) throw new Error((await r.json()).error || 'HTTP ' + r.status);
+    toast('Gelöscht.');
+    await loadLibrary();
+    if (_PDF_BOOK?.id === id) {
+      _PDF_DOC = null; _PDF_BOOK = null;
+      $('#lib-viewer').innerHTML = '<div class="empty"><h2>—</h2></div>';
+    }
+  } catch (e) { toast('⚠️ ' + e.message, true); }
+}
+
+async function importRecipesFromBook(id) {
+  toast('🧠 Rezepte aus PDF werden mit Claude extrahiert… (kann ~30 Sek dauern pro Block)');
+  try {
+    const r = await fetch('/api/cookbooks?id=' + id + '&full=1');
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error);
+    const book = data.cookbook;
+    // Feed the whole PDF through /api/import-document, which already
+    // handles recipe extraction. Multiple recipes in one PDF → multiple
+    // notes with note_type='recipe' get created.
+    const r2 = await fetch('/api/import-document', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        kind: 'pdf', filename: book.title + '.pdf', content_base64: book.pdf_b64,
+      }),
+    });
+    const data2 = await r2.json();
+    if (!r2.ok) throw new Error(data2.error || 'HTTP ' + r2.status);
+    toast('✓ Rezept-Import: „' + data2.title + '" gespeichert. Mehr-Rezepte-Pro-PDF folgt in nächster Iteration.');
+  } catch (e) {
+    toast('⚠️ ' + (e?.message || e), true);
+  }
+}
+
+// ── Shopping list ───────────────────────────────────────────────
+async function refreshShoppingList() {
+  try {
+    const r = await fetch('/api/shopping-list');
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'HTTP ' + r.status);
+    const items = data.items || [];
+    const open = items.filter(i => i.status === 'open');
+    const done = items.filter(i => i.status === 'done');
+    $('#shop-stats').textContent = `${open.length} offen · ${done.length} erledigt · ${items.length} gesamt`;
+    if (!items.length) {
+      $('#shop-list').innerHTML = '<div style="color:var(--text-2);font-size:13px;text-align:center;padding:24px">Einkaufsliste leer. Füge etwas hinzu oder klick auf „🛒 Auf Einkaufsliste" bei einem Rezept.</div>';
+    } else {
+      $('#shop-list').innerHTML = items.map(renderShopItem).join('');
+    }
+    refreshShoppingBadge(open.length);
+  } catch (e) {
+    $('#shop-list').innerHTML = '<div style="color:#ef4444;padding:14px">Fehler: ' + escapeHtml(e?.message || e) + '</div>';
+  }
+}
+function renderShopItem(it) {
+  const qty = it.qty_value
+    ? (Number.isInteger(it.qty_value) ? it.qty_value : it.qty_value.toFixed(1).replace(/\.0$/, ''))
+    : '';
+  const qtyHtml = qty ? `<span class="shop-item-qty">${qty}${it.qty_unit ? ' ' + escapeHtml(it.qty_unit) : ''}</span>` : '';
+  const recipeHtml = it.source_recipe_title ? `<div class="shop-item-recipe">↳ ${escapeHtml(it.source_recipe_title)}</div>` : '';
+  return `
+    <div class="shop-item ${it.status === 'done' ? 'done' : ''}" data-id="${it.id}">
+      <input type="checkbox" ${it.status === 'done' ? 'checked' : ''} onchange="toggleShopItem(${it.id}, this.checked)">
+      <div style="flex:1">
+        <div class="shop-item-text">${qtyHtml}${escapeHtml(it.item)}</div>
+        ${recipeHtml}
+      </div>
+      <button class="shop-item-delete" onclick="deleteShopItem(${it.id})" title="Löschen">×</button>
+    </div>`;
+}
+async function toggleShopItem(id, done) {
+  try {
+    await fetch('/api/shopping-list?id=' + id, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: done ? 'done' : 'open' }),
+    });
+    refreshShoppingList();
+  } catch (e) { toast('⚠️ ' + e.message, true); }
+}
+async function deleteShopItem(id) {
+  try {
+    await fetch('/api/shopping-list?id=' + id, { method: 'DELETE' });
+    refreshShoppingList();
+  } catch (e) { toast('⚠️ ' + e.message, true); }
+}
+async function refreshShoppingBadge(forceCount) {
+  const el = $('#shop-count');
+  if (!el) return;
+  if (forceCount != null) {
+    el.style.display = forceCount > 0 ? 'inline-flex' : 'none';
+    el.textContent = forceCount;
+    return;
+  }
+  try {
+    const r = await fetch('/api/shopping-list?status=open');
+    const data = await r.json();
+    const n = data.count || 0;
+    el.style.display = n > 0 ? 'inline-flex' : 'none';
+    el.textContent = n;
+  } catch(_) {}
+}
+
+function wireShoppingControls() {
+  const inp = $('#shop-quick-input');
+  const add = async () => {
+    const txt = inp.value.trim();
+    if (!txt) return;
+    // Parse "2 l Milch" → qty + unit + item
+    const p = parseIngredient(txt);
+    try {
+      const r = await fetch('/api/shopping-list', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ item: p.item || txt, qty_value: p.qty, qty_unit: p.unit }),
+      });
+      if (!r.ok) throw new Error((await r.json()).error || 'HTTP ' + r.status);
+      inp.value = '';
+      refreshShoppingList();
+    } catch (e) { toast('⚠️ ' + e.message, true); }
+  };
+  inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') add(); });
+  $('#shop-add-btn').addEventListener('click', add);
+  $('#shop-clear-done-btn').addEventListener('click', async () => {
+    if (!confirm('Alle erledigten Einträge wirklich löschen?')) return;
+    try {
+      await fetch('/api/shopping-list?clear=done', { method: 'DELETE' });
+      refreshShoppingList();
+    } catch (e) { toast('⚠️ ' + e.message, true); }
+  });
+}
+
+// ── Geofence: trigger shopping popup near supermarkets ──────────
+let _GEOFENCE_DISMISSED_AT = parseInt(localStorage.getItem('geofenceDismissedAt') || '0', 10);
+function dismissGeofence() {
+  _GEOFENCE_DISMISSED_AT = Date.now();
+  localStorage.setItem('geofenceDismissedAt', String(_GEOFENCE_DISMISSED_AT));
+  $('#shop-geofence').style.display = 'none';
+}
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+async function checkGeofence() {
+  if (!navigator.geolocation) return;
+  // Skip if user dismissed in last 30 min
+  if (Date.now() - _GEOFENCE_DISMISSED_AT < 30 * 60 * 1000) return;
+  try {
+    const shopsRes = await fetch('/api/shop-locations');
+    const sd = await shopsRes.json();
+    if (!sd.shops?.length) return;
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+      const { latitude: lat, longitude: lng } = pos.coords;
+      let nearestShop = null, nearestDistKm = Infinity;
+      for (const s of sd.shops) {
+        const dKm = haversineKm(lat, lng, s.lat, s.lng);
+        const radiusKm = (s.radius_m || 150) / 1000;
+        if (dKm <= radiusKm && dKm < nearestDistKm) {
+          nearestShop = s; nearestDistKm = dKm;
+        }
+      }
+      if (nearestShop) {
+        $('#shop-geofence-name').textContent = nearestShop.name + ' (' + nearestShop.chain + ')';
+        $('#shop-geofence').style.display = 'flex';
+        // Auto-switch to shopping tab if user is at a shop
+        if (location.hash !== '#shopping' && !window._geofenceAutoSwitched) {
+          window._geofenceAutoSwitched = true;
+          switchTab('shopping');
+          toast('📍 Du bist beim ' + nearestShop.name + ' — Einkaufsliste ist offen.');
+        }
+      }
+    }, () => {}, { enableHighAccuracy: false, maximumAge: 60000, timeout: 8000 });
+  } catch(_) {}
+}
+
+// ── Init everything ─────────────────────────────────────────────
+async function init() {
+  wireTabs();
+  wireShoppingControls();
+  await loadRecipes();
+  await refreshShoppingBadge();
+  // Geofence check on load + every 5 min
+  checkGeofence();
+  setInterval(checkGeofence, 5 * 60 * 1000);
 }
 init();
 </script>

@@ -204,6 +204,51 @@ export const TOOLS = [
       required: ['id', 'ingredients', 'steps'],
     },
   },
+  // ───── shopping list ───────────────────────────────────────
+  {
+    name: 'add_to_shopping_list',
+    description: 'Fügt einen oder mehrere Einträge zur Einkaufsliste hinzu. Nutze dies wenn der User sagt „setz X auf die Einkaufsliste", „füg Y zur Einkaufsliste hinzu", „ich brauche Z", „Einkaufsliste: Milch, Brot, Käse". Bei mehreren Items in einer Sprachaussage MEHRERE create-Aufrufe auf einmal — alternativ items[] für Bulk.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        items: {
+          type: 'array',
+          description: 'Liste von Einkaufseinträgen. Jeder Eintrag hat item (Produktname) plus optional qty_value + qty_unit.',
+          items: {
+            type: 'object',
+            properties: {
+              item:      { type: 'string', description: 'Produktname, z.B. „Milch", „Brot"' },
+              qty_value: { type: 'number', description: 'Menge als Zahl, z.B. 2' },
+              qty_unit:  { type: 'string', description: 'Einheit, z.B. „l", „kg", „Stück", „Packung"' },
+              notes:     { type: 'string', description: 'Optionale Anmerkung' },
+            },
+            required: ['item'],
+          },
+        },
+      },
+      required: ['items'],
+    },
+  },
+  {
+    name: 'list_shopping_list',
+    description: 'Liest die aktuelle Einkaufsliste vor. Nutze dies wenn der User fragt „was ist auf der Einkaufsliste", „zeig mir die Einkaufsliste", „was muss ich kaufen".',
+    input_schema: {
+      type: 'object',
+      properties: {
+        status: { type: 'string', enum: ['open','done','all'], description: 'Filter. Default open.' },
+      },
+    },
+  },
+  {
+    name: 'clear_shopping_list_done',
+    description: 'Entfernt alle bereits erledigten Einträge von der Einkaufsliste. Nur nach expliziter Bestätigung verwenden.',
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'open_shopping_list',
+    description: 'Öffnet die Einkaufsliste in der App. Nutze dies wenn der User sagt „öffne die Einkaufsliste", „zeig mir die Einkaufsliste"  und visuell sehen will.',
+    input_schema: { type: 'object', properties: {} },
+  },
   {
     name: 'open_cookbook',
     description: 'Öffnet die Kochbuch-Webseite (eine Übersichtsseite mit allen Rezepten, sortiert, mit Inhaltsverzeichnis). Nutze dies wenn der User sagt "öffne Kochbuch", "zeig mir alle Rezepte", "wo sind meine Rezepte", "Kochbuch bitte".',
@@ -444,6 +489,43 @@ export async function executeTool(name, args, env) {
         ).bind(newBody, JSON.stringify(newMeta), id).run();
         return ok({ promoted_id: id, title: before.title, servings: recipe.servings });
       }
+      // ───── shopping list ─────────────────────────────────
+      case 'add_to_shopping_list': {
+        if (!Array.isArray(args.items) || args.items.length === 0) return fail('items[] required');
+        const valid = args.items.filter(it => it && typeof it.item === 'string' && it.item.trim());
+        if (!valid.length) return fail('no valid items');
+        const stmts = valid.map(it => env.DB.prepare(
+          'INSERT INTO shopping_list (item, qty_value, qty_unit, notes, priority) VALUES (?, ?, ?, ?, ?)'
+        ).bind(
+          it.item.trim().slice(0, 200),
+          Number.isFinite(parseFloat(it.qty_value)) ? parseFloat(it.qty_value) : null,
+          it.qty_unit ? String(it.qty_unit).slice(0, 24) : null,
+          it.notes ? String(it.notes).slice(0, 500) : null,
+          3,
+        ));
+        const results = await env.DB.batch(stmts);
+        return ok({ added: results.length, items: valid.map(v => v.item) });
+      }
+      case 'list_shopping_list': {
+        const status = args.status === 'done' ? 'done' : (args.status === 'all' ? null : 'open');
+        const rows = status
+          ? await env.DB.prepare('SELECT id, item, qty_value, qty_unit, source_recipe_title, status FROM shopping_list WHERE status = ? ORDER BY added_at DESC LIMIT 50').bind(status).all()
+          : await env.DB.prepare("SELECT id, item, qty_value, qty_unit, source_recipe_title, status FROM shopping_list ORDER BY (status='open') DESC, added_at DESC LIMIT 50").all();
+        return ok({ count: rows.results.length, items: rows.results });
+      }
+      case 'clear_shopping_list_done': {
+        const r = await env.DB.prepare("DELETE FROM shopping_list WHERE status = 'done'").run();
+        return ok({ cleared: r.meta?.changes || 0 });
+      }
+      case 'open_shopping_list': {
+        return JSON.stringify({
+          ok: true,
+          action: 'open_shopping_list',
+          navigate_to: '/cookbook.html#shopping',
+          spoken: 'Öffne die Einkaufsliste, Sir.',
+        });
+      }
+
       case 'open_cookbook': {
         // Marker result — the browser-side chat handler watches for this
         // tool result and navigates the user to /cookbook.html. The text
