@@ -10822,7 +10822,13 @@ function openVoiceAssistant(mode) {
   // external Wispr/OpenWhispr) we never touch the mic API and no permission
   // dialog appears. Chained to the user's avatar click for a valid gesture.
   if (getPref('vaUseBrowserMic') && typeof vaWarmupMicPermission === 'function') {
-    vaWarmupMicPermission();
+    vaWarmupMicPermission().then(() => {
+      // Start the live mic-level meter as soon as permission is sorted —
+      // independently of SpeechRecognition. Even if recognition fails to
+      // start (OpenWhispr conflict, browser support gap), the user can
+      // still SEE whether their mic captures audio.
+      if (typeof vaStartMicLevelMeter === 'function') vaStartMicLevelMeter();
+    });
   }
   // JARVIS-style boot chime BEFORE Larry speaks — fire-and-forget so the
   // greeting follows naturally without a perceptible pause if the sound is
@@ -11294,8 +11300,9 @@ function vaStartListening() {
     _vaIsListening = true;
     vaSetBubbleState('listening');
     vaSetStatus('Höre zu… sprich jetzt.');
-    // Start the live mic-level meter so the user can SEE that audio is
-    // arriving. If they speak and the bar doesn't move → hardware/mic issue.
+    // Meter is now started when the bubble opens (in openVoiceAssistant),
+    // not here — so the user sees mic activity even if recognition itself
+    // fails to start. We just ensure it's running just-in-case.
     vaStartMicLevelMeter();
   };
   // Debounce timer that treats accumulated speech as "final" after a short
@@ -11483,7 +11490,11 @@ function vaBubbleClick(ev) {
     va?.classList.remove('paused');
     _vaConvActive = true;
     vaSetStatus('Pause beendet — höre wieder zu.');
-    // Don't open the mic if Larry is mid-sentence; the TTS-end hook does it.
+    // Restart the live mic-level meter immediately so the user sees activity
+    // even before recognition.onstart fires (or if recognition never starts).
+    if (getPref('vaUseBrowserMic')) vaStartMicLevelMeter();
+    // Don't open the mic recognition if Larry is mid-sentence; the TTS-end
+    // hook does it. The meter above is independent of recognition state.
     if (!_vaIsSpeaking) vaStartListening();
   } else {
     _vaPaused = true;
