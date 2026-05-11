@@ -1632,23 +1632,44 @@ async function onImportCookbookUrl() {
 async function importRecipesFromBook(id) {
   const t = document.createElement('div');
   t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:9999;background:var(--surface-2);color:var(--text);border:1px solid var(--border);padding:14px 20px;border-radius:10px;font-size:13px;max-width:90vw';
-  t.textContent = '🧠 Claude liest das ganze PDF und extrahiert alle Rezepte… (kann 30-90 Sek dauern)';
+  t.innerHTML = '🧠 Claude liest das PDF in Chunks à 95 Seiten…';
   document.body.appendChild(t);
-  try {
-    const r = await fetch('/api/cookbooks/extract?id=' + id, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ max_recipes: 250 }),
-    });
-    const data = await r.json();
-    if (!r.ok) throw new Error(data.error || 'HTTP ' + r.status);
-    t.style.background = '#1f3a25'; t.style.borderColor = '#2a5b34';
-    t.innerHTML = `✓ <strong>${data.inserted}</strong> Rezepte aus „${escapeHtml(data.cookbook_title || '')}" importiert${data.errors?.length ? ` (${data.errors.length} übersprungen)` : ''}.<br><span style="font-size:11px;color:var(--text-2)">Im Tab „Rezepte" verfügbar — alle mit Skalierungs-Slider.</span>`;
-    setTimeout(() => t.remove(), 8000);
-  } catch (e) {
-    t.style.background = '#3a1f1f'; t.style.borderColor = '#5b2a2a';
-    t.textContent = '⚠️ ' + (e?.message || e);
-    setTimeout(() => t.remove(), 10000);
+
+  let totalInserted = 0, totalErrors = 0, chunksDone = 0, totalChunks = null;
+  let next = 0;
+  let cookbookTitle = '';
+  // Up to 20 iterations as a safety cap (covers 1900-page books)
+  for (let iter = 0; iter < 20 && next != null; iter++) {
+    t.innerHTML = `🧠 Chunk ${chunksDone + 1}${totalChunks ? '/' + totalChunks : ''} wird analysiert…`;
+    try {
+      const r = await fetch('/api/cookbooks/extract?id=' + id, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ max_recipes: 200, start_chunk: next, max_chunks: 1 }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || 'HTTP ' + r.status);
+      totalInserted += data.inserted || 0;
+      totalErrors  += (data.errors?.length || 0);
+      chunksDone   += (data.processed_chunks || 1);
+      totalChunks  = data.total_chunks || totalChunks;
+      cookbookTitle = data.cookbook_title || cookbookTitle;
+      next = data.next_chunk;  // null when done
+    } catch (e) {
+      t.style.background = '#3a1f1f'; t.style.borderColor = '#5b2a2a';
+      t.innerHTML = '⚠️ Fehler bei Chunk ' + (chunksDone + 1) + ': ' + escapeHtml(e?.message || e) +
+                    '<br><span style="font-size:11px">Bis hier importiert: ' + totalInserted + ' Rezepte.</span>';
+      setTimeout(() => t.remove(), 12000);
+      return;
+    }
+    if (next == null) break;
   }
+
+  t.style.background = '#1f3a25'; t.style.borderColor = '#2a5b34';
+  t.innerHTML = `✓ <strong>${totalInserted}</strong> Rezepte aus „${escapeHtml(cookbookTitle)}" importiert ` +
+                `(${chunksDone}/${totalChunks || chunksDone} Chunks)` +
+                (totalErrors ? `, ${totalErrors} übersprungen` : '') +
+                `.<br><span style="font-size:11px;color:var(--text-2)">Im Tab „Rezepte" verfügbar — alle mit Skalierungs-Slider.</span>`;
+  setTimeout(() => t.remove(), 10000);
 }
 
 // ── Shopping list ───────────────────────────────────────────────

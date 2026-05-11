@@ -1,0 +1,9 @@
+{
+  "name": "brain-pka",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Personal Knowledge Assistant — Cloudflare Pages app",
+  "dependencies": {
+    "pdf-lib": "^1.17.1"
+  }
+}

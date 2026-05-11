@@ -1,15 +1,54 @@
 // Bulk recipe extraction: takes a cookbook (PDF stored as chunks in
-// cookbook_chunks), reassembles the base64, sends to Claude as a
-// `document` attachment, asks for ALL recipes as a JSON array, and
-// inserts each one into the `notes` table with note_type='recipe'
-// + cookbook_id + servings_base.
+// cookbook_chunks), reassembles the binary, SPLITS into ≤95-page
+// sub-PDFs with pdf-lib (Anthropic caps at 100 pages per request),
+// sends each chunk to Claude as a `document` attachment, asks for
+// recipes as a JSON array, merges + inserts.
 //
 // POST /api/cookbooks/extract?id=N
-// Body: { max_recipes?: number, dry_run?: boolean, locale?: 'de'|'fr' }
+// Body: { max_recipes?: number, dry_run?: boolean,
+//         start_chunk?: number, max_chunks?: number }
 
 import { loadCookbookB64 } from '../../_lib/pdf-chunks.js';
+import { PDFDocument } from 'pdf-lib';
 
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
+const PAGES_PER_CHUNK = 95;  // Anthropic limit is 100; leave safety margin
+
+// Decode base64 → Uint8Array (Workers don't have Buffer)
+function b64ToBytes(b64) {
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return arr;
+}
+// Encode Uint8Array → base64 (chunked to avoid stack overflow)
+function bytesToB64(bytes) {
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
+// Split a PDF binary into chunks of N pages, return [{ startPage,
+// endPage, b64 }] — startPage/endPage are 1-based, inclusive.
+async function splitPdfIntoChunks(pdfBytes, pagesPerChunk) {
+  const src = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
+  const total = src.getPageCount();
+  const chunks = [];
+  for (let start = 0; start < total; start += pagesPerChunk) {
+    const end = Math.min(start + pagesPerChunk, total);
+    const sub = await PDFDocument.create();
+    const indices = [];
+    for (let i = start; i < end; i++) indices.push(i);
+    const copied = await sub.copyPages(src, indices);
+    copied.forEach(p => sub.addPage(p));
+    const bytes = await sub.save();
+    chunks.push({ startPage: start + 1, endPage: end, b64: bytesToB64(bytes) });
+  }
+  return { totalPages: total, chunks };
+}
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -33,14 +72,29 @@ export async function onRequestPost({ env, request }) {
   try { body = await request.json(); } catch { body = {}; }
   const maxRecipes = Math.min(Math.max(parseInt(body.max_recipes, 10) || 200, 1), 500);
   const dryRun = body.dry_run === true;
+  const startChunk = Math.max(0, parseInt(body.start_chunk, 10) || 0);
+  const maxChunks = Math.max(1, Math.min(20, parseInt(body.max_chunks, 10) || 3));
 
   // Load the cookbook metadata + reassemble PDF bytes from chunks
   const book = await env.DB.prepare(
     'SELECT id, title, source, servings_base FROM cookbooks WHERE id = ?'
   ).bind(cookbookId).first();
   if (!book) return json({ error: 'Cookbook not found' }, 404);
-  book.pdf_b64 = await loadCookbookB64(env, cookbookId);
-  if (!book.pdf_b64) return json({ error: 'Cookbook has no PDF body (no chunks)' }, 400);
+  const fullB64 = await loadCookbookB64(env, cookbookId);
+  if (!fullB64) return json({ error: 'Cookbook has no PDF body (no chunks)' }, 400);
+
+  // Split into ≤95-page sub-PDFs because Anthropic limits 100 pages.
+  let pdfChunks;
+  try {
+    const pdfBytes = b64ToBytes(fullB64);
+    const splitResult = await splitPdfIntoChunks(pdfBytes, PAGES_PER_CHUNK);
+    pdfChunks = splitResult.chunks;
+    if (pdfChunks.length === 1) {
+      // Whole PDF fits — same path as before, no need to mention chunking
+    }
+  } catch (e) {
+    return json({ error: 'PDF splitting failed: ' + (e.message || e) }, 500);
+  }
 
   const baseServings = book.servings_base || 100;
   const sourceLabel = book.source || book.title;
@@ -87,57 +141,100 @@ WICHTIGE REGELN:
 - Wenn das Dokument KEINE Rezepte enthält oder unleserlich ist: leeres Array [] zurückgeben.
 - Antwort startet mit [ und endet mit ]. Sonst NICHTS.`;
 
-  const userText = `Bitte alle Rezepte aus diesem Kochbuch-PDF extrahieren. Quelle: "${sourceLabel}". Basis-Personenzahl: ${baseServings}.`;
+  // Process the requested chunk range (default: chunks startChunk
+  // through startChunk+maxChunks-1). Cloudflare Pages free tier has a
+  // ~30s CPU limit so we cap at a few chunks per call. The browser
+  // calls this endpoint repeatedly with start_chunk advancing until
+  // all chunks are done.
+  const chunkRange = pdfChunks.slice(startChunk, startChunk + maxChunks);
+  const allParsedRecipes = [];
+  const chunkResults = [];
 
-  // Call Claude with the PDF as a document attachment
-  let apiRes;
-  try {
-    apiRes = await fetch(ANTHROPIC_URL, {
-      method: 'POST',
-      headers: {
-        'x-api-key': env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5',
-        system,
-        max_tokens: 16384,
-        messages: [{
-          role: 'user',
-          content: [
-            { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: book.pdf_b64 } },
-            { type: 'text', text: userText },
-          ],
-        }],
-      }),
-    });
-  } catch (e) {
-    return json({ error: 'Anthropic request failed: ' + (e.message || e) }, 502);
+  for (let ci = 0; ci < chunkRange.length; ci++) {
+    const chunk = chunkRange[ci];
+    const chunkLabel = `Seiten ${chunk.startPage}-${chunk.endPage}`;
+    const userText = `Extrahiere alle Rezepte aus diesem PDF-Ausschnitt (${chunkLabel} des Originals). Quelle: "${sourceLabel}". Basis-Personenzahl: ${baseServings}. WICHTIG: "page" in deiner Antwort = die ORIGINAL-Seitenzahl im Gesamt-PDF (also addiere ${chunk.startPage - 1} zur Seite innerhalb dieses Chunks).`;
+    let apiRes;
+    try {
+      apiRes = await fetch(ANTHROPIC_URL, {
+        method: 'POST',
+        headers: {
+          'x-api-key': env.ANTHROPIC_API_KEY,
+          'anthropic-version': '2023-06-01',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5',
+          system,
+          max_tokens: 16384,
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: chunk.b64 } },
+              { type: 'text', text: userText },
+            ],
+          }],
+        }),
+      });
+    } catch (e) {
+      chunkResults.push({ chunk: startChunk + ci, error: 'Request failed: ' + (e.message || e) });
+      continue;
+    }
+    if (!apiRes.ok) {
+      const errBody = await apiRes.text();
+      chunkResults.push({ chunk: startChunk + ci, error: 'HTTP ' + apiRes.status + ': ' + errBody.slice(0, 200) });
+      continue;
+    }
+    const data = await apiRes.json();
+    const txt = (data.content || []).filter(c => c.type === 'text').map(c => c.text).join('').trim();
+    let jsonStr = txt;
+    if (jsonStr.startsWith('```')) jsonStr = jsonStr.replace(/^```(?:json)?\s*/, '').replace(/```\s*$/, '');
+    const a = jsonStr.indexOf('[');
+    const b = jsonStr.lastIndexOf(']');
+    if (a >= 0 && b > a) jsonStr = jsonStr.slice(a, b + 1);
+    let parsed;
+    try { parsed = JSON.parse(jsonStr); }
+    catch (e) {
+      chunkResults.push({ chunk: startChunk + ci, error: 'non-JSON: ' + txt.slice(0, 200) });
+      continue;
+    }
+    if (!Array.isArray(parsed)) {
+      chunkResults.push({ chunk: startChunk + ci, error: 'not an array' });
+      continue;
+    }
+    chunkResults.push({ chunk: startChunk + ci, pages: chunkLabel, recipes_found: parsed.length });
+    for (const r of parsed) allParsedRecipes.push(r);
+    if (allParsedRecipes.length >= maxRecipes) break;
   }
-  if (!apiRes.ok) {
-    const errBody = await apiRes.text();
-    return json({ error: 'Anthropic ' + apiRes.status + ': ' + errBody.slice(0, 500) }, apiRes.status);
-  }
-  const data = await apiRes.json();
-  const txt = (data.content || []).filter(c => c.type === 'text').map(c => c.text).join('').trim();
 
-  // Parse JSON array — robust to ```json fences and stray text
-  let parsed;
-  let jsonStr = txt;
-  if (jsonStr.startsWith('```')) jsonStr = jsonStr.replace(/^```(?:json)?\s*/, '').replace(/```\s*$/, '');
-  const a = jsonStr.indexOf('[');
-  const b = jsonStr.lastIndexOf(']');
-  if (a >= 0 && b > a) jsonStr = jsonStr.slice(a, b + 1);
-  try { parsed = JSON.parse(jsonStr); }
-  catch (e) { return json({ error: 'Claude returned non-JSON: ' + txt.slice(0, 400), raw: txt.slice(0, 1200) }, 502); }
-
-  if (!Array.isArray(parsed)) return json({ error: 'Expected JSON array' }, 502);
-  if (parsed.length === 0) return json({ ok: true, extracted: 0, inserted: 0, message: 'No recipes found.' });
+  const hasMore = (startChunk + chunkRange.length) < pdfChunks.length;
+  const nextChunk = hasMore ? (startChunk + chunkRange.length) : null;
 
   if (dryRun) {
-    return json({ ok: true, dry_run: true, extracted: parsed.length, recipes: parsed.slice(0, 10).map(r => ({ title: r.title, page: r.page })) });
+    return json({
+      ok: true, dry_run: true,
+      total_chunks: pdfChunks.length,
+      processed_chunks: chunkRange.length,
+      next_chunk: nextChunk,
+      extracted: allParsedRecipes.length,
+      recipes: allParsedRecipes.slice(0, 10).map(r => ({ title: r.title, page: r.page })),
+      chunk_results: chunkResults,
+    });
   }
+
+  if (allParsedRecipes.length === 0) {
+    return json({
+      ok: true,
+      total_chunks: pdfChunks.length,
+      processed_chunks: chunkRange.length,
+      next_chunk: nextChunk,
+      extracted: 0, inserted: 0,
+      message: 'No recipes found in this chunk range.',
+      chunk_results: chunkResults,
+    });
+  }
+
+  const parsed = allParsedRecipes.slice(0, maxRecipes);
 
   // Insert each recipe
   const insertedIds = [];
@@ -202,10 +299,14 @@ WICHTIGE REGELN:
     ok: true,
     cookbook_id: book.id,
     cookbook_title: book.title,
+    total_chunks: pdfChunks.length,
+    processed_chunks: chunkRange.length,
+    next_chunk: nextChunk,
     extracted: parsed.length,
     inserted: insertedIds.length,
     errors,
     sample: parsed.slice(0, 3).map(r => ({ title: r.title, page: r.page, servings: r.recipe?.servings })),
+    chunk_results: chunkResults,
   });
 }
 
