@@ -10,12 +10,24 @@ export async function onRequestGet({ env }) {
     });
   }
   try {
-    // Also fetch cookbooks so we can resolve source labels per-recipe.
-    // Map cookbook_id → { title, source } for fast lookup.
+    // Also fetch cookbooks so we can resolve source labels + URLs +
+    // logo per-recipe. Schema may or may not have source_url depending
+    // on migration state — query gracefully degrades.
     let cookbookMap = {};
     try {
-      const cb = await env.DB.prepare('SELECT id, title, source FROM cookbooks').all();
-      for (const c of (cb.results || [])) cookbookMap[c.id] = { title: c.title, source: c.source };
+      let cb;
+      try {
+        cb = await env.DB.prepare('SELECT id, title, source, source_url, logo_url FROM cookbooks').all();
+      } catch (_) {
+        cb = await env.DB.prepare('SELECT id, title, source, logo_url FROM cookbooks').all();
+      }
+      for (const c of (cb.results || [])) {
+        cookbookMap[c.id] = {
+          title: c.title, source: c.source,
+          source_url: c.source_url || null,
+          logo_url: c.logo_url || null,
+        };
+      }
     } catch (_) { /* cookbooks table may not exist on older schemas */ }
 
     const rows = await env.DB.prepare(
@@ -29,11 +41,15 @@ export async function onRequestGet({ env }) {
       } catch(_) {}
       // Resolve source info: prefer cookbook table → source_meta → garden_type
       let source = null, cookbook_id = null, cookbook_page = null, cookbook_title = null;
+      let cookbook_source_url = null, cookbook_logo_url = null;
       if (meta?.cookbook_id) {
         cookbook_id = meta.cookbook_id;
         cookbook_page = meta.cookbook_page || null;
-        cookbook_title = meta.cookbook_title || cookbookMap[cookbook_id]?.title || null;
-        source = cookbookMap[cookbook_id]?.source || meta.cookbook_title || null;
+        const cb = cookbookMap[cookbook_id];
+        cookbook_title = meta.cookbook_title || cb?.title || null;
+        source = cb?.source || meta.cookbook_title || null;
+        cookbook_source_url = cb?.source_url || null;
+        cookbook_logo_url = cb?.logo_url || null;
       }
       if (!source && meta?.cookbook_title) {
         cookbook_title = meta.cookbook_title;
@@ -48,10 +64,12 @@ export async function onRequestGet({ env }) {
           ? String(row.related_topics).split(/[,;]/).map(t => t.trim()).filter(Boolean)
           : [],
         garden_type: row.garden_type || null,
-        source,             // human-readable label like "Schweizer Armee · Kanton Zürich"
+        source,
         cookbook_id,
         cookbook_page,
         cookbook_title,
+        cookbook_source_url,  // ← used by badge link + source-tag link
+        cookbook_logo_url,    // ← used by badge img src (overrides default)
         created_at: row.created_at,
         recipe,
       };

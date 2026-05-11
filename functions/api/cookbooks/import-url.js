@@ -62,17 +62,36 @@ export async function onRequestPost({ env, request }) {
 
   try {
     // Metadata row first (no pdf_b64 in cookbooks anymore — bytes live
-    // in cookbook_chunks).
-    const r = await env.DB.prepare(
-      'INSERT INTO cookbooks (slug, title, author, description, pdf_size_kb, source, servings_base) VALUES (?, ?, ?, ?, ?, ?, ?)'
-    ).bind(
-      slug, title,
-      body.author || null,
-      body.description || null,
-      pdf_size_kb,
-      body.source || null,
-      Number.isInteger(body.servings_base) ? body.servings_base : 4,
-    ).run();
+    // in cookbook_chunks). source_url stored when available so the UI
+    // can link the badge / source-tag back to the original PDF.
+    let r;
+    try {
+      r = await env.DB.prepare(
+        'INSERT INTO cookbooks (slug, title, author, description, pdf_size_kb, source, source_url, servings_base) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+      ).bind(
+        slug, title,
+        body.author || null,
+        body.description || null,
+        pdf_size_kb,
+        body.source || null,
+        url,  // remember the public URL we fetched from
+        Number.isInteger(body.servings_base) ? body.servings_base : 4,
+      ).run();
+    } catch (e) {
+      // Schema may not have source_url column yet — fall back without it
+      if (/no such column|has no column/i.test(String(e.message || e))) {
+        r = await env.DB.prepare(
+          'INSERT INTO cookbooks (slug, title, author, description, pdf_size_kb, source, servings_base) VALUES (?, ?, ?, ?, ?, ?, ?)'
+        ).bind(
+          slug, title,
+          body.author || null,
+          body.description || null,
+          pdf_size_kb,
+          body.source || null,
+          Number.isInteger(body.servings_base) ? body.servings_base : 4,
+        ).run();
+      } else { throw e; }
+    }
     const newId = r.meta?.last_row_id;
     if (!newId) throw new Error('Could not get inserted cookbook id');
     const chunkCount = await saveCookbookChunks(env, newId, pdf_b64);

@@ -536,17 +536,33 @@
     .recipe-image { margin: -26px -24px 18px -24px; }
   }
 
-  /* Swiss Armed Forces badge — top right, only for military recipes */
+  /* Swiss Armed Forces badge — top right, only for military recipes.
+     Clickable link to the source PDF, opens in new tab. */
   .swiss-mil-badge {
     position: absolute; top: 14px; right: 14px; z-index: 2;
-    width: 44px; height: 44px; border-radius: 6px;
-    background: white; box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+    width: 52px; height: 52px; border-radius: 8px;
+    background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.3);
     display: flex; align-items: center; justify-content: center;
-    padding: 4px;
+    padding: 4px; text-decoration: none;
+    transition: transform .15s ease, box-shadow .15s ease;
   }
-  .swiss-mil-badge svg { width: 100%; height: 100%; }
+  .swiss-mil-badge:hover {
+    transform: scale(1.08);
+    box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+  }
+  .swiss-mil-badge img, .swiss-mil-badge svg {
+    width: 100%; height: 100%; object-fit: contain;
+  }
   /* When the badge is present, push the source-tag down so they don't overlap */
-  .recipe.from-military .recipe-source-tag { margin-right: 56px; }
+  .recipe.from-military .recipe-source-tag { margin-right: 66px; }
+  /* Clickable source-tag styling — when wrapped in <a> */
+  a.recipe-source-tag {
+    transition: filter .12s;
+  }
+  a.recipe-source-tag:hover {
+    filter: brightness(1.15);
+    background: rgba(196,131,30,0.28);
+  }
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -789,14 +805,14 @@ function pickFoodEmoji(title, tags) {
   return '🍽';
 }
 
-// Swiss army-style coat-of-arms badge (Swiss flag in a rounded square).
-// Inline SVG so we don't need an external asset.
-const SWISS_MIL_BADGE_SVG = `
-<svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-label="Schweizer Armee">
-  <rect width="32" height="32" rx="3" fill="#d52b1e"/>
-  <rect x="13" y="6" width="6" height="20" fill="white"/>
-  <rect x="6" y="13" width="20" height="6" fill="white"/>
-</svg>`;
+// Swiss Armed Forces logo (Schweizer Armee). Real logo URL provided
+// by the user from www.vbs.admin.ch's image CDN. Cached client-side
+// via service worker after first load.
+const SWISS_MIL_LOGO_URL = 'https://prod-vbsch-hcms-sdweb.imgix.net/2023/12/13/3c4276d0-beeb-48ba-bf85-57ee814457e3.png';
+// Public-source PDF for the Swiss military cookbook (Kochrezepte für
+// die Militärküche, Kanton Zürich Zivilschutz). The badge links here
+// when no per-cookbook URL is set in the DB.
+const SWISS_MIL_PDF_URL = 'https://www.zh.ch/content/dam/zhweb/bilder-dokumente/themen/sicherheit-justiz/zivilschutz/ausbildungsunterlagen/koch/Kochrezepte_f%C3%BCr_Milit%C3%A4rk%C3%BCche.pdf';
 
 function isMilitaryRecipe(r) {
   const fields = [
@@ -805,6 +821,13 @@ function isMilitaryRecipe(r) {
     r.garden_type, r.recipe?.notes || '',
   ].join(' ').toLowerCase();
   return /militär|militaer|armee|army|schweizer\s+armee|kantonspolizei|zivilschutz/.test(fields);
+}
+
+// Resolve the source-PDF URL for a recipe (per-recipe page anchor if
+// available). Falls back to the public ZH military cookbook PDF.
+function militaryRecipeSourceUrl(r) {
+  const base = r.source_url || r.cookbook_source_url || SWISS_MIL_PDF_URL;
+  return r.cookbook_page ? base + '#page=' + r.cookbook_page : base;
 }
 
 function renderRecipe(r) {
@@ -818,8 +841,21 @@ function renderRecipe(r) {
   const heroBg = heroImageUrl
     ? `<div class="recipe-image has-photo" style="background-image:url('${escapeHtml(heroImageUrl)}')"></div>`
     : `<div class="recipe-image">${heroEmoji}</div>`;
-  const milBadge = isMil ? `<div class="swiss-mil-badge" title="Schweizer Armee · Kochrezepte für die Militärküche">${SWISS_MIL_BADGE_SVG}</div>` : '';
-  const sourceTag = r.source ? `<div class="recipe-source-tag">📖 ${escapeHtml(r.source)}</div>` : '';
+  const milPdfUrl = isMil ? militaryRecipeSourceUrl(r) : null;
+  const milLogoUrl = r.cookbook_logo_url || SWISS_MIL_LOGO_URL;
+  const milBadge = isMil
+    ? `<a class="swiss-mil-badge" href="${escapeHtml(milPdfUrl)}" target="_blank" rel="noopener"
+          title="Schweizer Armee · Kochrezepte für die Militärküche${r.cookbook_page ? ' — S. ' + r.cookbook_page : ''} (PDF öffnen)">
+         <img src="${escapeHtml(milLogoUrl)}" alt="Schweizer Armee Logo" loading="lazy">
+       </a>`
+    : '';
+  const sourceLabel = r.source || r.cookbook_title;
+  const sourceUrl = isMil ? milPdfUrl : (r.source_url || r.cookbook_source_url || null);
+  const sourceTag = sourceLabel
+    ? (sourceUrl
+        ? `<a class="recipe-source-tag" href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener" style="text-decoration:none">📖 ${escapeHtml(sourceLabel)}${r.cookbook_page ? ' · S. ' + r.cookbook_page : ''} <span style="opacity:.6">↗</span></a>`
+        : `<div class="recipe-source-tag">📖 ${escapeHtml(sourceLabel)}${r.cookbook_page ? ' · S. ' + r.cookbook_page : ''}</div>`)
+    : '';
 
   const chips = [];
   if (rec.total_minutes) chips.push({ e: '⏱', t: rec.total_minutes + ' Min gesamt' });

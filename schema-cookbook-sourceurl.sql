@@ -1,0 +1,3 @@
+ALTER TABLE cookbooks ADD COLUMN source_url TEXT;
+UPDATE cookbooks SET source_url = 'https://www.zh.ch/content/dam/zhweb/bilder-dokumente/themen/sicherheit-justiz/zivilschutz/ausbildungsunterlagen/koch/Kochrezepte_f%C3%BCr_Milit%C3%A4rk%C3%BCche.pdf' WHERE (source LIKE '%Schweizer Armee%' OR title LIKE '%Militär%' OR title LIKE '%Militaer%') AND source_url IS NULL;
+UPDATE cookbooks SET logo_url = 'https://prod-vbsch-hcms-sdweb.imgix.net/2023/12/13/3c4276d0-beeb-48ba-bf85-57ee814457e3.png' WHERE (source LIKE '%Schweizer Armee%' OR title LIKE '%Militär%' OR title LIKE '%Militaer%') AND logo_url IS NULL;
