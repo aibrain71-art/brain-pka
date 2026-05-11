@@ -11318,7 +11318,7 @@ function vaStartListening() {
     console.log('[SR] onstart', vaSRDiagSummary());
     _vaIsListening = true;
     vaSetBubbleState('listening');
-    vaSetStatus('🎙 Höre zu… sprich jetzt. ' + vaSRDiagSummary());
+    vaSetStatus('🎙 Höre zu… sprich jetzt.');
     // Meter is now started when the bubble opens (in openVoiceAssistant),
     // not here — so the user sees mic activity even if recognition itself
     // fails to start. We just ensure it's running just-in-case.
@@ -11335,7 +11335,7 @@ function vaStartListening() {
   _vaRecognition.onspeechstart = () => {
     window._vaSRDiag.speechstart++;
     console.log('[SR] onspeechstart', vaSRDiagSummary());
-    vaSetStatus('🗣 Spracherkennung verarbeitet… ' + vaSRDiagSummary());
+    vaSetStatus('🗣 Spracherkennung verarbeitet…');
   };
   _vaRecognition.onspeechend = () => {
     window._vaSRDiag.speechend++;
@@ -11396,18 +11396,17 @@ function vaStartListening() {
     console.warn('[SR] onerror', e.error, e, vaSRDiagSummary());
     // Map common Web Speech API errors to actionable messages.
     if (e.error === 'no-speech' || e.error === 'aborted') {
-      // benign — user just hasn't spoken yet OR we stopped manually
-      vaSetStatus((e.error === 'no-speech' ? '⏳ Stille (no-speech) — sprich lauter/näher am Mikro. ' : '⏹ Spracherkennung abgebrochen. ') + vaSRDiagSummary());
+      // benign — user just hasn't spoken yet OR we stopped manually. No status spam.
     } else if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
       vaSetStatus('🚫 Mikrofon-Berechtigung fehlt. Klick aufs Schloss-Icon links neben der URL → Mikrofon → Zulassen → Tab neu laden.');
     } else if (e.error === 'audio-capture') {
       vaSetStatus('🚫 Kein Mikrofon gefunden / blockiert (audio-capture). Anderes Programm hat das Mikro exklusiv (Wispr Flow, Teams, Zoom)? Schliessen + Tab neu laden.');
     } else if (e.error === 'network') {
-      vaSetStatus('🌐 Netzwerk-Fehler bei Spracherkennung — Online-Service (Google) nicht erreichbar.');
+      vaSetStatus('🌐 Netzwerk-Fehler bei Spracherkennung. Tipp: Edge/Brave nutzt Microsoft-Cloud — in Chrome probieren.');
     } else if (e.error === 'language-not-supported') {
       vaSetStatus('⚠️ Spracherkennung unterstützt diese Sprache nicht.');
     } else if (e.error) {
-      vaSetStatus('⚠️ Spracherkennung-Fehler: ' + e.error + ' ' + vaSRDiagSummary());
+      vaSetStatus('⚠️ Spracherkennung-Fehler: ' + e.error);
     }
     vaStopListening();
   };
@@ -11422,15 +11421,7 @@ function vaStartListening() {
     // in an active conversation and not paused, the next vaSpeak end-hook
     // will call vaMaybeAutoListen and reopen the mic ONCE.
     if (!_vaPaused && !_vaIsSpeaking) {
-      const d = window._vaSRDiag;
-      // If onend fires without any speechstart, the OS is probably
-      // intercepting audio before SR can hear it. Surface that suspicion.
-      const suspectIntercept = d.start > 0 && d.speechstart === 0 && d.result === 0 && d.audiostart > 0;
-      if (suspectIntercept && _vaConvActive) {
-        vaSetStatus('⚠️ Mikro hört, aber Spracherkennung bekommt keine Sprache. Anderes Tool (Wispr Flow, OpenWhispr) blockiert? ' + vaSRDiagSummary());
-      } else {
-        vaSetStatus((_vaConvActive ? 'Bereit. Klick auf die Bubble um zu pausieren. ' : 'Bereit. ') + vaSRDiagSummary());
-      }
+      vaSetStatus(_vaConvActive ? 'Bereit. Klick auf die Bubble um zu pausieren.' : 'Bereit.');
     }
   };
   try { _vaRecognition.start(); }
@@ -13689,12 +13680,6 @@ document.addEventListener('dblclick', (e) => {
     <!-- Hidden file input used for mobile camera capture -->
     <input type="file" id="va-camera-input" accept="image/*" capture="environment" style="display:none" onchange="onMobileCameraFile(event)">
     <div class="va-status" id="va-status">Bereit. Klick auf die Bubble zum Sprechen.</div>
-    <!-- Live mic-level indicator — visible only while listening. Bar width
-         tracks the input volume in real-time. If you speak and the bar
-         doesn't move → mic isn't capturing. -->
-    <div id="va-mic-level" class="va-mic-level" style="display:none">
-      <div class="va-mic-level-fill"></div>
-    </div>
   </div>
   <div class="va-chat" id="va-chat-thread"></div>
   <div class="va-input">
