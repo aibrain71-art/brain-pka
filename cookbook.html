@@ -918,27 +918,58 @@ function pdfZoom(delta) {
 }
 
 async function renderPdfOutline() {
-  const outline = await _PDF_DOC.getOutline().catch(() => null);
   const wrap = $('#lib-toc-wrap');
   const list = $('#lib-toc');
-  if (!outline || !outline.length) {
+  const head = wrap.querySelector('.lib-toc-head');
+  if (head) head.textContent = '📑 Kapitel — wird ermittelt…';
+
+  // Strategy 1: PDF's built-in outline (bookmarks) — many cookbooks
+  // don't have these, so we fall back to text-scanning.
+  const outline = await _PDF_DOC.getOutline().catch(() => null);
+  let flat = null;
+  let source = null;
+  if (outline && outline.length) {
+    flat = [];
+    (function walk(items, depth) {
+      items.forEach(it => {
+        flat.push({ title: it.title, dest: it.dest, depth });
+        if (it.items?.length) walk(it.items, depth + 1);
+      });
+    })(outline, 0);
+    source = 'bookmarks';
+  }
+
+  // Strategy 2: scan first 20 pages for a printed table of contents
+  // ("Inhaltsverzeichnis"-style page) and parse title→page entries.
+  if (!flat || flat.length < 3) {
+    const scanned = await scanFirstPagesForTOC(20);
+    if (scanned && scanned.length >= 2) {
+      flat = scanned;
+      source = 'auto-scan';
+    }
+  }
+
+  if (!flat || !flat.length) {
     wrap.style.display = 'none';
+    if (head) head.textContent = '📑 Kapitel';
     return;
   }
   wrap.style.display = '';
-  const flat = [];
-  function walk(items, depth) {
-    items.forEach(it => {
-      flat.push({ title: it.title, dest: it.dest, depth });
-      if (it.items?.length) walk(it.items, depth + 1);
-    });
-  }
-  walk(outline, 0);
-  list.innerHTML = flat.map((it, i) => `<li data-i="${i}" style="padding-left:${it.depth * 14}px">${escapeHtml(it.title)}</li>`).join('');
+  if (head) head.textContent = source === 'bookmarks' ? '📑 Kapitel' : '📑 Inhaltsverzeichnis (erkannt)';
+
+  list.innerHTML = flat.map((it, i) => `<li data-i="${i}" style="padding-left:${(it.depth || 0) * 14}px">${escapeHtml(it.title)}${it.page ? '<span style="float:right;color:var(--text-2);font-size:11px">S. ' + it.page + '</span>' : ''}</li>`).join('');
   list.querySelectorAll('li').forEach(li => {
     li.addEventListener('click', async () => {
       const idx = parseInt(li.dataset.i, 10);
-      const dest = flat[idx].dest;
+      const it = flat[idx];
+      // Auto-scan entries carry .page directly. Bookmark entries carry
+      // .dest which needs resolving via PDF.js.
+      if (Number.isInteger(it.page) && it.page > 0) {
+        _PDF_PAGE = Math.min(_PDF_DOC.numPages, it.page);
+        renderPdfPage();
+        return;
+      }
+      const dest = it.dest;
       if (!dest) return;
       const destRef = Array.isArray(dest) ? dest[0] : (typeof dest === 'string' ? await _PDF_DOC.getDestination(dest).then(d => d?.[0]) : null);
       if (!destRef) return;
@@ -947,6 +978,104 @@ async function renderPdfOutline() {
       renderPdfPage();
     });
   });
+}
+
+// Heuristic: scan the first N pages, look for an "Inhaltsverzeichnis"
+// heading, then parse subsequent lines as "<title>........<page>"
+// entries. Works for most German/English/French cookbooks even when
+// the PDF has no proper bookmark outline.
+async function scanFirstPagesForTOC(maxPages) {
+  const pageCount = Math.min(maxPages || 20, _PDF_DOC.numPages);
+  const allLines = [];
+  for (let p = 1; p <= pageCount; p++) {
+    try {
+      const page = await _PDF_DOC.getPage(p);
+      const txt = await page.getTextContent();
+      // Build text-lines from items. pdf.js v4 marks line breaks via
+      // hasEOL; otherwise we fall back to y-coordinate grouping.
+      const lines = textContentToLines(txt);
+      for (const ln of lines) allLines.push({ text: ln, page: p });
+    } catch (_) { /* skip unreadable page */ }
+  }
+
+  // Find heading
+  const headingRe = /^\s*(Inhaltsverzeichnis|Inhalt|Table\s+of\s+Contents|Contents|Sommaire|Index|Indice)\s*$/i;
+  let startIdx = -1;
+  for (let i = 0; i < allLines.length; i++) {
+    if (headingRe.test(allLines[i].text)) { startIdx = i; break; }
+  }
+  if (startIdx < 0) return null;
+
+  // Parse "<title> ... <page>" entries after the heading.
+  // Common patterns:
+  //   "Suppen ................. 23"
+  //   "Suppen   23"
+  //   "1.2 Suppen 23"
+  // Accept dot-leader, ellipsis, spaces, or just whitespace between
+  // the title and the trailing page number.
+  const entryRe = /^(.{2,80}?)[\s.…]{2,}(\d{1,4})\s*$/;
+  const simpleRe = /^(.{2,80}?)\s+(\d{1,4})\s*$/;
+  const entries = [];
+  let nonMatchStreak = 0;
+  for (let i = startIdx + 1; i < allLines.length; i++) {
+    const txt = allLines[i].text.trim();
+    if (!txt) continue;
+    let m = txt.match(entryRe) || txt.match(simpleRe);
+    if (m) {
+      let title = m[1].trim().replace(/[\s….]+$/, '');
+      // Strip leading numbering like "1.2.3 " or "I. "
+      title = title.replace(/^(\d+(?:\.\d+)*\.?\s+|[IVX]+\.\s+|[a-z]\)\s+)/i, '');
+      const page = parseInt(m[2], 10);
+      // Sanity: title alphanumeric, page within document, page increasing or close
+      if (title.length >= 2 && /[A-Za-zÄÖÜäöüß]/.test(title) && page > 0 && page <= _PDF_DOC.numPages) {
+        // Detect depth by indentation (leading number levels) — best-effort
+        const numLevels = (m[1].match(/\d+\.\d+/) || [''])[0].split('.').length - 1;
+        const depth = Math.min(numLevels, 3);
+        entries.push({ title, page, depth });
+        nonMatchStreak = 0;
+        continue;
+      }
+    }
+    nonMatchStreak++;
+    // After a streak of non-matching lines (likely past TOC), stop.
+    if (nonMatchStreak > 8 && entries.length >= 3) break;
+  }
+  return entries.length >= 2 ? entries : null;
+}
+
+// Convert pdf.js textContent.items into a list of strings, one per
+// visual line. Uses hasEOL if available (pdf.js v4+), otherwise groups
+// by y-coordinate from the item transform.
+function textContentToLines(textContent) {
+  const items = textContent?.items || [];
+  if (!items.length) return [];
+  // hasEOL path (v4+)
+  if (items.some(i => 'hasEOL' in i)) {
+    const lines = [];
+    let buf = '';
+    for (const it of items) {
+      if (!('str' in it)) continue;
+      buf += it.str;
+      if (it.hasEOL) { if (buf.trim()) lines.push(buf.replace(/\s+/g, ' ').trim()); buf = ''; }
+    }
+    if (buf.trim()) lines.push(buf.replace(/\s+/g, ' ').trim());
+    return lines;
+  }
+  // Fallback: group by y-coordinate (transform[5])
+  const tol = 2;
+  const lines = [];
+  let currentY = null, buf = '';
+  for (const it of items) {
+    const y = it.transform?.[5];
+    if (currentY == null || Math.abs(currentY - y) > tol) {
+      if (buf.trim()) lines.push(buf.replace(/\s+/g, ' ').trim());
+      buf = it.str || ''; currentY = y;
+    } else {
+      buf += ' ' + (it.str || '');
+    }
+  }
+  if (buf.trim()) lines.push(buf.replace(/\s+/g, ' ').trim());
+  return lines;
 }
 
 async function searchPdf(query) {
