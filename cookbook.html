@@ -576,47 +576,44 @@
     text-transform: uppercase; font-weight: 700;
   }
 
-  /* Recipe hero image — dark / desaturated military feel */
+  /* Recipe top row — source label on the left, both icons on the right
+     in a single line. Replaces the old full-width hero image strip. */
   .recipe { position: relative; }
-  .recipe-image {
-    height: 130px; border-radius: 0;
-    margin: -32px -36px 22px -40px;  /* bleed to card edge incl. left-border */
-    display: flex; align-items: center; justify-content: center;
-    background:
-      linear-gradient(135deg, rgba(213,43,30,0.08) 0%, rgba(12,12,12,0.5) 100%),
-      linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%);
-    font-size: 64px; line-height: 1; user-select: none;
-    border-bottom: 3px solid var(--accent);
-    overflow: hidden; position: relative;
-    filter: grayscale(0.2) contrast(1.05);
+  .recipe-header-row {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    margin-bottom: 14px;
   }
-  .recipe-image.has-photo {
+  .recipe-header-row .source-side { flex: 1; min-width: 200px; }
+  .recipe-header-row .icons-side {
+    display: flex; align-items: center; gap: 14px; flex-shrink: 0;
+  }
+  /* Food icon inline (was full-width hero before). Clickable to upload
+     a real photo via the image picker. When a photo IS set, this slot
+     renders that photo as a small thumbnail. */
+  .recipe-food-icon {
+    width: 64px; height: 64px;
+    display: flex; align-items: center; justify-content: center;
+    background: #1a1a1a; border: 1px solid var(--border);
+    font-size: 36px; line-height: 1; cursor: pointer;
+    transition: all .12s; position: relative;
+    overflow: hidden;
+  }
+  .recipe-food-icon:hover { border-color: var(--accent); }
+  .recipe-food-icon.has-photo {
     background-size: cover; background-position: center;
     font-size: 0;
   }
-  .recipe-image.has-photo::after {
-    content: ''; position: absolute; inset: 0;
-    background: linear-gradient(180deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.4) 100%);
-    pointer-events: none;
-  }
-  /* Small image-edit button overlaid on the hero strip */
-  .recipe-image-edit {
-    position: absolute; bottom: 8px; right: 10px;
-    background: rgba(0,0,0,0.7); color: white;
-    border: 1px solid rgba(255,255,255,0.3); border-radius: 0;
-    padding: 4px 9px; font-size: 11px; font-weight: 700;
-    cursor: pointer; z-index: 3;
+  .recipe-food-icon .edit-hint {
+    position: absolute; inset: 0;
+    background: rgba(0,0,0,0.75);
+    color: white; font-size: 9px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; transition: opacity .12s;
     text-transform: uppercase; letter-spacing: 1px;
-    backdrop-filter: blur(4px);
   }
-  .recipe-image-edit:hover { background: var(--accent); border-color: var(--accent); }
-  .recipe-image-credit {
-    position: absolute; bottom: 6px; left: 10px;
-    font-size: 9px; color: rgba(255,255,255,0.6); z-index: 2;
-    text-transform: uppercase; letter-spacing: 0.5px;
-  }
+  .recipe-food-icon:hover .edit-hint { opacity: 1; }
   @media (max-width: 600px) {
-    .recipe-image { margin: -24px -22px 20px -26px; }
+    .recipe-food-icon { width: 50px; height: 50px; font-size: 28px; }
   }
 
   /* Image picker modal */
@@ -668,34 +665,27 @@
   }
 
   /* Swiss Armed Forces badge — full multi-language wordmark.
-     Larger format with shield + 4-line text bar. Black bg matching
-     the official army logo. Clickable link to the source PDF. */
+     Sits inline next to the recipe-food-icon at the top-right of the
+     header row (NOT absolute-positioned anymore). 1.5x bigger than
+     the previous size per user request. */
   .swiss-mil-badge {
-    position: absolute; top: 16px; right: 16px; z-index: 2;
-    width: 180px; height: 52px;
+    width: 270px; height: 78px;  /* 1.5x of 180×52 */
     background: black; border: 1px solid #2a2a2a;
     box-shadow: 0 3px 10px rgba(0,0,0,0.5);
     display: flex; align-items: center; justify-content: center;
     padding: 0; text-decoration: none;
     transition: transform .15s ease, box-shadow .15s ease;
-    overflow: hidden;
+    overflow: hidden; flex-shrink: 0;
   }
   .swiss-mil-badge:hover {
-    transform: scale(1.04);
+    transform: scale(1.03);
     box-shadow: 0 6px 18px rgba(0,0,0,0.7);
     border-color: var(--accent);
   }
   .swiss-mil-badge img { width: 100%; height: 100%; object-fit: contain; }
   .swiss-mil-badge svg { width: 100%; height: 100%; display: block; }
   @media (max-width: 600px) {
-    .swiss-mil-badge { width: 140px; height: 40px; top: 12px; right: 12px; }
-  }
-  /* Push the source-tag below the badge — wider badge needs more space */
-  .recipe.from-military > .recipe-source-tag,
-  .recipe.from-military > h2 { margin-right: 200px; }
-  @media (max-width: 600px) {
-    .recipe.from-military > .recipe-source-tag,
-    .recipe.from-military > h2 { margin-right: 0; margin-top: 50px; }
+    .swiss-mil-badge { width: 210px; height: 60px; }  /* 1.5x of 140×40 */
   }
   /* Clickable source-tag styling — when wrapped in <a> */
   a.recipe-source-tag {
@@ -1030,11 +1020,12 @@ function renderRecipe(r) {
   // recipes endpoint passes it through as r.image_url for convenience.
   const heroImageUrl = r.image_url || rec.image_url || null;
   const heroCredit = r.image_credit || rec.image_credit || null;
-  const editBtn = `<button class="recipe-image-edit" onclick="openImagePicker(${r.id}, ${attrJson(r.title)})">📷 ${heroImageUrl ? 'Bild ändern' : 'Bild'}</button>`;
-  const creditHtml = heroCredit ? `<div class="recipe-image-credit">📷 ${escapeHtml(heroCredit)}</div>` : '';
-  const heroBg = heroImageUrl
-    ? `<div class="recipe-image has-photo" style="background-image:url('${escapeHtml(heroImageUrl)}')">${creditHtml}${editBtn}</div>`
-    : `<div class="recipe-image">${heroEmoji}${editBtn}</div>`;
+  // The inline food-icon (next to the Swiss army badge) doubles as the
+  // image-picker entry point: click to set a real photo, hover shows
+  // "📷 BILD" overlay hint.
+  const foodIcon = heroImageUrl
+    ? `<div class="recipe-food-icon has-photo" style="background-image:url('${escapeHtml(heroImageUrl)}')" onclick="openImagePicker(${r.id}, ${attrJson(r.title)})" title="${escapeHtml(heroCredit ? 'Bild: ' + heroCredit : '')}"><div class="edit-hint">📷 ändern</div></div>`
+    : `<div class="recipe-food-icon" onclick="openImagePicker(${r.id}, ${attrJson(r.title)})" title="Bild hinzufügen">${heroEmoji}<div class="edit-hint">📷 Bild</div></div>`;
   const milPdfUrl = isMil ? militaryRecipeSourceUrl(r) : null;
   const milLogoUrl = r.cookbook_logo_url || SWISS_MIL_LOGO_URL;
   // Use inline SVG by default; cookbook_logo_url (if set in DB) overrides
@@ -1096,9 +1087,13 @@ function renderRecipe(r) {
     <article class="recipe${isMil ? ' from-military' : ''}" id="${anchor}" data-title="${escapeHtml(r.title.toLowerCase())}"
              data-recipe-id="${r.id}" data-base="${baseServings}" data-servings="${initialServings}"
              data-ingredients='${escapeHtml(JSON.stringify(ingredients))}'>
-      ${milBadge}
-      ${heroBg}
-      ${sourceTag}
+      <div class="recipe-header-row">
+        <div class="source-side">${sourceTag}</div>
+        <div class="icons-side">
+          ${foodIcon}
+          ${milBadge}
+        </div>
+      </div>
       <h2>${escapeHtml(r.title)}</h2>
       <div class="meta-row">
         ${chips.map(c => `<span class="meta-chip"><span class="meta-emoji">${c.e}</span>${escapeHtml(c.t)}</span>`).join('')}
