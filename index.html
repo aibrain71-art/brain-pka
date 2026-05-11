@@ -11619,6 +11619,91 @@ async function vaStartMicLevelMeter() {
     _vaMicLevelCtx = null;
   }
 }
+// ── Barge-In Detector ───────────────────────────────────────────
+// While Larry is speaking (TTS playing), open a parallel mic stream and
+// watch for sustained voice activity. If the user starts talking → stop
+// Larry's TTS immediately and re-open the main SpeechRecognition so the
+// user's interruption gets captured.
+//
+// Echo cancellation (echoCancellation: true) is enabled by default on
+// getUserMedia, so Larry's own voice coming through the speakers should
+// be suppressed at the mic. But on laptops the suppression isn't perfect —
+// we additionally require SUSTAINED energy (~500ms above threshold) to
+// distinguish real user speech from echo bleed.
+let _vaBargeInStream = null;
+let _vaBargeInCtx = null;
+let _vaBargeInRaf = null;
+let _vaBargeInArmed = false;  // becomes true ~600ms after start to avoid trigger from Larry's first syllable
+async function vaStartBargeInWatcher(onBargeIn) {
+  if (_vaBargeInStream) return;  // already running
+  if (!navigator.mediaDevices?.getUserMedia) return;
+  try {
+    _vaBargeInStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl:  true,
+      },
+    });
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    _vaBargeInCtx = new Ctx();
+    if (_vaBargeInCtx.state === 'suspended') { try { await _vaBargeInCtx.resume(); } catch(_) {} }
+    const source = _vaBargeInCtx.createMediaStreamSource(_vaBargeInStream);
+    const analyser = _vaBargeInCtx.createAnalyser();
+    analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = 0.2;
+    source.connect(analyser);
+    const buf = new Uint8Array(analyser.frequencyBinCount);
+
+    // Grace period: ignore the first ~600ms so the residual echo of
+    // Larry's first words doesn't auto-stop him.
+    setTimeout(() => { _vaBargeInArmed = true; }, 600);
+    _vaBargeInArmed = false;
+
+    // Sliding-window detector: count consecutive frames above threshold.
+    // Threshold of 30 (out of 255) is well above background noise but
+    // below echo-canceled TTS bleed (~10-15 range on most laptops).
+    const THRESHOLD = 35;
+    const MIN_FRAMES = 12;  // ~200ms @ 60fps — enough to filter out clicks
+    let consecutive = 0;
+
+    const tick = () => {
+      if (!_vaBargeInStream) return;  // stopped
+      if (_vaBargeInCtx?.state === 'suspended') _vaBargeInCtx.resume().catch(()=>{});
+      analyser.getByteFrequencyData(buf);
+      let sum = 0;
+      for (let i = 0; i < buf.length; i++) sum += buf[i];
+      const avg = sum / buf.length;
+      if (_vaBargeInArmed && avg > THRESHOLD) {
+        consecutive++;
+        if (consecutive >= MIN_FRAMES) {
+          console.log('[BargeIn] sustained voice (avg=' + avg.toFixed(0) + ') — stopping TTS');
+          vaStopBargeInWatcher();
+          if (typeof onBargeIn === 'function') onBargeIn();
+          return;
+        }
+      } else {
+        consecutive = 0;
+      }
+      _vaBargeInRaf = requestAnimationFrame(tick);
+    };
+    tick();
+  } catch (e) {
+    console.warn('[BargeIn] failed to start:', e?.name || e);
+    _vaBargeInStream = null;
+    _vaBargeInCtx = null;
+  }
+}
+function vaStopBargeInWatcher() {
+  _vaBargeInArmed = false;
+  if (_vaBargeInRaf) { cancelAnimationFrame(_vaBargeInRaf); _vaBargeInRaf = null; }
+  if (_vaBargeInStream) {
+    _vaBargeInStream.getTracks().forEach(t => { try { t.stop(); } catch(_) {} });
+    _vaBargeInStream = null;
+  }
+  if (_vaBargeInCtx) { try { _vaBargeInCtx.close(); } catch(_) {} _vaBargeInCtx = null; }
+}
+
 function vaStopMicLevelMeter() {
   if (_vaMicLevelRaf) { cancelAnimationFrame(_vaMicLevelRaf); _vaMicLevelRaf = null; }
   if (_vaMicLevelStream) {
@@ -12211,12 +12296,41 @@ async function vaSpeakElevenLabs(text, voiceIdOverride) {
     const url  = URL.createObjectURL(blob);
     const a = new Audio(url);
     _vaActiveAudio = a;
-    a.onplay  = () => { _vaIsSpeaking = true; vaSetBubbleState('speaking'); vaSetStatus('Spricht…'); };
-    a.onended = () => { _vaIsSpeaking = false; vaSetBubbleState(null); vaSetStatus('Bereit');
-                         URL.revokeObjectURL(url); if (_vaActiveAudio === a) _vaActiveAudio = null;
-                         vaMaybeAutoListen(); };
-    a.onerror = () => { _vaIsSpeaking = false; vaSetBubbleState(null);
-                         URL.revokeObjectURL(url); if (_vaActiveAudio === a) _vaActiveAudio = null; };
+    a.onplay  = () => {
+      _vaIsSpeaking = true;
+      vaSetBubbleState('speaking');
+      vaSetStatus('Spricht… (einfach rein reden zum Unterbrechen)');
+      // Start barge-in watcher: sustained user speech → vaStopSpeaking
+      // → onerror's vaMaybeAutoListen path re-opens the main mic so
+      // the interrupting utterance gets captured.
+      if (typeof vaStartBargeInWatcher === 'function') {
+        vaStartBargeInWatcher(() => {
+          console.log('[BargeIn] user interrupted Larry — stopping TTS, opening mic');
+          vaStopSpeaking();
+          // Brief delay so the audio stream actually releases before the
+          // main recognition grabs the mic — avoids capture conflicts.
+          setTimeout(() => {
+            if (!_vaIsListening && !_vaPaused && _vaConvActive) vaStartListening();
+          }, 100);
+        });
+      }
+    };
+    a.onended = () => {
+      _vaIsSpeaking = false;
+      vaStopBargeInWatcher();
+      vaSetBubbleState(null);
+      vaSetStatus('Bereit');
+      URL.revokeObjectURL(url);
+      if (_vaActiveAudio === a) _vaActiveAudio = null;
+      vaMaybeAutoListen();
+    };
+    a.onerror = () => {
+      _vaIsSpeaking = false;
+      vaStopBargeInWatcher();
+      vaSetBubbleState(null);
+      URL.revokeObjectURL(url);
+      if (_vaActiveAudio === a) _vaActiveAudio = null;
+    };
     await a.play();
     return true;
   } catch (e) {
@@ -12227,6 +12341,7 @@ async function vaSpeakElevenLabs(text, voiceIdOverride) {
 function vaStopSpeaking() {
   if ('speechSynthesis' in window) speechSynthesis.cancel();
   if (_vaActiveAudio) { try { _vaActiveAudio.pause(); } catch(_) {} _vaActiveAudio = null; }
+  if (typeof vaStopBargeInWatcher === 'function') vaStopBargeInWatcher();
   _vaIsSpeaking = false;
   vaSetBubbleState(null);
 }
