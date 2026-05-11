@@ -6,31 +6,39 @@
 <title>Kochbuch · Brain PKA</title>
 <link rel="manifest" href="./pwa.webmanifest">
 <style>
+  /* Color palette inspired by militaerkueche.ch — dark/red/white. */
   :root {
-    --bg: #0d1117;
-    --surface: #161c24;
-    --surface-2: #1f2730;
-    --border: #2a3441;
-    --text: #e6edf3;
-    --text-2: #8b96a3;
-    --accent: #c4831e;         /* warm cooking-magazine ochre */
-    --accent-2: #e9aa4a;
-    --accent-soft: #2a1e10;
-    --paper: #f7f0e3;          /* light "paper" backdrop for recipe cards */
-    --ink: #1a1a1a;
+    --bg: #0c0c0c;            /* dark_900 from reference site */
+    --surface: #1f1f1f;        /* dark_800 */
+    --surface-2: #2f2f2f;      /* dark_700 */
+    --border: #3a3a3a;
+    --text: #ffffff;
+    --text-2: #a8a8a8;
+    --accent: #d52b1e;          /* swiss military red */
+    --accent-2: #ff0000;        /* pure red highlight */
+    --accent-soft: rgba(213, 43, 30, 0.12);
+    --green: #4a6525;           /* military olive (from --green: 74 101 37) */
+    --paper: #1a1a1a;           /* recipe cards now DARK (no more cream) */
+    --paper-2: #242424;
+    --ink: #ffffff;             /* text on cards is white now */
+    --highlight-font: 'Permanent Marker', cursive;
+    --main-font: 'Helvetica Neue', 'TeX Gyre Heros', Arial, sans-serif;
   }
 
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text);
-    font-family: 'Helvetica Neue', system-ui, -apple-system, sans-serif;
+    font-family: var(--main-font);
     -webkit-font-smoothing: antialiased;
   }
 
   /* Header band — magazine masthead vibe */
   header.masthead {
-    background: linear-gradient(180deg, #1c2531 0%, #141a23 100%);
-    border-bottom: 2px solid var(--accent);
-    padding: 16px 24px 22px;
+    background:
+      linear-gradient(180deg, rgba(12,12,12,0.4) 0%, rgba(12,12,12,0.95) 100%),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Cpath d='M0 20h40M20 0v40' stroke='%23ffffff' stroke-opacity='0.02' stroke-width='1'/%3E%3C/svg%3E"),
+      linear-gradient(180deg, #1a1a1a 0%, #0c0c0c 100%);
+    border-bottom: 3px solid var(--accent);
+    padding: 18px 24px 26px;
   }
   header.masthead .row {
     max-width: 1280px; margin: 0 auto;
@@ -38,29 +46,35 @@
   }
   header.masthead .row > div:first-child { flex: 1; min-width: 200px; }
   header.masthead h1 {
-    margin: 0; font-family: 'Playfair Display', Georgia, serif;
-    font-size: clamp(26px, 5vw, 44px); font-weight: 800; letter-spacing: -0.5px;
-    color: var(--accent-2);
+    margin: 0;
+    font-family: var(--highlight-font);
+    font-weight: 400;
+    font-size: clamp(36px, 6vw, 64px);
+    line-height: 0.98;
+    color: var(--text);
+    letter-spacing: 0;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.6);
   }
+  header.masthead h1 .accent { color: var(--accent); }
   header.masthead .tagline {
-    color: var(--text-2); font-size: 12px; letter-spacing: 2px; text-transform: uppercase;
-    margin-top: 4px;
+    color: var(--text-2); font-size: 11px; letter-spacing: 3px; text-transform: uppercase;
+    margin-top: 6px; font-weight: 700;
   }
   header.masthead a.back {
     display: inline-flex; align-items: center; gap: 8px;
     color: var(--text); text-decoration: none;
-    font-size: 14px; font-weight: 600;
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    padding: 10px 18px; border-radius: 24px;
+    font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px;
+    background: transparent;
+    border: 2px solid var(--accent);
+    padding: 9px 18px; border-radius: 0;
     transition: all .15s;
     flex-shrink: 0; margin-top: 6px;
   }
   header.masthead a.back:hover {
-    background: var(--accent); color: #0c1015;
+    background: var(--accent); color: white;
     border-color: var(--accent);
   }
-  header.masthead a.back .arrow { font-size: 18px; line-height: 1; }
+  header.masthead a.back .arrow { font-size: 16px; line-height: 1; }
   /* Floating fallback for in-fullscreen quick exit */
   .fs-back-fallback {
     position: fixed; top: 14px; left: 14px; z-index: 10001;
@@ -134,26 +148,33 @@
   }
   aside.toc a:hover { color: var(--accent-2); border-bottom-color: var(--accent); }
 
-  /* Recipe articles */
-  section.recipes { display: grid; gap: 36px; }
+  /* Recipe articles — dark cards, military aesthetic */
+  section.recipes { display: grid; gap: 32px; }
   article.recipe {
-    background: var(--paper); color: var(--ink); border-radius: 14px;
-    padding: 36px 40px; box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    background: var(--paper); color: var(--ink);
+    border-radius: 0; border: 1px solid var(--border);
+    border-left: 4px solid var(--accent);
+    padding: 32px 36px; box-shadow: 0 6px 24px rgba(0,0,0,0.5);
     scroll-margin-top: 24px;
   }
-  @media (max-width: 600px) { article.recipe { padding: 26px 24px; } }
+  @media (max-width: 600px) { article.recipe { padding: 24px 22px; } }
 
   article.recipe h2 {
-    margin: 0; font-family: 'Playfair Display', Georgia, serif;
-    font-size: 30px; line-height: 1.15; letter-spacing: -0.3px;
+    margin: 0;
+    font-family: var(--highlight-font);
+    font-weight: 400;
+    font-size: 36px; line-height: 1.05; letter-spacing: 0;
+    color: var(--text);
   }
   article.recipe .meta-row {
-    display: flex; flex-wrap: wrap; gap: 8px 14px; margin: 14px 0 22px 0;
-    font-size: 12px; color: #5a5a5a; letter-spacing: 0.4px;
+    display: flex; flex-wrap: wrap; gap: 6px 10px; margin: 14px 0 22px 0;
+    font-size: 11px; color: var(--text-2); letter-spacing: 0.5px;
   }
   article.recipe .meta-chip {
-    background: rgba(196,131,30,0.08); border: 1px solid rgba(196,131,30,0.25);
-    border-radius: 14px; padding: 4px 10px;
+    background: rgba(213,43,30,0.10); border: 1px solid rgba(213,43,30,0.35);
+    border-radius: 0; padding: 5px 10px;
+    color: var(--text);
+    font-weight: 600; text-transform: uppercase;
     display: inline-flex; align-items: center; gap: 6px;
   }
   article.recipe .meta-emoji { font-size: 13px; }
@@ -165,40 +186,65 @@
   }
   @media (max-width: 700px) { article.recipe .body-grid { grid-template-columns: 1fr; gap: 22px; } }
   article.recipe h3 {
-    font-family: 'Playfair Display', Georgia, serif;
-    font-size: 16px; letter-spacing: 1.6px; text-transform: uppercase;
-    border-bottom: 2px solid var(--accent); padding-bottom: 6px;
-    margin: 0 0 14px 0; color: var(--ink);
+    font-family: var(--main-font);
+    font-size: 12px; letter-spacing: 2.5px; text-transform: uppercase; font-weight: 700;
+    border-bottom: 2px solid var(--accent); padding-bottom: 8px;
+    margin: 0 0 14px 0; color: var(--text);
   }
   article.recipe ul.ingredients { list-style: none; padding: 0; margin: 0; font-size: 14px; line-height: 1.7; }
-  article.recipe ul.ingredients li { padding: 3px 0; border-bottom: 1px dotted #ddd0b2; }
-  article.recipe ul.ingredients li::before { content: '·'; color: var(--accent); margin-right: 8px; font-weight: 700; }
+  article.recipe ul.ingredients li {
+    padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.06);
+    color: var(--text);
+  }
+  article.recipe ul.ingredients li::before {
+    content: '▸'; color: var(--accent); margin-right: 10px; font-weight: 700;
+  }
   article.recipe ol.steps {
     list-style: none; padding: 0; margin: 0; counter-reset: step;
-    font-size: 15px; line-height: 1.65;
+    font-size: 14px; line-height: 1.65;
   }
-  article.recipe ol.steps li { counter-increment: step; position: relative; padding: 8px 0 14px 44px; min-height: 36px; }
+  article.recipe ol.steps li {
+    counter-increment: step; position: relative;
+    padding: 10px 0 14px 48px; min-height: 36px;
+    color: var(--text);
+  }
   article.recipe ol.steps li::before {
-    content: counter(step); position: absolute; left: 0; top: 4px;
-    width: 30px; height: 30px; border-radius: 50%;
-    background: var(--accent); color: white; display: flex; align-items: center; justify-content: center;
-    font-family: 'Playfair Display', Georgia, serif; font-weight: 700; font-size: 14px;
+    content: counter(step); position: absolute; left: 0; top: 6px;
+    width: 32px; height: 32px; border-radius: 0;
+    background: var(--accent); color: white;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--highlight-font); font-weight: 400; font-size: 16px;
   }
 
   /* Nutrients tile */
   .nutrients {
-    margin-top: 28px; background: rgba(196,131,30,0.06); border-left: 3px solid var(--accent);
-    padding: 14px 18px; border-radius: 0 8px 8px 0;
+    margin-top: 28px; background: rgba(213,43,30,0.06); border-left: 3px solid var(--accent);
+    padding: 14px 18px; border-radius: 0;
   }
-  .nutrients-title { font-size: 11px; letter-spacing: 1.4px; text-transform: uppercase; color: #6b6b6b; margin-bottom: 8px; }
+  .nutrients-title {
+    font-size: 11px; letter-spacing: 2px; text-transform: uppercase; font-weight: 700;
+    color: var(--accent); margin-bottom: 10px;
+  }
   .nutrients-row { display: flex; gap: 24px; flex-wrap: wrap; }
-  .nutrient { font-size: 12px; color: #4a4a4a; }
-  .nutrient strong { display: block; font-family: 'Playfair Display', Georgia, serif; font-size: 20px; color: var(--ink); font-weight: 700; }
+  .nutrient { font-size: 11px; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.5px; }
+  .nutrient strong {
+    display: block; font-family: var(--highlight-font); font-weight: 400;
+    font-size: 24px; color: var(--text); margin-bottom: 2px;
+  }
 
-  .recipe-tags { margin-top: 22px; display: flex; flex-wrap: wrap; gap: 6px; }
-  .recipe-tag { background: rgba(196,131,30,0.12); color: #6b4d18; padding: 4px 10px; border-radius: 12px; font-size: 11px; }
+  .recipe-tags { margin-top: 22px; display: flex; flex-wrap: wrap; gap: 4px; }
+  .recipe-tag {
+    background: transparent; color: var(--text-2);
+    border: 1px solid var(--border);
+    padding: 4px 10px; border-radius: 0; font-size: 10px;
+    text-transform: uppercase; letter-spacing: 1.2px; font-weight: 600;
+  }
 
-  .recipe-notes { margin-top: 18px; font-style: italic; color: #5a5a5a; font-size: 13px; border-left: 3px solid #ddd0b2; padding: 6px 14px; }
+  .recipe-notes {
+    margin-top: 18px; font-style: italic; color: var(--text-2);
+    font-size: 13px; border-left: 3px solid var(--border);
+    padding: 6px 14px;
+  }
 
   .empty {
     background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
@@ -210,25 +256,26 @@
 
   footer { padding: 36px 24px; text-align: center; color: var(--text-2); font-size: 11px; letter-spacing: 1px; border-top: 1px solid var(--border); }
 
-  /* Tab navigation */
+  /* Tab navigation — squared military style */
   nav.tabs {
-    display: flex; gap: 8px; max-width: 1280px; margin: 18px auto 0 auto; padding: 0 24px;
+    display: flex; gap: 4px; max-width: 1280px; margin: 16px auto 0 auto; padding: 0 24px;
     flex-wrap: wrap;
   }
   nav.tabs .tab {
-    background: transparent; color: var(--text-2); border: 1px solid var(--border);
-    border-radius: 20px; padding: 8px 16px; cursor: pointer; font-size: 13px;
-    transition: all .15s;
-    display: inline-flex; align-items: center; gap: 6px;
+    background: transparent; color: var(--text-2); border: 2px solid var(--border);
+    border-radius: 0; padding: 9px 18px; cursor: pointer;
+    font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px;
+    transition: all .12s;
+    display: inline-flex; align-items: center; gap: 8px;
   }
   nav.tabs .tab:hover { color: var(--text); border-color: var(--accent); }
   nav.tabs .tab.active {
-    background: var(--accent); color: #0c1015; border-color: var(--accent); font-weight: 700;
+    background: var(--accent); color: white; border-color: var(--accent);
   }
   nav.tabs .tab .badge {
     display: inline-flex; align-items: center; justify-content: center;
-    min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
-    background: rgba(255,255,255,.18); color: inherit; font-size: 10px; font-weight: 700;
+    min-width: 18px; height: 18px; padding: 0 5px; border-radius: 0;
+    background: rgba(255,255,255,.2); color: inherit; font-size: 10px; font-weight: 700;
   }
   .tab-pane { display: none; }
   .tab-pane.active { display: block; }
@@ -478,62 +525,82 @@
 
   /* Recipe scaling controls (inside the existing article.recipe) */
   .recipe-scale {
-    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-    margin: 16px 0; padding: 12px 14px;
-    background: rgba(196,131,30,0.08); border-left: 3px solid var(--accent);
-    border-radius: 0 8px 8px 0;
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    margin: 18px 0; padding: 12px 14px;
+    background: rgba(213,43,30,0.06); border-left: 3px solid var(--accent);
+    border-radius: 0;
   }
-  .recipe-scale label { font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: #5a5a5a; margin-right: 4px; }
+  .recipe-scale label {
+    font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
+    color: var(--text-2); margin-right: 6px; font-weight: 700;
+  }
   .recipe-scale .preset {
-    background: white; color: var(--ink); border: 1.5px solid #ddd0b2;
-    padding: 6px 12px; border-radius: 18px; cursor: pointer;
-    font-size: 13px; font-weight: 600; transition: all .12s;
+    background: transparent; color: var(--text);
+    border: 2px solid var(--border); padding: 5px 12px;
+    border-radius: 0; cursor: pointer;
+    font-size: 12px; font-weight: 700; transition: all .12s;
     display: inline-flex; align-items: center; gap: 4px;
+    text-transform: uppercase; letter-spacing: 1px;
   }
-  .recipe-scale .preset:hover { border-color: var(--accent); background: rgba(196,131,30,0.06); }
+  .recipe-scale .preset:hover { border-color: var(--accent); color: var(--text); }
   .recipe-scale .preset.active {
     background: var(--accent); color: white; border-color: var(--accent);
-    box-shadow: 0 2px 6px rgba(196,131,30,0.3);
   }
   .recipe-scale .custom-input {
-    background: white; color: var(--ink); border: 1.5px solid #ddd0b2;
-    padding: 6px 10px; border-radius: 18px; width: 70px;
-    font-size: 13px; font-weight: 600; text-align: center;
+    background: transparent; color: var(--text);
+    border: 2px solid var(--border); padding: 5px 8px;
+    border-radius: 0; width: 70px;
+    font-size: 13px; font-weight: 700; text-align: center;
     font-family: inherit;
   }
   .recipe-scale .custom-input:focus { outline: none; border-color: var(--accent); }
-  .recipe-scale .custom-input.active { border-color: var(--accent); background: rgba(196,131,30,0.08); }
-  .recipe-scale .scale-hint { font-size: 11px; color: #6b6b6b; flex: 1; min-width: 80px; }
+  .recipe-scale .custom-input.active { border-color: var(--accent); color: var(--accent); }
+  .recipe-scale .scale-hint {
+    font-size: 10px; color: var(--text-2); flex: 1; min-width: 80px;
+    text-transform: uppercase; letter-spacing: 1px;
+  }
   .recipe-scale .add-to-shop-btn {
-    background: #1f8c3a; color: white; border: 0; padding: 8px 14px;
-    border-radius: 6px; font-weight: 600; font-size: 12px;
+    background: var(--green); color: white; border: 0;
+    padding: 7px 14px; border-radius: 0;
+    font-weight: 700; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 1.5px;
     cursor: pointer;
   }
-  .recipe-scale .add-to-shop-btn:hover { filter: brightness(1.1); }
+  .recipe-scale .add-to-shop-btn:hover { filter: brightness(1.15); }
 
   .recipe-source-tag {
-    display: inline-block; margin-bottom: 8px; padding: 3px 10px;
-    background: rgba(196,131,30,0.18); color: #6b4d18;
-    border-radius: 12px; font-size: 10px; letter-spacing: 1px; text-transform: uppercase;
+    display: inline-flex; align-items: center; gap: 6px;
+    margin-bottom: 10px; padding: 4px 10px;
+    background: var(--accent); color: white;
+    border-radius: 0; font-size: 10px; letter-spacing: 1.5px;
+    text-transform: uppercase; font-weight: 700;
   }
 
-  /* Recipe hero image — emoji-based placeholder when no real image */
+  /* Recipe hero image — dark / desaturated military feel */
   .recipe { position: relative; }
   .recipe-image {
-    height: 110px; border-radius: 10px;
-    margin: -16px -20px 18px -20px;  /* bleed to card edge */
+    height: 130px; border-radius: 0;
+    margin: -32px -36px 22px -40px;  /* bleed to card edge incl. left-border */
     display: flex; align-items: center; justify-content: center;
-    background: linear-gradient(135deg, #efe4cc 0%, #e2d3aa 100%);
-    font-size: 56px; line-height: 1; user-select: none;
-    border-bottom: 2px solid var(--accent);
+    background:
+      linear-gradient(135deg, rgba(213,43,30,0.08) 0%, rgba(12,12,12,0.5) 100%),
+      linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%);
+    font-size: 64px; line-height: 1; user-select: none;
+    border-bottom: 3px solid var(--accent);
     overflow: hidden; position: relative;
+    filter: grayscale(0.2) contrast(1.05);
   }
   .recipe-image.has-photo {
     background-size: cover; background-position: center;
-    font-size: 0; /* hide the emoji when real image */
+    font-size: 0;
+  }
+  .recipe-image.has-photo::after {
+    content: ''; position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.4) 100%);
+    pointer-events: none;
   }
   @media (max-width: 600px) {
-    .recipe-image { margin: -26px -24px 18px -24px; }
+    .recipe-image { margin: -24px -22px 20px -26px; }
   }
 
   /* Swiss Armed Forces badge — top right, only for military recipes.
@@ -566,7 +633,7 @@
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Permanent+Marker&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs" type="module"></script>
 </head>
 <body>
@@ -574,11 +641,11 @@
 <header class="masthead">
   <div class="row">
     <a class="back" href="./" title="Zurück zur Brain-PKA Hauptseite">
-      <span class="arrow">←</span><span>Zurück zur App</span>
+      <span class="arrow">←</span><span>App</span>
     </a>
     <div>
-      <h1>📕 Kochbuch</h1>
-      <div class="tagline">Persönliche Rezeptsammlung · Brain PKA</div>
+      <h1>Brain <span class="accent">Küche</span></h1>
+      <div class="tagline">Rezepte · Bibliothek · Einkaufsliste</div>
     </div>
   </div>
   <nav class="tabs" id="cookbook-tabs">
