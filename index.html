@@ -11283,11 +11283,27 @@ function vaSetBubbleState(state /* 'listening' | 'speaking' | null */) {
 
 
 // ── Speech-to-Text (browser SpeechRecognition) ───────────────
+// Lifetime telemetry: counts every SR event since the bubble opened. If
+// onstart fires but onresult never does, we have an OS-level audio
+// interception (Wispr Flow, OpenWhispr, exclusive audio session) or a
+// network/auth issue with Google's cloud speech service. Visible in
+// status + console so the user can see exactly which event is missing.
+window._vaSRDiag = window._vaSRDiag || {
+  start: 0, audiostart: 0, soundstart: 0, speechstart: 0,
+  result: 0, speechend: 0, soundend: 0, audioend: 0,
+  end: 0, error: 0, lastError: '', lastErrorAt: 0,
+  attempts: 0
+};
+function vaSRDiagSummary() {
+  const d = window._vaSRDiag;
+  return `[try:${d.attempts} ▶${d.start} 🔊${d.audiostart} 🗣${d.speechstart} ✏${d.result} ⏹${d.end} ⚠${d.error}${d.lastError ? '/'+d.lastError : ''}]`;
+}
 function vaStartListening() {
   if (_vaRecognition) return;
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) { vaSetStatus('Browser unterstützt keine Spracherkennung. Bitte Chrome/Edge benutzen.'); return; }
   _vaRecognition = new SR();
+  window._vaSRDiag.attempts++;
   const lang = (typeof UI_LANG !== 'undefined' ? UI_LANG : 'de');
   _vaRecognition.lang = lang === 'de' ? 'de-DE' : (lang === 'fr' ? 'fr-FR' : 'en-US');
   _vaRecognition.interimResults = true;
@@ -11298,13 +11314,40 @@ function vaStartListening() {
   // re-prompt for permission on every new instance.
   _vaRecognition.continuous = true;
   _vaRecognition.onstart = () => {
+    window._vaSRDiag.start++;
+    console.log('[SR] onstart', vaSRDiagSummary());
     _vaIsListening = true;
     vaSetBubbleState('listening');
-    vaSetStatus('Höre zu… sprich jetzt.');
+    vaSetStatus('🎙 Höre zu… sprich jetzt. ' + vaSRDiagSummary());
     // Meter is now started when the bubble opens (in openVoiceAssistant),
     // not here — so the user sees mic activity even if recognition itself
     // fails to start. We just ensure it's running just-in-case.
     vaStartMicLevelMeter();
+  };
+  _vaRecognition.onaudiostart = () => {
+    window._vaSRDiag.audiostart++;
+    console.log('[SR] onaudiostart', vaSRDiagSummary());
+  };
+  _vaRecognition.onsoundstart = () => {
+    window._vaSRDiag.soundstart++;
+    console.log('[SR] onsoundstart', vaSRDiagSummary());
+  };
+  _vaRecognition.onspeechstart = () => {
+    window._vaSRDiag.speechstart++;
+    console.log('[SR] onspeechstart', vaSRDiagSummary());
+    vaSetStatus('🗣 Spracherkennung verarbeitet… ' + vaSRDiagSummary());
+  };
+  _vaRecognition.onspeechend = () => {
+    window._vaSRDiag.speechend++;
+    console.log('[SR] onspeechend', vaSRDiagSummary());
+  };
+  _vaRecognition.onsoundend = () => {
+    window._vaSRDiag.soundend++;
+    console.log('[SR] onsoundend', vaSRDiagSummary());
+  };
+  _vaRecognition.onaudioend = () => {
+    window._vaSRDiag.audioend++;
+    console.log('[SR] onaudioend', vaSRDiagSummary());
   };
   // Debounce timer that treats accumulated speech as "final" after a short
   // pause — necessary because some browsers (Chrome/Edge on Windows) rarely
@@ -11322,6 +11365,7 @@ function vaStartListening() {
     }
   };
   _vaRecognition.onresult = (e) => {
+    window._vaSRDiag.result++;
     let interim = '';
     let final = '';
     for (let i = e.resultIndex; i < e.results.length; i++) {
@@ -11329,6 +11373,7 @@ function vaStartListening() {
       if (e.results[i].isFinal) final += t;
       else interim += t;
     }
+    console.log('[SR] onresult', { final, interim }, vaSRDiagSummary());
     const inp = document.getElementById('va-text-input');
     const combined = (final + interim).trim();
     if (inp) inp.value = combined;
@@ -11345,24 +11390,30 @@ function vaStartListening() {
     if (final.trim()) flushSpeech();
   };
   _vaRecognition.onerror = (e) => {
+    window._vaSRDiag.error++;
+    window._vaSRDiag.lastError = e.error || 'unknown';
+    window._vaSRDiag.lastErrorAt = Date.now();
+    console.warn('[SR] onerror', e.error, e, vaSRDiagSummary());
     // Map common Web Speech API errors to actionable messages.
     if (e.error === 'no-speech' || e.error === 'aborted') {
       // benign — user just hasn't spoken yet OR we stopped manually
+      vaSetStatus((e.error === 'no-speech' ? '⏳ Stille (no-speech) — sprich lauter/näher am Mikro. ' : '⏹ Spracherkennung abgebrochen. ') + vaSRDiagSummary());
     } else if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
       vaSetStatus('🚫 Mikrofon-Berechtigung fehlt. Klick aufs Schloss-Icon links neben der URL → Mikrofon → Zulassen → Tab neu laden.');
     } else if (e.error === 'audio-capture') {
-      vaSetStatus('🚫 Kein Mikrofon gefunden / blockiert. Hardware oder OS-Mikrofon-Settings prüfen.');
+      vaSetStatus('🚫 Kein Mikrofon gefunden / blockiert (audio-capture). Anderes Programm hat das Mikro exklusiv (Wispr Flow, Teams, Zoom)? Schliessen + Tab neu laden.');
     } else if (e.error === 'network') {
       vaSetStatus('🌐 Netzwerk-Fehler bei Spracherkennung — Online-Service (Google) nicht erreichbar.');
     } else if (e.error === 'language-not-supported') {
       vaSetStatus('⚠️ Spracherkennung unterstützt diese Sprache nicht.');
     } else if (e.error) {
-      vaSetStatus('Spracherkennung-Fehler: ' + e.error);
+      vaSetStatus('⚠️ Spracherkennung-Fehler: ' + e.error + ' ' + vaSRDiagSummary());
     }
-    console.warn('SpeechRecognition error:', e.error, e);
     vaStopListening();
   };
   _vaRecognition.onend = () => {
+    window._vaSRDiag.end++;
+    console.log('[SR] onend', vaSRDiagSummary());
     _vaIsListening = false;
     vaSetBubbleState(null);
     _vaRecognition = null;
@@ -11371,7 +11422,15 @@ function vaStartListening() {
     // in an active conversation and not paused, the next vaSpeak end-hook
     // will call vaMaybeAutoListen and reopen the mic ONCE.
     if (!_vaPaused && !_vaIsSpeaking) {
-      vaSetStatus(_vaConvActive ? 'Bereit. Klick auf die Bubble um zu pausieren.' : 'Bereit.');
+      const d = window._vaSRDiag;
+      // If onend fires without any speechstart, the OS is probably
+      // intercepting audio before SR can hear it. Surface that suspicion.
+      const suspectIntercept = d.start > 0 && d.speechstart === 0 && d.result === 0 && d.audiostart > 0;
+      if (suspectIntercept && _vaConvActive) {
+        vaSetStatus('⚠️ Mikro hört, aber Spracherkennung bekommt keine Sprache. Anderes Tool (Wispr Flow, OpenWhispr) blockiert? ' + vaSRDiagSummary());
+      } else {
+        vaSetStatus((_vaConvActive ? 'Bereit. Klick auf die Bubble um zu pausieren. ' : 'Bereit. ') + vaSRDiagSummary());
+      }
     }
   };
   try { _vaRecognition.start(); }
