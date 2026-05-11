@@ -9,7 +9,11 @@
 //         start_chunk?: number, max_chunks?: number }
 
 import { loadCookbookB64 } from '../../_lib/pdf-chunks.js';
-import { PDFDocument } from 'pdf-lib';
+
+// pdf-lib is loaded LAZILY via dynamic import inside the handler so a
+// missing dependency (e.g. when Cloudflare Pages hasn't been configured
+// with "npm install" as its build command) only breaks this endpoint,
+// not the rest of the API surface (blood-pressure, chat, etc.).
 
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
 const PAGES_PER_CHUNK = 95;  // Anthropic limit is 100; leave safety margin
@@ -34,6 +38,14 @@ function bytesToB64(bytes) {
 // Split a PDF binary into chunks of N pages, return [{ startPage,
 // endPage, b64 }] — startPage/endPage are 1-based, inclusive.
 async function splitPdfIntoChunks(pdfBytes, pagesPerChunk) {
+  // Lazy-load pdf-lib — keeps the module surface clean if the dep is
+  // missing at build time. Will throw a clear error if not available.
+  let PDFDocument;
+  try {
+    ({ PDFDocument } = await import('pdf-lib'));
+  } catch (e) {
+    throw new Error('pdf-lib nicht verfügbar. In Cloudflare Pages → Settings → Builds → Build command auf "npm install" setzen + Redeploy.');
+  }
   const src = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
   const total = src.getPageCount();
   const chunks = [];
