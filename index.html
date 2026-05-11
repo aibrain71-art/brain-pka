@@ -3712,6 +3712,109 @@ async function loadGarden() {
   }
 }
 
+// ── Cloud-DB loader (Cloudflare D1 via /api/notes /journal /tasks /ideas) ──
+// Pulls the user's voice-captured items into the in-memory ENTRIES list so
+// the UI shows them next to hardcoded sample data. Idempotent — replaces
+// any prior d1-prefixed entries on each call. Called once at startup and
+// after every voice tool_use that mutates the DB.
+let _D1_LOADED = false;
+async function loadFromD1() {
+  // Remove any previously-loaded D1 entries so refreshes are clean
+  for (let i = ENTRIES.length - 1; i >= 0; i--) {
+    if (typeof ENTRIES[i].id === 'string' && ENTRIES[i].id.startsWith('d1-')) {
+      ENTRIES.splice(i, 1);
+    }
+  }
+  const toIso = (s) => (s || '').slice(0, 10);
+  const splitTags = (s) => {
+    if (!s) return [];
+    if (typeof s === 'string' && s.startsWith('[')) {
+      try { return JSON.parse(s).filter(Boolean); } catch(_) {}
+    }
+    return String(s).split(/[,;]/).map(t => t.trim()).filter(Boolean);
+  };
+  const fetchSafe = async (url) => {
+    try { const r = await fetch(url); if (!r.ok) return null; return await r.json(); }
+    catch (e) { console.warn('D1 fetch failed:', url, e); return null; }
+  };
+
+  const [n, j, t, i] = await Promise.all([
+    fetchSafe('/api/notes?limit=200'),
+    fetchSafe('/api/journal?limit=300'),
+    fetchSafe('/api/tasks?limit=200'),
+    fetchSafe('/api/ideas?limit=200'),
+  ]);
+
+  if (n?.notes) {
+    for (const row of n.notes) {
+      ENTRIES.push({
+        id: 'd1-note-' + row.id,
+        type: 'note',
+        icon: row.note_type === 'quote' ? '"' : (row.note_type === 'recipe' ? '🍳' : '📝'),
+        date: toIso(row.created_at),
+        title: row.title,
+        preview: (row.body || '').slice(0, 220),
+        detailed: row.body || '',
+        body: row.body || '',
+        topics: splitTags(row.related_topics),
+      });
+    }
+  }
+  if (j?.journal) {
+    for (const row of j.journal) {
+      ENTRIES.push({
+        id: 'd1-journal-' + row.id,
+        type: 'note',
+        icon: '📔',
+        date: row.entry_date || toIso(row.created_at),
+        title: row.title,
+        preview: (row.body || '').slice(0, 220),
+        detailed: row.body || '',
+        body: row.body || '',
+        topics: splitTags(row.related_topics),
+      });
+    }
+  }
+  if (t?.tasks) {
+    for (const row of t.tasks) {
+      const checkmark = row.status === 'done' ? '✅ ' : '☐ ';
+      const prioLabel = row.priority === 1 ? ' [URGENT]' : (row.priority === 2 ? ' [hoch]' : '');
+      ENTRIES.push({
+        id: 'd1-task-' + row.id,
+        type: 'note',
+        icon: '🎯',
+        date: toIso(row.created_at),
+        title: checkmark + row.title + prioLabel,
+        preview: (row.details || '').slice(0, 220) || (row.due_date ? 'Fällig: ' + row.due_date : ''),
+        detailed: (row.details || '') + (row.due_date ? '\n\nFällig: ' + row.due_date : ''),
+        body: row.details || '',
+        topics: splitTags(row.tags),
+      });
+    }
+  }
+  if (i?.ideas) {
+    for (const row of i.ideas) {
+      ENTRIES.push({
+        id: 'd1-idea-' + row.id,
+        type: 'note',
+        icon: '💡',
+        date: toIso(row.created_at),
+        title: row.title,
+        preview: (row.body || '').slice(0, 220),
+        detailed: row.body || '',
+        body: row.body || '',
+        topics: splitTags(row.tags),
+      });
+    }
+  }
+
+  _D1_LOADED = true;
+  if (typeof resetEntityIndex === 'function') resetEntityIndex();
+  if (typeof buildTagTree === 'function')      buildTagTree();
+  if (typeof updateModeCounts === 'function')  updateModeCounts();
+  if (typeof applyFilters === 'function')      applyFilters();
+}
+
 // Populate the count chip in BOTH mode buttons:
 //   Standard → number of personal notes (non-garden entries)
 //   Garden   → number of garden cards (loaded from manifest)
@@ -11905,20 +12008,27 @@ async function vaRespond(userText) {
     'Maximal 2–3 kurze Sätze, kein Markdown, keine Aufzählungen, keine Überschriften.',
     '',
     '## Tools — du hast Zugriff auf das persönliche Wissensbank-System:',
-    '- create_note(title, body, note_type?, tags?) — wenn der User eine Notiz diktiert oder dich bittet „merk dir…", „schreib auf…", „notiere…".',
-    '- search_notes(query) / list_recent_notes — wenn er fragt „was war meine Notiz zu…", „wann hab ich…".',
-    '- delete_note(id) — NUR nach expliziter Bestätigung des Users.',
-    '- create_journal(title, body, mood?) — wenn er einen Tagebucheintrag macht („heute habe ich…", „mein Tag war…").',
-    '- search_journal / list_recent_journal — Rückblick auf vergangene Tage.',
-    '- create_task(title, priority?, due_date?) — wenn er etwas TUN muss (Action-Item).',
+    '- create_note(title, body, note_type?, tags?) — bei „neue Notiz…", „merk dir…", „schreib auf…", „notiere…".',
+    '- search_notes(query) / list_recent_notes — bei „was war meine Notiz zu…", „letzte Notizen".',
+    '- delete_note(id) — NUR nach expliziter Bestätigung.',
+    '- create_journal(title, body, mood?) — bei Tagebucheinträgen („heute habe ich…").',
+    '- search_journal / list_recent_journal — Rückblick auf Tage.',
+    '- create_task(title, priority?, due_date?) — bei TODO-Items.',
     '- list_open_tasks / complete_task(id) — TODO-Verwaltung.',
-    '- create_idea(title, body?) — halbgare Idee zum späteren Ausarbeiten.',
-    '- list_ideas / search_people — orientierung.',
-    '- web_search — wenn er nach aktuellen Infos fragt („was passiert grad…", „Aktien", „Wetter", News).',
+    '- create_idea(title, body?) — halbgare Ideen.',
+    '- list_ideas / search_people — Orientierung.',
+    '- web_search — bei aktuellen Infos („was passiert grad…", News, Aktien, Wetter).',
     '',
-    `Heutiges Datum: ${todayISO}. Sprache des Inhalts: ${voiceLangName}.`,
-    'Nach jeder Mutation (create/delete) IMMER kurz bestätigen, z.B. „Notiert, Sir."',
-    'Wenn Suche keine Treffer hat, das ehrlich sagen statt halluzinieren.',
+    `Heutiges Datum: ${todayISO}. Sprache: ${voiceLangName}.`,
+    '',
+    '## KRITISCHE REGELN für Tool-Calls:',
+    '1. **FRAG NICHT ZURÜCK** wenn der User eine Notiz/Aufgabe/Idee diktiert. Extrahiere Titel + Body SELBST.',
+    '2. **Titel** = die ersten 3-6 Worte als prägnante Überschrift (z.B. „Heute war ein produktiver Tag mit Cloudflare" → Titel: „Produktiver Tag mit Cloudflare", Body: voller Satz).',
+    '3. **Body** = der ganze diktierte Inhalt 1:1 (nur Filler-Wörter wie „ähm" raus).',
+    '4. Wenn völlig unklar was gemeint ist → FRAG nach, sonst direkt das Tool aufrufen.',
+    '5. Nach jeder Mutation (create/delete) IMMER kurz bestätigen: „Notiert, Sir." / „Aufgenommen." / „Gelöscht."',
+    '6. Bei leerer Suche: ehrlich sagen, NICHT halluzinieren.',
+    '7. Wenn der User „neue Notiz: <Text>" sagt → SOFORT create_note aufrufen, NICHT fragen.',
     '',
     'Falls KEIN Tool nötig — stütze dich auf die folgenden Notizen aus dem persönlichen Wissensgarten:',
     '',
@@ -11976,6 +12086,11 @@ async function vaRespond(userText) {
       const toolBlocks = data._trace.flatMap(r => (r.blocks || []).filter(b => b === 'tool_use'));
       if (toolBlocks.length > 0) {
         console.log('[Larry] Tool calls this turn:', data._trace);
+        // If any DB-mutating tools ran, re-pull from D1 so the UI shows
+        // the new/updated/deleted items without a full page reload.
+        if (typeof loadFromD1 === 'function') {
+          loadFromD1().catch(e => console.warn('D1 refresh failed:', e));
+        }
       }
     }
   } catch (err) {
@@ -12189,6 +12304,7 @@ document.querySelectorAll('.lang-toggle button').forEach(b => b.classList.remove
 document.getElementById('lang-' + UI_LANG)?.classList.add('active');
 applyLanguage();
 loadGarden();
+loadFromD1();  // fetch user's notes/journal/tasks/ideas from Cloudflare D1
 applyLogo();  // re-run after avatar element exists in topbar
 _initCloudSync();  // restore OneDrive connection if previously signed in
 applyVaTimelinePref();  // restore the voice-chat timeline visibility from prefs
