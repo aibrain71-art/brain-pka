@@ -603,25 +603,36 @@
     .recipe-image { margin: -24px -22px 20px -26px; }
   }
 
-  /* Swiss Armed Forces badge — top right, only for military recipes.
-     Clickable link to the source PDF, opens in new tab. */
+  /* Swiss Armed Forces badge — full multi-language wordmark.
+     Larger format with shield + 4-line text bar. Black bg matching
+     the official army logo. Clickable link to the source PDF. */
   .swiss-mil-badge {
-    position: absolute; top: 14px; right: 14px; z-index: 2;
-    width: 52px; height: 52px; border-radius: 8px;
-    background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    position: absolute; top: 16px; right: 16px; z-index: 2;
+    width: 180px; height: 52px;
+    background: black; border: 1px solid #2a2a2a;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.5);
     display: flex; align-items: center; justify-content: center;
-    padding: 4px; text-decoration: none;
+    padding: 0; text-decoration: none;
     transition: transform .15s ease, box-shadow .15s ease;
+    overflow: hidden;
   }
   .swiss-mil-badge:hover {
-    transform: scale(1.08);
-    box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+    transform: scale(1.04);
+    box-shadow: 0 6px 18px rgba(0,0,0,0.7);
+    border-color: var(--accent);
   }
-  .swiss-mil-badge img, .swiss-mil-badge svg {
-    width: 100%; height: 100%; object-fit: contain;
+  .swiss-mil-badge img { width: 100%; height: 100%; object-fit: contain; }
+  .swiss-mil-badge svg { width: 100%; height: 100%; display: block; }
+  @media (max-width: 600px) {
+    .swiss-mil-badge { width: 140px; height: 40px; top: 12px; right: 12px; }
   }
-  /* When the badge is present, push the source-tag down so they don't overlap */
-  .recipe.from-military .recipe-source-tag { margin-right: 66px; }
+  /* Push the source-tag below the badge — wider badge needs more space */
+  .recipe.from-military > .recipe-source-tag,
+  .recipe.from-military > h2 { margin-right: 200px; }
+  @media (max-width: 600px) {
+    .recipe.from-military > .recipe-source-tag,
+    .recipe.from-military > h2 { margin-right: 0; margin-top: 50px; }
+  }
   /* Clickable source-tag styling — when wrapped in <a> */
   a.recipe-source-tag {
     transition: filter .12s;
@@ -872,10 +883,28 @@ function pickFoodEmoji(title, tags) {
   return '🍽';
 }
 
-// Swiss Armed Forces logo (Schweizer Armee). Real logo URL provided
-// by the user from www.vbs.admin.ch's image CDN. Cached client-side
-// via service worker after first load.
-const SWISS_MIL_LOGO_URL = 'https://prod-vbsch-hcms-sdweb.imgix.net/2023/12/13/3c4276d0-beeb-48ba-bf85-57ee814457e3.png';
+// Schweizer Armee logo — full wordmark version, multi-language.
+// Inline SVG so it loads instantly, scales crisply, and stays in
+// theme even on a black background.
+const SWISS_MIL_LOGO_URL = null;  // null = use the inline SVG below
+const SWISS_MIL_LOGO_SVG = `
+<svg viewBox="0 0 280 80" xmlns="http://www.w3.org/2000/svg" aria-label="Schweizer Armee">
+  <rect width="280" height="80" fill="black"/>
+  <!-- Shield outline on the left -->
+  <g transform="translate(16 14)">
+    <path d="M2 2 L48 2 L48 36 Q25 56 2 36 Z" fill="none" stroke="white" stroke-width="2.8" stroke-linejoin="miter"/>
+    <!-- White cross inside the shield -->
+    <rect x="21" y="11" width="8" height="24" fill="white"/>
+    <rect x="13" y="19" width="24" height="8" fill="white"/>
+  </g>
+  <!-- Multi-language wordmark on the right -->
+  <g fill="white" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="700">
+    <text x="80" y="20" font-size="13" letter-spacing="0.4">SCHWEIZER ARMEE</text>
+    <text x="80" y="36" font-size="13" letter-spacing="0.4">ARMÉE SUISSE</text>
+    <text x="80" y="52" font-size="13" letter-spacing="0.4">ESERCITO SVIZZERO</text>
+    <text x="80" y="68" font-size="13" letter-spacing="0.4">ARMADA SVIZRA</text>
+  </g>
+</svg>`;
 // Public-source PDF for the Swiss military cookbook (Kochrezepte für
 // die Militärküche, Kanton Zürich Zivilschutz). The badge links here
 // when no per-cookbook URL is set in the DB.
@@ -910,10 +939,14 @@ function renderRecipe(r) {
     : `<div class="recipe-image">${heroEmoji}</div>`;
   const milPdfUrl = isMil ? militaryRecipeSourceUrl(r) : null;
   const milLogoUrl = r.cookbook_logo_url || SWISS_MIL_LOGO_URL;
+  // Use inline SVG by default; cookbook_logo_url (if set in DB) overrides
+  const milLogoContent = milLogoUrl
+    ? `<img src="${escapeHtml(milLogoUrl)}" alt="Schweizer Armee Logo" loading="lazy">`
+    : SWISS_MIL_LOGO_SVG;
   const milBadge = isMil
     ? `<a class="swiss-mil-badge" href="${escapeHtml(milPdfUrl)}" target="_blank" rel="noopener"
           title="Schweizer Armee · Kochrezepte für die Militärküche${r.cookbook_page ? ' — S. ' + r.cookbook_page : ''} (PDF öffnen)">
-         <img src="${escapeHtml(milLogoUrl)}" alt="Schweizer Armee Logo" loading="lazy">
+         ${milLogoContent}
        </a>`
     : '';
   const sourceLabel = r.source || r.cookbook_title;
