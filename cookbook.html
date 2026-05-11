@@ -1013,7 +1013,11 @@ function renderRecipe(r) {
   const rec = r.recipe || {};
   const anchor = slugForAnchor(r.title, r.id);
   const baseServings = r.servings_base || rec.servings || 4;
-  const initialServings = rec.servings || baseServings;
+  // Default DISPLAY serving: 2 portions for large-base recipes
+  // (military, catering) so household-relevant quantities show up
+  // first. User can switch to 1/4/any-N via the preset/input buttons.
+  // For normal household recipes (base ≤ 12) keep the original.
+  const initialServings = baseServings >= 30 ? 2 : (rec.servings || baseServings);
   const isMil = isMilitaryRecipe(r);
   const heroEmoji = pickFoodEmoji(r.title, r.tags);
   // Image lives in source_meta.image_url (set via /api/recipes/set-image).
@@ -1498,6 +1502,7 @@ function renderPdfViewer() {
       <h3>${escapeHtml(_PDF_BOOK.title)}</h3>
       <div class="pdf-actions">
         <button onclick="importRecipesFromBook(${_PDF_BOOK.id})" class="primary">📥 Rezepte importieren</button>
+        <button onclick="importRecipesFromBook(${_PDF_BOOK.id}, { dryRun: true })" title="Test-Lauf — zeigt was Claude erkennt, ohne in DB zu speichern">🔍 Dry-Run</button>
         <button id="pdf-spread-btn" onclick="togglePdfSpread()" title="Einzel- vs Doppelseiten-Ansicht (D)">📖 Einzelseite</button>
         <button onclick="toggleFullscreenPdf()">⛶ Vollbild</button>
         <button onclick="pdfZoom(-0.2)">−</button>

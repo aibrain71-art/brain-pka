@@ -142,16 +142,25 @@ Antwort EXAKT in dieser Form (KEIN Text drumherum, KEIN \`\`\`json-Block — pur
   }
 ]
 
-WICHTIGE REGELN:
+WICHTIGE REGELN — SEI INKLUSIV, lieber zu viele als zu wenige Rezepte:
 - ALLE Rezepte aus dem Dokument extrahieren (bis max ${maxRecipes}).
-- "servings" pro Rezept ist die Basis-Personenzahl wie im Original (für Militärküchen-Bücher ist das typischerweise ${baseServings}).
-- "page" = PDF-Seitenzahl des Rezepts (1-basiert).
-- ingredients[] PFLICHT: ganze Zeilen wie "10 kg Kartoffeln", "Salz nach Bedarf". Nicht in Komponenten zerlegen.
-- steps[] PFLICHT: Zubereitungsschritte als ganze Sätze.
+- "Rezept" = irgendeine Seite oder Sektion mit konkreten Zutaten + Anleitung. Auch wenn:
+  • die Liste der Zutaten in einer TABELLE steht (zähle sie als Strings auf)
+  • die Anleitung kurz/stichwortartig ist ("Zwiebeln dünsten, Brühe dazu, 30 Min kochen" zählt!)
+  • einige Felder leer/spärlich sind (Schritte 1-2 reichen)
+  • das Rezept nur Variationen eines anderen ist (eigenes Rezept)
+  • das Rezept eine Beilage, Sauce, Dessert oder Suppe ist
+  • Schweizer Mundart-Namen vorkommen (Älplermagronen, Dörrbohnen, Rösti, Rivella-Hähnchen etc.)
+- "servings" = Basis-Personenzahl wie im Original (Militärküchen typischerweise ${baseServings}).
+- "page" = PDF-Seitenzahl des Rezepts (1-basiert) im DIESEM Chunk.
+- ingredients[] PFLICHT: ganze Zeilen ("10 kg Kartoffeln", "Salz nach Bedarf", "1 Bund Petersilie").
+- steps[] PFLICHT: mindestens 1 Schritt als ganzer Satz. Wenn nur Stichworte stehen, formuliere als Satz.
 - Nährwerte: nur wenn im Original explizit angegeben — sonst null.
-- KEIN Index, KEINE Inhaltsverzeichnis-Einträge, KEINE Kapitel-Überschriften ohne Rezept-Inhalt.
+- AUSSCHLIESSEN: reines Inhaltsverzeichnis ohne Rezept-Inhalt, reine Kapitel-Trenner, Einführungstexte ohne Zutaten.
 - Wenn das Dokument KEINE Rezepte enthält oder unleserlich ist: leeres Array [] zurückgeben.
-- Antwort startet mit [ und endet mit ]. Sonst NICHTS.`;
+- Antwort startet mit [ und endet mit ]. Sonst NICHTS.
+
+PRÄZISIONS-CHECK: Wenn du fertig bist, gehe MENTAL nochmal alle Seiten durch und prüfe ob du irgendein Rezept ausgelassen hast. Schweizer Militärküchen-Klassiker wie Dörrbohnen, Älplermagronen, Berner Platte, Riz Casimir dürfen NICHT fehlen.`;
 
   // Process the requested chunk range (default: chunks startChunk
   // through startChunk+maxChunks-1). Cloudflare Pages free tier has a
