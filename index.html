@@ -11330,7 +11330,14 @@ function vaStartListening() {
       else interim += t;
     }
     const inp = document.getElementById('va-text-input');
-    if (inp) inp.value = (final + interim).trim();
+    const combined = (final + interim).trim();
+    if (inp) inp.value = combined;
+    // Live-feedback: show the recognised text as status so user SEES that
+    // recognition is producing text (vs. silent failure where mic captures
+    // but Web Speech API gets nothing because OpenWhispr/etc. intercept it).
+    if (combined) {
+      vaSetStatus('🗣 „' + combined.slice(0, 80) + (combined.length > 80 ? '…' : '') + '"');
+    }
     // Reset the silence timer on every recognised chunk; if no new chunk
     // arrives for SILENCE_MS the accumulated text is sent as if final.
     if (window._vaSilenceTimer) clearTimeout(window._vaSilenceTimer);
