@@ -4247,7 +4247,8 @@ async function vaRunSelfTest() {
   const log = (s) => { lines.push(s); print(); };
   log('🩺 Selbsttest läuft…\n');
 
-  // ─── 1. Mic permission ──────────────────────────────────────
+  // ─── 1a. Mic permission ─────────────────────────────────────
+  let micPermissionOK = false;
   try {
     if (!navigator.mediaDevices?.getUserMedia) {
       log('✗ Browser-Mikrofon: API nicht verfügbar (alter Browser?)');
@@ -4256,20 +4257,72 @@ async function vaRunSelfTest() {
       const status = await navigator.permissions.query({ name: 'microphone' });
       if (status.state === 'granted') {
         log('✓ Browser-Mikrofon: Permission "granted"');
+        micPermissionOK = true;
       } else if (status.state === 'denied') {
         log('✗ Browser-Mikrofon: Permission "denied" (vom User blockiert)');
         log('  → Fix: Schloss-Icon links neben URL → Mikrofon → Zulassen → Tab neu laden');
       } else {
         log('⚠ Browser-Mikrofon: Permission "prompt" (noch nicht entschieden)');
         log('  → Bubble öffnen, Browser fragt einmal nach Erlaubnis');
+        micPermissionOK = true;  // worth trying the capture test
       }
     } else {
       log('⚠ Browser-Mikrofon: Permissions-API nicht unterstützt — kann Status nicht prüfen');
+      micPermissionOK = true;
     }
   } catch (e) {
     log('✗ Browser-Mikrofon Check fehlgeschlagen: ' + (e?.message || e));
   }
   log('');
+
+  // ─── 1b. Live audio capture test (3s) ───────────────────────
+  if (micPermissionOK && navigator.mediaDevices?.getUserMedia) {
+    log('⏺ Audio-Capture-Test läuft (3 Sek) — sprich JETZT laut!');
+    print();
+    let stream, ctx;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      ctx = new Ctx();
+      if (ctx.state === 'suspended') { try { await ctx.resume(); } catch(_) {} }
+      const src = ctx.createMediaStreamSource(stream);
+      const an = ctx.createAnalyser();
+      an.fftSize = 256;
+      src.connect(an);
+      const buf = new Uint8Array(an.frequencyBinCount);
+      const samples = [];
+      const start = performance.now();
+      while (performance.now() - start < 3000) {
+        an.getByteFrequencyData(buf);
+        let sum = 0;
+        for (let i = 0; i < buf.length; i++) sum += buf[i];
+        samples.push(sum / buf.length);
+        await new Promise(r => setTimeout(r, 50));
+      }
+      stream.getTracks().forEach(t => t.stop());
+      try { await ctx.close(); } catch(_) {}
+      // Remove the "läuft" line and replace with result
+      lines.pop();
+      const max = Math.max(...samples);
+      const avg = samples.reduce((a, b) => a + b, 0) / samples.length;
+      if (max > 15) {
+        log(`✓ Audio-Capture: Mikro fängt Audio auf (Peak ${max.toFixed(0)}, Schnitt ${avg.toFixed(0)} von 255)`);
+      } else if (max > 4) {
+        log(`⚠ Audio-Capture: Nur sehr leises Signal (Peak ${max.toFixed(0)} — vielleicht warst du zu still?)`);
+        log('  → Erneut testen + lauter sprechen, oder OS-Eingangslautstärke prüfen.');
+      } else {
+        log(`✗ Audio-Capture: Mikro liefert KEIN Signal (Peak ${max.toFixed(0)} = stumm)`);
+        log('  → Fix: OS-Mikro-Settings prüfen (richtiges Input-Device gewählt?), Hardware-Mute aus,');
+        log('    Browser-Mikro-Auswahl im Schloss-Icon links neben URL → Mikrofon → richtiges Device wählen');
+      }
+    } catch (e) {
+      if (stream) stream.getTracks().forEach(t => t.stop());
+      if (ctx) { try { await ctx.close(); } catch(_) {} }
+      lines.pop();
+      log('✗ Audio-Capture konnte nicht starten: ' + (e?.name || e?.message || e));
+    }
+    log('');
+  }
 
   // ─── 2. /api/voices ─────────────────────────────────────────
   try {
