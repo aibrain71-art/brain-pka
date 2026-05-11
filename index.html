@@ -948,6 +948,101 @@ body:has(#sidebar:not(.collapsed)) .list-subtitle .ls-count::after  { content: "
                                       transform: scale(1.08);
                                       box-shadow: 0 4px 16px rgba(99,102,241,.6); }
 
+/* Fullscreen markdown editor */
+.note-editor-overlay {
+  position: fixed; inset: 0; background: var(--bg); z-index: 9998;
+  display: none;
+}
+.note-editor-overlay.open { display: flex; }
+.ne-shell { display: flex; flex-direction: column; width: 100%; height: 100%; }
+.ne-head {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 18px; border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.ne-title {
+  flex: 1; background: transparent; border: 0; color: var(--text);
+  font-size: 18px; font-weight: 600; outline: none; padding: 6px 0;
+}
+.ne-title::placeholder { color: var(--text-2); font-weight: 400; }
+.ne-head-right { display: flex; gap: 8px; align-items: center; }
+.ne-saved-tag {
+  font-size: 11px; color: #4ade80; letter-spacing: 0.6px;
+  animation: fadeOut 2.5s ease-out forwards;
+}
+@keyframes fadeOut { 0%,40%{opacity:1} 100%{opacity:0} }
+.ne-btn {
+  background: var(--surface-2); color: var(--text); border: 1px solid var(--border);
+  padding: 7px 14px; border-radius: 8px; cursor: pointer; font-size: 13px;
+  transition: all .12s;
+}
+.ne-btn:hover { background: var(--surface); border-color: var(--accent); }
+.ne-btn-ghost { background: transparent; }
+.ne-btn-primary {
+  background: var(--accent); color: #0c1015; border-color: var(--accent); font-weight: 600;
+}
+.ne-btn-primary:hover { background: var(--accent-2, var(--accent)); border-color: var(--accent-2, var(--accent)); }
+.ne-toolbar {
+  display: flex; gap: 4px; padding: 8px 14px;
+  background: var(--surface); border-bottom: 1px solid var(--border);
+  overflow-x: auto; flex-wrap: wrap;
+}
+.ne-tb {
+  background: transparent; color: var(--text); border: 1px solid transparent;
+  padding: 5px 9px; border-radius: 6px; cursor: pointer; font-size: 13px;
+  min-width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.ne-tb:hover { background: var(--surface-2); border-color: var(--border); }
+.ne-sep { width: 1px; background: var(--border); margin: 2px 4px; align-self: stretch; }
+.ne-grow { flex: 1; }
+.ne-stat { color: var(--text-2); font-size: 11px; letter-spacing: 0.5px; align-self: center; }
+.ne-body {
+  flex: 1; display: grid; grid-template-columns: 1fr 1fr; min-height: 0;
+  background: var(--bg);
+}
+.ne-body.solo { grid-template-columns: 1fr; }
+.ne-body.solo .ne-preview { display: none; }
+.ne-textarea {
+  width: 100%; height: 100%;
+  background: var(--bg); color: var(--text);
+  border: 0; border-right: 1px solid var(--border);
+  padding: 22px 28px; font-size: 15px; line-height: 1.65;
+  font-family: ui-monospace, SFMono-Regular, Menlo, "Cascadia Code", monospace;
+  resize: none; outline: none;
+  tab-size: 2;
+}
+.ne-preview {
+  background: var(--surface); color: var(--text);
+  padding: 22px 28px; overflow-y: auto;
+  font-size: 15px; line-height: 1.65;
+}
+.ne-preview h1, .ne-preview h2, .ne-preview h3 {
+  font-family: 'Playfair Display', Georgia, serif; margin: 16px 0 8px 0;
+}
+.ne-preview h1 { font-size: 26px; }
+.ne-preview h2 { font-size: 21px; }
+.ne-preview h3 { font-size: 17px; color: var(--accent); }
+.ne-preview ul, .ne-preview ol { padding-left: 22px; margin: 6px 0; }
+.ne-preview li { margin: 3px 0; }
+.ne-preview li.todo { list-style: none; margin-left: -22px; }
+.ne-preview li.todo input { margin-right: 6px; vertical-align: middle; pointer-events: none; }
+.ne-preview blockquote { border-left: 3px solid var(--accent); margin: 8px 0; padding: 4px 14px; color: var(--text-2); font-style: italic; }
+.ne-preview code { background: var(--surface-2); border-radius: 4px; padding: 1px 5px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+.ne-preview pre { background: var(--surface-2); border-radius: 6px; padding: 10px 14px; overflow-x: auto; }
+.ne-preview pre code { background: transparent; padding: 0; }
+.ne-preview a { color: var(--accent); text-decoration: none; border-bottom: 1px dashed transparent; }
+.ne-preview a:hover { border-bottom-color: var(--accent); }
+.ne-preview hr { border: 0; border-top: 1px solid var(--border); margin: 14px 0; }
+.ne-preview .tag { background: rgba(96,165,250,0.12); color: var(--accent); padding: 1px 6px; border-radius: 4px; font-size: 12px; }
+.ne-preview .ref { background: rgba(196,131,30,0.12); color: #e9aa4a; padding: 1px 6px; border-radius: 4px; cursor: pointer; }
+@media (max-width: 800px) {
+  .ne-body { grid-template-columns: 1fr; }
+  .ne-body .ne-preview { display: none; }  /* mobile: preview hidden by default */
+  .ne-body.show-preview { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
+  .ne-body.show-preview .ne-preview { display: block; border-top: 1px solid var(--border); border-right: 0; }
+}
+
 .add-dropzone {
   margin-top: 18px;
   border: 2px dashed var(--border);
@@ -5300,11 +5395,12 @@ function addContent(kind) {
   closeAddContent();
   switch (kind) {
     case 'voice':
-    case 'note':
-      // Both tiles open the same Larry-bubble note-capture flow. The user
-      // can dictate (default) or type into the bubble's text input — Larry
-      // handles either path via the same create_note tool call.
+      // Voice → Larry bubble in note mode
       if (typeof openVoiceAssistant === 'function') openVoiceAssistant('note');
+      break;
+    case 'note':
+      // Note → fullscreen markdown editor (for meetings / no-voice contexts)
+      openNoteEditor();
       break;
     case 'link': {
       const url = prompt('URL einfügen (YouTube, Artikel, Webseite):');
@@ -5354,6 +5450,315 @@ function pickImageThenImport({ camera }) {
     await importImageFlow(file, camera ? 'camera' : 'picker');
   };
   inp.click();
+}
+
+// ── Fullscreen markdown note editor ────────────────────────────
+// Logseq-flavoured: bullets/checkboxes continue on Enter, Tab indents,
+// markdown shortcuts render live in the right pane. Used when the user
+// can't dictate to Larry (meeting, public space). Saves to D1 via
+// POST /api/notes — the entry appears in the standard notes list.
+let _NE_WIRED = false;
+function openNoteEditor() {
+  const ov = document.getElementById('note-editor-overlay');
+  if (!ov) return;
+  if (!_NE_WIRED) wireNoteEditor();
+  ov.classList.add('open');
+  ov.setAttribute('aria-hidden', 'false');
+  document.body.style.overflow = 'hidden';
+  // Focus the title first if empty, else jump to textarea
+  const title = document.getElementById('ne-title');
+  const ta = document.getElementById('ne-textarea');
+  setTimeout(() => (title.value ? ta : title).focus(), 50);
+}
+function closeNoteEditor() {
+  const ov = document.getElementById('note-editor-overlay');
+  if (!ov) return;
+  ov.classList.remove('open');
+  ov.setAttribute('aria-hidden', 'true');
+  document.body.style.overflow = '';
+}
+function wireNoteEditor() {
+  _NE_WIRED = true;
+  const ta = document.getElementById('ne-textarea');
+  const title = document.getElementById('ne-title');
+  const preview = document.getElementById('ne-preview');
+  const stat = document.getElementById('ne-stat');
+  const body = preview?.parentElement;
+
+  // Live preview render
+  const render = () => {
+    preview.innerHTML = mdRender(ta.value || '');
+    const chars = ta.value.length;
+    const words = ta.value.trim() ? ta.value.trim().split(/\s+/).length : 0;
+    stat.textContent = chars.toLocaleString('de-CH') + ' Zeichen · ' + words.toLocaleString('de-CH') + ' Wörter';
+  };
+  ta.addEventListener('input', render);
+
+  // Toolbar — wrap selection with markdown markers
+  document.querySelectorAll('.ne-tb[data-md]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const md = btn.dataset.md;
+      wrapSelection(ta, md, md);
+      render();
+    });
+  });
+  document.querySelectorAll('.ne-tb[data-md-block]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const tpl = btn.dataset.mdBlock.replace(/\\n/g, '\n');
+      insertAtCursor(ta, tpl);
+      render();
+    });
+  });
+  document.querySelectorAll('.ne-tb[data-prefix]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      prefixCurrentLines(ta, btn.dataset.prefix);
+      render();
+    });
+  });
+
+  // Link / image buttons
+  document.getElementById('ne-link').addEventListener('click', () => {
+    const url = prompt('Link-URL:'); if (!url) return;
+    const label = prompt('Link-Text (leer = URL nutzen):') || url;
+    insertAtCursor(ta, `[${label}](${url})`); render();
+  });
+  document.getElementById('ne-image').addEventListener('click', () => {
+    const url = prompt('Bild-URL:'); if (!url) return;
+    const alt = prompt('Alt-Text (kurz):') || '';
+    insertAtCursor(ta, `![${alt}](${url})`); render();
+  });
+
+  // Preview toggle
+  document.getElementById('ne-preview-toggle').addEventListener('click', () => {
+    body.classList.toggle('solo');
+    body.classList.toggle('show-preview');
+  });
+
+  // Close button
+  document.getElementById('ne-close').addEventListener('click', () => {
+    if (ta.value.trim() && !confirm('Editor schliessen ohne speichern? Inhalt geht verloren.')) return;
+    ta.value = ''; title.value = '';
+    closeNoteEditor();
+  });
+
+  // Save button
+  document.getElementById('ne-save').addEventListener('click', () => saveNoteEditor());
+
+  // Keyboard shortcuts: Ctrl+S, Ctrl+B, Ctrl+I, Tab/Shift+Tab, Enter (list continue)
+  ta.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+      e.preventDefault(); saveNoteEditor(); return;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+      e.preventDefault(); wrapSelection(ta, '**', '**'); render(); return;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'i') {
+      e.preventDefault(); wrapSelection(ta, '*', '*'); render(); return;
+    }
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      if (e.shiftKey) outdentSelection(ta);
+      else indentSelection(ta);
+      render(); return;
+    }
+    if (e.key === 'Enter') {
+      // Continue lists: detect current line pattern, insert same prefix on new line
+      const pos = ta.selectionStart;
+      const upto = ta.value.slice(0, pos);
+      const lineStart = upto.lastIndexOf('\n') + 1;
+      const line = upto.slice(lineStart);
+      const m = line.match(/^(\s*)([-*+]\s\[[ x]\]\s|[-*+]\s|\d+\.\s|>\s)(.*)$/);
+      if (m) {
+        const [, indent, prefix, content] = m;
+        if (!content.trim()) {
+          // Empty bullet → remove it (Logseq-style: Enter on empty bullet exits the list)
+          e.preventDefault();
+          const newVal = ta.value.slice(0, lineStart) + ta.value.slice(pos);
+          ta.value = newVal;
+          ta.selectionStart = ta.selectionEnd = lineStart;
+          render(); return;
+        }
+        e.preventDefault();
+        // For numbered lists, increment the number
+        let nextPrefix = prefix;
+        const numMatch = prefix.match(/^(\d+)\.\s$/);
+        if (numMatch) nextPrefix = (parseInt(numMatch[1], 10) + 1) + '. ';
+        // For - [x] → continue as - [ ]
+        if (/^[-*+]\s\[[x ]\]\s$/.test(prefix)) nextPrefix = prefix.replace('[x]', '[ ]');
+        const ins = '\n' + indent + nextPrefix;
+        ta.value = ta.value.slice(0, pos) + ins + ta.value.slice(pos);
+        const newPos = pos + ins.length;
+        ta.selectionStart = ta.selectionEnd = newPos;
+        render();
+      }
+    }
+  });
+
+  // ESC closes (only on the overlay, not on the title input)
+  document.getElementById('note-editor-overlay').addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      if (ta.value.trim() && !confirm('Editor schliessen ohne speichern?')) return;
+      ta.value = ''; title.value = '';
+      closeNoteEditor();
+    }
+  });
+
+  // initial render
+  render();
+}
+
+// ── Text manipulation helpers ─────────────────────────────────
+function insertAtCursor(ta, str) {
+  const s = ta.selectionStart, e = ta.selectionEnd;
+  ta.value = ta.value.slice(0, s) + str + ta.value.slice(e);
+  ta.selectionStart = ta.selectionEnd = s + str.length;
+  ta.focus();
+}
+function wrapSelection(ta, open, close) {
+  const s = ta.selectionStart, e = ta.selectionEnd;
+  const sel = ta.value.slice(s, e);
+  if (sel) {
+    ta.value = ta.value.slice(0, s) + open + sel + close + ta.value.slice(e);
+    ta.selectionStart = s + open.length;
+    ta.selectionEnd = e + open.length;
+  } else {
+    ta.value = ta.value.slice(0, s) + open + close + ta.value.slice(e);
+    ta.selectionStart = ta.selectionEnd = s + open.length;
+  }
+  ta.focus();
+}
+function prefixCurrentLines(ta, prefix) {
+  const s = ta.selectionStart, e = ta.selectionEnd;
+  const before = ta.value.slice(0, s);
+  const lineStart = before.lastIndexOf('\n') + 1;
+  const sel = ta.value.slice(lineStart, e);
+  // Apply to each line in selection
+  const lines = sel.split('\n');
+  const newLines = lines.map((ln, i) => (i === 0 || ln.length || lines.length === 1) ? prefix + ln : ln);
+  const replaced = newLines.join('\n');
+  ta.value = ta.value.slice(0, lineStart) + replaced + ta.value.slice(e);
+  const delta = replaced.length - sel.length;
+  ta.selectionStart = lineStart + prefix.length;
+  ta.selectionEnd = e + delta;
+  ta.focus();
+}
+function indentSelection(ta) {
+  const s = ta.selectionStart, e = ta.selectionEnd;
+  const before = ta.value.slice(0, s);
+  const lineStart = before.lastIndexOf('\n') + 1;
+  const seg = ta.value.slice(lineStart, e);
+  const indented = seg.split('\n').map(l => '  ' + l).join('\n');
+  ta.value = ta.value.slice(0, lineStart) + indented + ta.value.slice(e);
+  ta.selectionStart = s + 2;
+  ta.selectionEnd = e + (indented.length - seg.length);
+}
+function outdentSelection(ta) {
+  const s = ta.selectionStart, e = ta.selectionEnd;
+  const before = ta.value.slice(0, s);
+  const lineStart = before.lastIndexOf('\n') + 1;
+  const seg = ta.value.slice(lineStart, e);
+  const out = seg.split('\n').map(l => l.replace(/^( {1,2}|\t)/, '')).join('\n');
+  ta.value = ta.value.slice(0, lineStart) + out + ta.value.slice(e);
+  const delta = out.length - seg.length;  // negative or 0
+  ta.selectionStart = Math.max(lineStart, s + (s > lineStart ? -2 : 0));
+  ta.selectionEnd = e + delta;
+}
+
+// ── Tiny markdown → HTML renderer ─────────────────────────────
+// Not a full spec — just enough for the live preview. Handles
+// headings, bold/italic/strike/code, ordered+unordered lists, todos,
+// blockquotes, code blocks, links, images, hr, tags, [[refs]].
+function mdRender(src) {
+  if (!src) return '<div style="color:var(--text-2);font-style:italic">Tipp drauf los, hier erscheint die Vorschau…</div>';
+  // Escape HTML first
+  let s = src.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  // Code blocks (```...```)
+  s = s.replace(/```([\s\S]*?)```/g, (_,c) => '<pre><code>' + c.trim() + '</code></pre>');
+  // Headings
+  s = s.replace(/^###### (.+)$/gm, '<h6>$1</h6>')
+       .replace(/^##### (.+)$/gm, '<h5>$1</h5>')
+       .replace(/^#### (.+)$/gm, '<h4>$1</h4>')
+       .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+       .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+       .replace(/^# (.+)$/gm, '<h1>$1</h1>');
+  // Horizontal rule
+  s = s.replace(/^---$/gm, '<hr>');
+  // Blockquote
+  s = s.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
+  // Inline code
+  s = s.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+  // Bold / italic / strike
+  s = s.replace(/\*\*([^\*]+)\*\*/g, '<strong>$1</strong>')
+       .replace(/\*([^\*\n]+)\*/g, '<em>$1</em>')
+       .replace(/~~([^~]+)~~/g, '<del>$1</del>');
+  // Links + images
+  s = s.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img alt="$1" src="$2" style="max-width:100%;border-radius:6px;margin:6px 0">')
+       .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  // [[wiki refs]]
+  s = s.replace(/\[\[([^\]]+)\]\]/g, '<span class="ref">$1</span>');
+  // #tags (only at word start)
+  s = s.replace(/(^|\s)#([a-z0-9_\-/]+)/gi, '$1<span class="tag">#$2</span>');
+  // Lists — group consecutive bullets
+  s = s.replace(/(?:^|\n)((?:[ \t]*(?:- |\* |\+ |\d+\. )[\s\S]*?(?:\n|$))+)/g, (_, block) => {
+    const lines = block.replace(/^\n/, '').replace(/\n$/, '').split('\n');
+    if (!lines.length) return _;
+    const isOrdered = /^\s*\d+\. /.test(lines[0]);
+    const tag = isOrdered ? 'ol' : 'ul';
+    const items = lines.map(l => {
+      const m = l.match(/^[ \t]*(?:- |\* |\+ |\d+\. )(.+)$/);
+      if (!m) return '';
+      let item = m[1];
+      // Todo checkbox?
+      const tm = item.match(/^\[([ x])\]\s+(.*)$/);
+      if (tm) {
+        const checked = tm[1] === 'x';
+        return '<li class="todo"><input type="checkbox"' + (checked ? ' checked' : '') + '>' + tm[2] + '</li>';
+      }
+      return '<li>' + item + '</li>';
+    }).filter(Boolean).join('');
+    return '\n<' + tag + '>' + items + '</' + tag + '>\n';
+  });
+  // Paragraphs: lines not already in block elements
+  s = s.split(/\n{2,}/).map(block => {
+    if (/^\s*<(h[1-6]|ul|ol|pre|blockquote|hr|img)/.test(block.trim())) return block;
+    if (!block.trim()) return '';
+    return '<p>' + block.replace(/\n/g, '<br>') + '</p>';
+  }).join('\n');
+  return s;
+}
+
+async function saveNoteEditor() {
+  const title = document.getElementById('ne-title').value.trim();
+  const text  = document.getElementById('ne-textarea').value.trim();
+  if (!title) { alert('Bitte einen Titel eingeben.'); return; }
+  if (!text)  { alert('Notiz ist leer.'); return; }
+  // Extract #tags from body → store as related_topics
+  const tagSet = new Set();
+  text.replace(/(?:^|\s)#([a-z0-9_\-/]+)/gi, (_, t) => { tagSet.add(t.toLowerCase()); return _; });
+  const tags = [...tagSet].slice(0, 20);
+  const savedTag = document.getElementById('ne-saved-tag');
+  try {
+    const r = await fetch('/api/notes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, body: text, note_type: 'note', tags }),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || ('HTTP ' + r.status));
+    savedTag.style.display = '';
+    savedTag.style.animation = 'none'; void savedTag.offsetWidth; savedTag.style.animation = '';
+    if (typeof loadFromD1 === 'function') await loadFromD1();
+    setTimeout(() => {
+      document.getElementById('ne-title').value = '';
+      document.getElementById('ne-textarea').value = '';
+      closeNoteEditor();
+    }, 700);
+  } catch (e) {
+    alert('Speichern fehlgeschlagen: ' + (e?.message || e));
+  }
 }
 
 // ── Live camera capture modal ──────────────────────────────────
@@ -15012,6 +15417,49 @@ document.addEventListener('dblclick', (e) => {
     </button>
   </div>
   <div class="note-fs-body" id="note-fs-body"></div>
+</div>
+
+<!-- ── Fullscreen Markdown / Outliner editor (Notiz-Tile) ────────── -->
+<div id="note-editor-overlay" class="note-editor-overlay" role="dialog" aria-label="Notiz-Editor" aria-hidden="true">
+  <div class="ne-shell">
+    <div class="ne-head">
+      <input type="text" id="ne-title" class="ne-title" placeholder="Titel der Notiz…" autocomplete="off">
+      <div class="ne-head-right">
+        <span class="ne-saved-tag" id="ne-saved-tag" style="display:none">✓ Gespeichert</span>
+        <button class="ne-btn ne-btn-ghost" id="ne-preview-toggle" title="Live-Vorschau ein/aus">👁</button>
+        <button class="ne-btn ne-btn-primary" id="ne-save" title="Speichern (Strg+S)">💾 Speichern</button>
+        <button class="ne-btn ne-btn-ghost" id="ne-close" title="Schliessen">✕</button>
+      </div>
+    </div>
+    <div class="ne-toolbar">
+      <button class="ne-tb" data-md="**" title="Fett (Strg+B)"><b>B</b></button>
+      <button class="ne-tb" data-md="*"  title="Kursiv (Strg+I)"><i>I</i></button>
+      <button class="ne-tb" data-md="~~" title="Durchgestrichen">S̶</button>
+      <button class="ne-tb" data-md="`"  title="Inline-Code">{}</button>
+      <span class="ne-sep"></span>
+      <button class="ne-tb" data-prefix="# "  title="Heading 1">H1</button>
+      <button class="ne-tb" data-prefix="## " title="Heading 2">H2</button>
+      <button class="ne-tb" data-prefix="### " title="Heading 3">H3</button>
+      <span class="ne-sep"></span>
+      <button class="ne-tb" data-prefix="- "       title="Liste">•</button>
+      <button class="ne-tb" data-prefix="1. "      title="Nummerierte Liste">1.</button>
+      <button class="ne-tb" data-prefix="- [ ] "   title="Todo">☐</button>
+      <button class="ne-tb" data-prefix="> "       title="Zitat">»</button>
+      <span class="ne-sep"></span>
+      <button class="ne-tb" id="ne-link"  title="Link einfügen">🔗</button>
+      <button class="ne-tb" id="ne-image" title="Bild einfügen">🖼</button>
+      <button class="ne-tb" data-md-block="```\n\n```" title="Code-Block">⌨</button>
+      <button class="ne-tb" data-prefix="---\n" title="Trenner">―</button>
+      <span class="ne-grow"></span>
+      <span class="ne-stat" id="ne-stat">0 Zeichen · 0 Wörter</span>
+    </div>
+    <div class="ne-body">
+      <textarea id="ne-textarea" class="ne-textarea"
+                placeholder="Hier tippen…&#10;&#10;# Heading mit #&#10;- Bullets mit -&#10;- [ ] Todos mit - [ ]&#10;**fett**, *kursiv*, `code`&#10;[[Note-Name]] für Verbindungen&#10;#tag für Tags&#10;&#10;Tab zum Einrücken, Shift+Tab zum Ausrücken.&#10;Enter setzt Bullet/Number automatisch fort."
+                spellcheck="true" autocomplete="off" autocapitalize="sentences"></textarea>
+      <div class="ne-preview" id="ne-preview" aria-hidden="true"></div>
+    </div>
+  </div>
 </div>
 
 <!-- ── Image lightbox (double-click on any image) ─────────────────── -->
