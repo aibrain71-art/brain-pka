@@ -3375,6 +3375,16 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
         <div class="settings-hint">Diese Personas gelten <strong>nur</strong> im Sprachassistenten-Modus (das blaue-Bubble-Fenster) — sie beeinflussen <strong>nicht</strong> den App-Chat oder andere Teile von Larry. Jede Persona hat einen System-Prompt (Sprachverhalten) und eine optionale ElevenLabs-Stimme. Eine ist Standard; jederzeit umschaltbar im Sprachfenster.</div>
       </div>
 
+      <!-- System-Selbsttest — diagnostiziert in einem Klick wo's hängt:
+           Mikrofon-Permission, /api/voices, /api/chat, /api/tts —
+           jeweils mit Fix-Anweisung bei Fehler. -->
+      <div class="settings-group" data-section="voice">
+        <div class="settings-label">System-Selbsttest</div>
+        <button class="settings-btn" onclick="vaRunSelfTest()" style="margin-bottom:8px">🩺 Selbsttest starten</button>
+        <pre id="selftest-output" style="font-size:11px;line-height:1.6;color:var(--text-2);background:var(--surface-2);padding:10px 12px;border-radius:6px;border:1px solid var(--border);white-space:pre-wrap;word-break:break-word;max-height:280px;overflow-y:auto;display:none"></pre>
+        <div class="settings-hint">Prüft Mikro + Backend-Endpoints + End-to-End. Bei Fehler steht direkt darunter wie du's fixt (mit Link zum richtigen Cloudflare-Setting).</div>
+      </div>
+
       <!-- API-Keys werden server-seitig in Cloudflare Secrets verwaltet —
            keine Eingabe in der UI nötig. Falls für lokale Entwicklung doch
            ein Key gesetzt werden muss: Browser-Konsole → setAnthropicKey('sk-ant-...') -->
@@ -4213,6 +4223,147 @@ function updateElevenSettings() {
     });
   }
 }
+// ── System-Selbsttest ────────────────────────────────────────
+// Runs all 4 health checks in sequence: mic permission, /api/voices,
+// /api/chat, /api/tts. Prints ✓/✗ with concrete fix instructions per
+// failure. Diagnose-in-one-click for the user.
+async function vaRunSelfTest() {
+  const out = document.getElementById('selftest-output');
+  if (!out) return;
+  out.style.display = 'block';
+  const lines = [];
+  const print = () => { out.textContent = lines.join('\n'); };
+  const log = (s) => { lines.push(s); print(); };
+  log('🩺 Selbsttest läuft…\n');
+
+  // ─── 1. Mic permission ──────────────────────────────────────
+  try {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      log('✗ Browser-Mikrofon: API nicht verfügbar (alter Browser?)');
+      log('  → Fix: Chrome oder Edge benutzen.\n');
+    } else if (navigator.permissions?.query) {
+      const status = await navigator.permissions.query({ name: 'microphone' });
+      if (status.state === 'granted') {
+        log('✓ Browser-Mikrofon: Permission "granted"');
+      } else if (status.state === 'denied') {
+        log('✗ Browser-Mikrofon: Permission "denied" (vom User blockiert)');
+        log('  → Fix: Schloss-Icon links neben URL → Mikrofon → Zulassen → Tab neu laden');
+      } else {
+        log('⚠ Browser-Mikrofon: Permission "prompt" (noch nicht entschieden)');
+        log('  → Bubble öffnen, Browser fragt einmal nach Erlaubnis');
+      }
+    } else {
+      log('⚠ Browser-Mikrofon: Permissions-API nicht unterstützt — kann Status nicht prüfen');
+    }
+  } catch (e) {
+    log('✗ Browser-Mikrofon Check fehlgeschlagen: ' + (e?.message || e));
+  }
+  log('');
+
+  // ─── 2. /api/voices ─────────────────────────────────────────
+  try {
+    const r = await fetch('/api/voices');
+    const txt = await r.text();
+    if (r.ok) {
+      let count = 0;
+      try { count = (JSON.parse(txt).voices || []).length; } catch(_) {}
+      log(`✓ Cloudflare /api/voices: ${r.status} OK, ${count} Stimmen geladen`);
+    } else if (r.status === 404) {
+      log('✗ Cloudflare /api/voices: 404 (Function nicht deployt)');
+      log('  → Fix: Push triggern für neuen Cloudflare-Deploy. Schau https://dash.cloudflare.com/?to=/:account/pages → Deployments');
+    } else if (r.status === 500 && txt.includes('not configured')) {
+      log('✗ Cloudflare /api/voices: 500 — ELEVENLABS_API_KEY fehlt im Cloudflare-Secret');
+      log('  → Fix: https://dash.cloudflare.com/?to=/:account/pages → brain-pka → Settings → Environment Variables → "ELEVENLABS_API_KEY" als Encrypted Secret hinzufügen → Re-Deploy');
+    } else if (r.status === 401) {
+      log('✗ Cloudflare /api/voices: 401 — ElevenLabs-Key ist ungültig');
+      log('  → Fix: Key auf https://elevenlabs.io/app/settings/api-keys neu generieren, in Cloudflare-Secret aktualisieren');
+    } else {
+      log(`✗ Cloudflare /api/voices: ${r.status} — ${txt.slice(0, 200)}`);
+    }
+  } catch (e) {
+    log('✗ Cloudflare /api/voices nicht erreichbar: ' + (e?.message || e));
+  }
+  log('');
+
+  // ─── 3. /api/chat ───────────────────────────────────────────
+  try {
+    const r = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5',
+        messages: [{ role: 'user', content: 'sag nur "ok"' }],
+        max_tokens: 16,
+      }),
+    });
+    const txt = await r.text();
+    if (r.ok) {
+      let reply = '';
+      try { reply = (JSON.parse(txt).content || []).filter(c => c.type === 'text').map(c => c.text).join(' ').trim(); } catch(_) {}
+      log(`✓ Cloudflare /api/chat: ${r.status} OK — Antwort: "${reply.slice(0, 80)}"`);
+    } else if (r.status === 404) {
+      log('✗ Cloudflare /api/chat: 404 (Function nicht deployt)');
+      log('  → Fix: Push triggern für neuen Cloudflare-Deploy.');
+    } else if (r.status === 500 && txt.includes('not configured')) {
+      log('✗ Cloudflare /api/chat: 500 — ANTHROPIC_API_KEY fehlt im Cloudflare-Secret');
+      log('  → Fix: https://dash.cloudflare.com/?to=/:account/pages → brain-pka → Settings → Environment Variables → "ANTHROPIC_API_KEY" als Encrypted Secret hinzufügen → Re-Deploy');
+      log('  → Key holen: https://console.anthropic.com/settings/keys');
+    } else if (r.status === 401) {
+      log('✗ Cloudflare /api/chat: 401 — Anthropic-Key ist ungültig');
+      log('  → Fix: Key auf https://console.anthropic.com/settings/keys neu generieren, in Cloudflare-Secret aktualisieren');
+    } else if (r.status === 429) {
+      log('✗ Cloudflare /api/chat: 429 — Rate-Limit oder Quota erschöpft');
+      log('  → Fix: Anthropic Usage prüfen auf https://console.anthropic.com/');
+    } else {
+      log(`✗ Cloudflare /api/chat: ${r.status} — ${txt.slice(0, 200)}`);
+    }
+  } catch (e) {
+    log('✗ Cloudflare /api/chat nicht erreichbar: ' + (e?.message || e));
+  }
+  log('');
+
+  // ─── 4. /api/tts ────────────────────────────────────────────
+  if (!ELEVEN_VOICE_ID) {
+    log('⚠ /api/tts Test übersprungen — keine Stimme ausgewählt.');
+    log('  → Erst „Stimmen laden" klicken + Stimme aus Dropdown wählen.');
+  } else {
+    try {
+      const r = await fetch('/api/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: 'Test', voiceId: ELEVEN_VOICE_ID }),
+      });
+      if (r.ok) {
+        const blob = await r.blob();
+        const ct = r.headers.get('Content-Type') || 'unbekannt';
+        log(`✓ Cloudflare /api/tts: ${r.status} OK — ${(blob.size/1024).toFixed(1)} KB ${ct}`);
+      } else {
+        const txt = await r.text();
+        if (r.status === 500 && txt.includes('not configured')) {
+          log('✗ Cloudflare /api/tts: 500 — ELEVENLABS_API_KEY fehlt im Cloudflare-Secret');
+        } else if (r.status === 401) {
+          log('✗ Cloudflare /api/tts: 401 — ElevenLabs-Key ungültig');
+        } else if (r.status === 404) {
+          log('✗ Cloudflare /api/tts: 404 (Stimme nicht gefunden oder Function fehlt)');
+        } else {
+          log(`✗ Cloudflare /api/tts: ${r.status} — ${txt.slice(0, 200)}`);
+        }
+      }
+    } catch (e) {
+      log('✗ Cloudflare /api/tts nicht erreichbar: ' + (e?.message || e));
+    }
+  }
+  log('');
+
+  // ─── End summary ────────────────────────────────────────────
+  const allOK = !lines.some(l => l.startsWith('✗'));
+  if (allOK) {
+    log('✅ Alle Checks bestanden — Voice-Loop sollte funktionieren.');
+  } else {
+    log('❌ Ein oder mehrere Checks fehlgeschlagen — siehe Fix-Hinweise oben.');
+  }
+}
+
 // Manual "Stimmen laden" button handler — clears any cached voices
 // and re-fetches via /api/voices. Visible feedback so the user knows
 // the click did something (button text temporarily changes).
@@ -11527,13 +11678,44 @@ async function vaRespond(userText) {
         max_tokens: 400,  // shorter for voice — TTS-friendly
       }),
     });
+    // Detect specific error states BEFORE trying to JSON-parse the body
+    if (!res.ok) {
+      const bodyText = await res.text().catch(() => '');
+      let hint = `HTTP ${res.status}`;
+      if (res.status === 500 && bodyText.includes('not configured')) {
+        hint = 'ANTHROPIC_API_KEY nicht in Cloudflare-Secrets gesetzt';
+      } else if (res.status === 401) {
+        hint = 'Anthropic-Key ungültig (401)';
+      } else if (res.status === 429) {
+        hint = 'Anthropic Rate-Limit / Quota erschöpft (429)';
+      } else if (res.status === 404) {
+        hint = '/api/chat Function nicht deployt (404)';
+      } else {
+        try { const j = JSON.parse(bodyText); hint += ': ' + (j.error?.message || j.error || ''); } catch(_) {}
+      }
+      throw new Error(hint);
+    }
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error?.message || data.error || `HTTP ${res.status}`);
     reply = (data.content || []).filter(c => c.type === 'text').map(c => c.text).join(' ').trim();
     if (!reply) reply = 'Hmm, ich habe keine Antwort generieren können.';
     if (data.usage) meta = { usage: data.usage, model: modelUsed };
   } catch (err) {
-    reply = `Fehler beim Abrufen der Antwort: ${err.message || err}.`;
+    // Surface the actual reason in the BUBBLE STATUS (very visible) plus a
+    // chat message — but DON'T speak the error via TTS, that's annoying.
+    const msg = err?.message || String(err);
+    const hint = (msg.includes('not configured') || msg.includes('nicht in Cloudflare'))
+      ? '⚠️ Cloudflare-Secret ANTHROPIC_API_KEY fehlt. Settings → 🩺 Selbsttest für Details + Fix-Link.'
+      : (msg.includes('401') || msg.includes('ungültig'))
+      ? '⚠️ Anthropic-Key ungültig (401). Settings → 🩺 Selbsttest.'
+      : (msg.includes('429') || msg.includes('Quota'))
+      ? '⚠️ Anthropic-Quota erschöpft (429). Nutzungslimit erreicht.'
+      : (msg.includes('404') || msg.includes('nicht deployt'))
+      ? '⚠️ /api/chat Function nicht deployt. Settings → 🩺 Selbsttest.'
+      : `⚠️ Fehler: ${msg}`;
+    vaSetStatus(hint);
+    vaAddMsg('assistant', hint);
+    vaMaybeAutoListen();  // let user try again
+    return;
   }
 
   vaAddMsg('assistant', reply, meta);
@@ -13056,6 +13238,16 @@ if ('serviceWorker' in navigator) {
   // Register relative path so it works whether served from /, /PKM/, etc.
   navigator.serviceWorker.register('service-worker.js')
     .catch(e => console.warn('Service Worker konnte nicht registriert werden:', e));
+  // When a NEW Service Worker takes over (= new deploy installed + activated),
+  // the page in the current tab is still running the OLD index.html cached in
+  // memory. Do ONE silent reload so the user actually sees the fresh code
+  // without needing to manually clear cache + close tabs.
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!window._reloadedForSW) {
+      window._reloadedForSW = true;
+      window.location.reload();
+    }
+  });
 }
 
 // If the app was launched via a share-target intent (e.g. user taps "Share"
