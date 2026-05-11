@@ -5804,58 +5804,77 @@ function mdRender(src) {
   return s;
 }
 
-// ── < command menu — AI + Callout inserts ─────────────────────
-// Format basics (B/I/H1-3/etc) live on the toolbar. "<" triggers a
-// small focused menu of Anthropic-backed assists PLUS GitHub-style
-// callout blocks (Note/Tip/Warning/Important/Caution) which other
-// editors also offer as discoverable inserts.
+// ── Command menus — two triggers ──────────────────────────────
+// "<" → Callout / Hinweis-Inserts (GFM admonitions: Note/Tip/Warning/
+//       Important/Caution + Quote). Static text gets inserted at the
+//       cursor with the GFM alert syntax.
+// "\" → AI-Funktionen via Anthropic /api/note-assist (summarize,
+//       continue, improve, translate, expand, outline, ideas, title,
+//       rewrite). Each item runs a Claude prompt and inserts the result.
+// Format basics (B/I/H1-3/bullets/etc.) live on the toolbar — neither
+// trigger surfaces them, to keep both menus short and focused.
 const NE_COMMANDS = [
-  // Callout inserts — GitHub Flavored Markdown alert syntax.
-  // Rendered with styled colored boxes in the live preview.
-  { group: 'Hinweise', icon: '💬', label: 'Quote',     match: ['quote','zitat'],
+  // Callout inserts — trigger "<"
+  { trigger: '<', group: 'Hinweise', icon: '💬', label: 'Quote',     match: ['quote','zitat'],
     insert: '> ', cursorOffset: 0 },
-  { group: 'Hinweise', icon: '💡', label: 'Tip',       match: ['tip','tipp'],
+  { trigger: '<', group: 'Hinweise', icon: '💡', label: 'Tip',       match: ['tip','tipp'],
     insert: '> [!TIP]\n> ', cursorOffset: 0 },
-  { group: 'Hinweise', icon: '⚠️', label: 'Warning',   match: ['warning','warnung'],
+  { trigger: '<', group: 'Hinweise', icon: '⚠️', label: 'Warning',   match: ['warning','warnung'],
     insert: '> [!WARNING]\n> ', cursorOffset: 0 },
-  { group: 'Hinweise', icon: 'ℹ️', label: 'Note',      match: ['note','hinweis','info'],
+  { trigger: '<', group: 'Hinweise', icon: 'ℹ️', label: 'Note',      match: ['note','hinweis','info'],
     insert: '> [!NOTE]\n> ', cursorOffset: 0 },
-  { group: 'Hinweise', icon: '❗', label: 'Important', match: ['important','wichtig'],
+  { trigger: '<', group: 'Hinweise', icon: '❗', label: 'Important', match: ['important','wichtig'],
     insert: '> [!IMPORTANT]\n> ', cursorOffset: 0 },
-  { group: 'Hinweise', icon: '🔥', label: 'Caution',   match: ['caution','vorsicht'],
+  { trigger: '<', group: 'Hinweise', icon: '🔥', label: 'Caution',   match: ['caution','vorsicht'],
     insert: '> [!CAUTION]\n> ', cursorOffset: 0 },
-  // AI assists below
-  { group: 'AI',      icon: '✨', label: 'Zusammenfassen',       match: ['summarize','tldr','zusammenfassen','summary'], ai: 'summarize', mode: 'append' },
-  { group: 'AI',      icon: '✍',  label: 'Weiterschreiben',       match: ['continue','weiterschreiben','weiter'], ai: 'continue', mode: 'insert' },
-  { group: 'AI',      icon: '📝', label: 'Sprache verbessern',     match: ['improve','verbessern','correct','grammar'], ai: 'improve', mode: 'replace_selection_or_all' },
-  { group: 'AI',      icon: '🌍', label: 'Übersetzen…',           match: ['translate','uebersetzen','übersetzen'], ai: 'translate', mode: 'replace_selection_or_all', askLanguage: true },
-  { group: 'AI',      icon: '🔍', label: 'Bullet ausarbeiten',    match: ['expand','ausarbeiten','elaborate'], ai: 'expand', mode: 'replace_selection_or_line' },
-  { group: 'AI',      icon: '📋', label: 'In Outline umwandeln',  match: ['outline','gliederung'], ai: 'outline', mode: 'append' },
-  { group: 'AI',      icon: '💡', label: 'Ideen generieren',      match: ['ideas','ideen','brainstorm'], ai: 'ideas', mode: 'append', askPrompt: 'Thema (leer = aus Notiz)' },
-  { group: 'AI',      icon: '🎯', label: 'Titel vorschlagen',     match: ['title','titel'], ai: 'title', mode: 'set_title' },
-  { group: 'AI',      icon: '🔄', label: 'Umformulieren…',         match: ['rewrite','umformulieren'], ai: 'rewrite', mode: 'replace_selection_or_all', askPrompt: 'Stil (z.B. "förmlicher", "einfacher")' },
+  // AI assists — trigger "\"
+  { trigger: '\\', group: 'AI', icon: '✨', label: 'Zusammenfassen',       match: ['summarize','tldr','zusammenfassen','summary'], ai: 'summarize', mode: 'append' },
+  { trigger: '\\', group: 'AI', icon: '✍',  label: 'Weiterschreiben',       match: ['continue','weiterschreiben','weiter'], ai: 'continue', mode: 'insert' },
+  { trigger: '\\', group: 'AI', icon: '📝', label: 'Sprache verbessern',     match: ['improve','verbessern','correct','grammar'], ai: 'improve', mode: 'replace_selection_or_all' },
+  { trigger: '\\', group: 'AI', icon: '🌍', label: 'Übersetzen…',           match: ['translate','uebersetzen','übersetzen'], ai: 'translate', mode: 'replace_selection_or_all', askLanguage: true },
+  { trigger: '\\', group: 'AI', icon: '🔍', label: 'Bullet ausarbeiten',    match: ['expand','ausarbeiten','elaborate'], ai: 'expand', mode: 'replace_selection_or_line' },
+  { trigger: '\\', group: 'AI', icon: '📋', label: 'In Outline umwandeln',  match: ['outline','gliederung'], ai: 'outline', mode: 'append' },
+  { trigger: '\\', group: 'AI', icon: '💡', label: 'Ideen generieren',      match: ['ideas','ideen','brainstorm'], ai: 'ideas', mode: 'append', askPrompt: 'Thema (leer = aus Notiz)' },
+  { trigger: '\\', group: 'AI', icon: '🎯', label: 'Titel vorschlagen',     match: ['title','titel'], ai: 'title', mode: 'set_title' },
+  { trigger: '\\', group: 'AI', icon: '🔄', label: 'Umformulieren…',         match: ['rewrite','umformulieren'], ai: 'rewrite', mode: 'replace_selection_or_all', askPrompt: 'Stil (z.B. "förmlicher", "einfacher")' },
 ];
 
-let _NE_CMD_STATE = { open: false, triggerPos: -1, query: '', filtered: [], selectedIdx: 0 };
+let _NE_CMD_STATE = { open: false, trigger: null, triggerPos: -1, query: '', filtered: [], selectedIdx: 0 };
 
 function wireNoteCommandMenu(ta) {
   const menu = document.getElementById('ne-cmd-menu');
   if (!menu) return;
 
-  // Detect typing of "<" to open menu
+  // Detect typing of "<" → Hinweise menu OR "\" → AI menu.
+  // Both regexes match from the start of the most recent trigger up
+  // to the cursor, capturing the query string the user has typed.
   ta.addEventListener('input', () => {
     const pos = ta.selectionStart;
     const upto = ta.value.slice(0, pos);
-    // Find the most recent "<" since whitespace/newline
-    const m = upto.match(/<([\w \-äöüÄÖÜ]*)$/);
-    if (m) {
-      _NE_CMD_STATE.open = true;
-      _NE_CMD_STATE.triggerPos = pos - m[0].length;  // position of "<"
-      _NE_CMD_STATE.query = m[1].toLowerCase();
-      renderCommandMenu(ta, menu);
-    } else if (_NE_CMD_STATE.open) {
-      closeCommandMenu(menu);
+    let trigger = null, m = null;
+    // Prefer the LAST trigger character entered — find the position
+    // of the most recent "<" and the most recent "\\", pick whichever
+    // is later in the string.
+    const lastLt = upto.lastIndexOf('<');
+    const lastBs = upto.lastIndexOf('\\');
+    const usePos = Math.max(lastLt, lastBs);
+    if (usePos < 0) {
+      if (_NE_CMD_STATE.open) closeCommandMenu(menu);
+      return;
     }
+    const triggerChar = upto[usePos];
+    // Query must contain only word-y chars + spaces (no whitespace breaks
+    // the menu, but newline / lots of spaces close it).
+    const tail = upto.slice(usePos + 1);
+    if (!/^[\w \-äöüÄÖÜ]*$/.test(tail)) {
+      if (_NE_CMD_STATE.open) closeCommandMenu(menu);
+      return;
+    }
+    _NE_CMD_STATE.open = true;
+    _NE_CMD_STATE.trigger = triggerChar;
+    _NE_CMD_STATE.triggerPos = usePos;
+    _NE_CMD_STATE.query = tail.toLowerCase();
+    renderCommandMenu(ta, menu);
   });
 
   ta.addEventListener('keydown', (e) => {
@@ -5890,12 +5909,14 @@ function wireNoteCommandMenu(ta) {
   });
 }
 function closeCommandMenu(menu) {
-  _NE_CMD_STATE = { open: false, triggerPos: -1, query: '', filtered: [], selectedIdx: 0 };
+  _NE_CMD_STATE = { open: false, trigger: null, triggerPos: -1, query: '', filtered: [], selectedIdx: 0 };
   menu.classList.remove('open');
 }
 function renderCommandMenu(ta, menu, keepPosition) {
   const q = _NE_CMD_STATE.query.trim();
-  const items = NE_COMMANDS.filter(c => {
+  const trig = _NE_CMD_STATE.trigger;
+  // Filter to items matching the active trigger first
+  const items = NE_COMMANDS.filter(c => c.trigger === trig).filter(c => {
     if (!q) return true;
     return c.match.some(m => m.toLowerCase().includes(q)) || c.label.toLowerCase().includes(q);
   });
@@ -15838,7 +15859,7 @@ document.addEventListener('dblclick', (e) => {
       <!-- Slash-style command menu, triggered by typing "<" in the textarea -->
       <div id="ne-cmd-menu" class="ne-cmd-menu" role="listbox" aria-label="Editor-Befehle"></div>
       <textarea id="ne-textarea" class="ne-textarea"
-                placeholder="Hier tippen…&#10;&#10;# Heading mit #&#10;- Bullets mit -&#10;- [ ] Todos mit - [ ]&#10;**fett**, *kursiv*, `code`&#10;[[Note-Name]] für Verbindungen&#10;#tag für Tags&#10;&#10;Tab zum Einrücken, Shift+Tab zum Ausrücken.&#10;Enter setzt Bullet/Number automatisch fort."
+                placeholder="Hier tippen…&#10;&#10;# Heading mit #&#10;- Bullets mit -&#10;- [ ] Todos mit - [ ]&#10;**fett**, *kursiv*, `code`&#10;[[Note-Name]] für Verbindungen&#10;#tag für Tags&#10;&#10;Tab zum Einrücken, Shift+Tab zum Ausrücken.&#10;Enter setzt Bullet/Number automatisch fort.&#10;&#10;< → Hinweise einfügen (Note, Tip, Warning…)&#10;\ → AI-Funktionen (Zusammenfassen, Weiterschreiben, Übersetzen…)"
                 spellcheck="true" autocomplete="off" autocapitalize="sentences"></textarea>
       <div class="ne-preview" id="ne-preview" aria-hidden="true"></div>
     </div>
