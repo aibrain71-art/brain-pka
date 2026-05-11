@@ -1056,6 +1056,47 @@ body:has(#sidebar:not(.collapsed)) .list-subtitle .ls-count::after  { content: "
 .ne-preview li.todo input { margin-right: 6px; vertical-align: middle; pointer-events: none; }
 .ne-preview li.todo::before { background: transparent !important; }
 
+/* Bullet threading (Logseq-style) — curved vertical connector lines
+   between parent and child bullets. Line is the child <ul>'s left
+   border; the rounded elbow at the top is a ::before pseudo-element.
+   Active path uses :has() to cascade the highlight from the leaf <li>
+   marked by JS up through every ancestor. */
+.ne-preview li > ul,
+.ne-preview li > ol {
+  position: relative;
+  margin-left: 6px;
+  padding-left: 16px;
+  border-left: 1.5px solid var(--border);
+  transition: border-color .18s ease;
+}
+.ne-preview li > ul::before,
+.ne-preview li > ol::before {
+  content: '';
+  position: absolute;
+  left: -1.5px; top: -8px;
+  width: 10px; height: 14px;
+  border-left: 1.5px solid var(--border);
+  border-bottom: 1.5px solid var(--border);
+  border-bottom-left-radius: 10px;
+  transition: border-color .18s ease;
+}
+/* Active path — JS marks the leaf with .active-leaf, :has() bubbles up */
+.ne-preview li:has(.active-leaf) > ul,
+.ne-preview li:has(.active-leaf) > ul::before,
+.ne-preview li:has(.active-leaf) > ol,
+.ne-preview li:has(.active-leaf) > ol::before,
+.ne-preview li.active-leaf > ul,
+.ne-preview li.active-leaf > ul::before,
+.ne-preview li.active-leaf > ol,
+.ne-preview li.active-leaf > ol::before {
+  border-color: var(--accent);
+}
+.ne-preview li.active-leaf::before {
+  background: var(--accent) !important;
+  box-shadow: 0 0 0 4px rgba(96,165,250,0.18);
+  transform: scale(1.25);
+}
+
 /* Block context menu (shown when clicking a bullet) */
 .ne-block-menu {
   position: fixed; z-index: 10001;
@@ -5619,14 +5660,50 @@ function wireNoteEditor() {
   const stat = document.getElementById('ne-stat');
   const body = preview?.parentElement;
 
-  // Live preview render
+  // Live preview render. After each render, walk the textarea's bullet
+  // lines and the preview's <li> nodes in document order to assign
+  // data-line attrs — this lets the cursor-tracker and the block menu
+  // map preview elements to source lines without fragile text matching.
   const render = () => {
     preview.innerHTML = mdRender(ta.value || '');
+    const srcLines = ta.value.split('\n');
+    const listLineIdx = [];
+    srcLines.forEach((l, i) => {
+      if (/^[ \t]*(- |\* |\+ |\d+\. )/.test(l)) listLineIdx.push(i);
+    });
+    preview.querySelectorAll('li').forEach((li, i) => {
+      if (listLineIdx[i] != null) li.dataset.line = listLineIdx[i];
+    });
+    updateActivePath();
     const chars = ta.value.length;
     const words = ta.value.trim() ? ta.value.trim().split(/\s+/).length : 0;
     stat.textContent = chars.toLocaleString('de-CH') + ' Zeichen · ' + words.toLocaleString('de-CH') + ' Wörter';
   };
   ta.addEventListener('input', render);
+
+  // Cursor-tracker → bullet threading active path.
+  // requestAnimationFrame coalesces rapid cursor moves into one DOM
+  // update per frame. JS only toggles the .active-leaf class on the
+  // matching <li> — :has() in CSS propagates the highlight upward
+  // through every ancestor list automatically.
+  let _activePathRAF = null;
+  function updateActivePath() {
+    if (_activePathRAF) cancelAnimationFrame(_activePathRAF);
+    _activePathRAF = requestAnimationFrame(() => {
+      _activePathRAF = null;
+      const pos = ta.selectionStart;
+      const lineIdx = ta.value.slice(0, pos).split('\n').length - 1;
+      preview.querySelectorAll('.active-leaf').forEach(el => el.classList.remove('active-leaf'));
+      const li = preview.querySelector('li[data-line="' + lineIdx + '"]');
+      if (li) li.classList.add('active-leaf');
+    });
+  }
+  ta.addEventListener('keyup', updateActivePath);
+  ta.addEventListener('click', updateActivePath);
+  ta.addEventListener('focus', updateActivePath);
+  document.addEventListener('selectionchange', () => {
+    if (document.activeElement === ta) updateActivePath();
+  });
 
   // Toolbar — wrap selection with markdown markers
   document.querySelectorAll('.ne-tb[data-md]').forEach(btn => {
@@ -5802,18 +5879,18 @@ function wireNoteEditor() {
   // < command menu
   wireNoteCommandMenu(ta);
 
-  // Click on bullet → open block context menu
+  // Click on bullet → open block context menu.
+  // Pass the data-line attr from the <li> directly so openBlockMenu can
+  // skip the fragile text-content matching that used to be needed.
   preview.addEventListener('click', (e) => {
     const li = e.target.closest('li');
     if (!li || !li.parentElement || li.parentElement.tagName !== 'UL') return;
-    // Detect bullet-area click: ::before sits at left:-16px, ~9px wide.
-    // Use the left ~24px of the <li> as the bullet hit area.
     const rect = li.getBoundingClientRect();
     const xWithinLi = e.clientX - rect.left;
     if (xWithinLi > 26 || xWithinLi < -20) return;
-    // Get the block's source text. Match by visible text against ta lines.
+    const lineIdx = li.dataset.line != null ? parseInt(li.dataset.line, 10) : -1;
     const blockText = li.textContent.trim();
-    openBlockMenu(blockText, e.clientX, e.clientY, ta);
+    openBlockMenu(blockText, e.clientX, e.clientY, ta, lineIdx);
   });
 
   // initial render
@@ -5822,16 +5899,21 @@ function wireNoteEditor() {
 
 // Block context menu — shown when user clicks a list-item bullet in
 // the preview. Operates on the matching line in the textarea.
-function openBlockMenu(blockText, x, y, ta) {
+// Preferred: hintLineIdx comes from the clicked <li>'s data-line.
+// Fallback: text-content match (legacy path for any <li> rendered
+// without a data-line attr — e.g. cached partial renders).
+function openBlockMenu(blockText, x, y, ta, hintLineIdx) {
   closeBlockMenu();
-  // Find the line in the textarea that maps to this block.
   const lines = ta.value.split('\n');
-  let targetIdx = -1;
-  const needle = blockText.toLowerCase();
-  for (let i = 0; i < lines.length; i++) {
-    const stripped = lines[i].replace(/^(\s*)([-*+]\s\[[ x]\]\s|[-*+]\s|\d+\.\s|>\s)/, '').trim().toLowerCase();
-    if (stripped && (stripped === needle || stripped.includes(needle.slice(0, 30)))) {
-      targetIdx = i; break;
+  let targetIdx = (Number.isInteger(hintLineIdx) && hintLineIdx >= 0 && hintLineIdx < lines.length)
+    ? hintLineIdx : -1;
+  if (targetIdx < 0) {
+    const needle = (blockText || '').toLowerCase();
+    for (let i = 0; i < lines.length; i++) {
+      const stripped = lines[i].replace(/^(\s*)([-*+]\s\[[ x]\]\s|[-*+]\s|\d+\.\s|>\s)/, '').trim().toLowerCase();
+      if (stripped && (stripped === needle || stripped.includes(needle.slice(0, 30)))) {
+        targetIdx = i; break;
+      }
     }
   }
   if (targetIdx < 0) return;
@@ -6107,25 +6189,52 @@ function mdRender(src) {
   s = s.replace(/\[\[([^\]]+)\]\]/g, '<span class="ref">$1</span>');
   // #tags (only at word start)
   s = s.replace(/(^|\s)#([a-z0-9_\-/]+)/gi, '$1<span class="tag">#$2</span>');
-  // Lists — group consecutive bullets
+  // Lists — group consecutive bullets, depth-aware so 2-space indents
+  // produce NESTED <ul><li><ul>…</ul></li></ul> instead of a flat list.
+  // Depth = floor(leading_spaces / 2) — matches indentSelection's step.
+  // Each <li> gets data-depth + (later) data-line for cursor mapping.
   s = s.replace(/(?:^|\n)((?:[ \t]*(?:- |\* |\+ |\d+\. )[\s\S]*?(?:\n|$))+)/g, (_, block) => {
     const lines = block.replace(/^\n/, '').replace(/\n$/, '').split('\n');
-    if (!lines.length) return _;
-    const isOrdered = /^\s*\d+\. /.test(lines[0]);
-    const tag = isOrdered ? 'ol' : 'ul';
-    const items = lines.map(l => {
-      const m = l.match(/^[ \t]*(?:- |\* |\+ |\d+\. )(.+)$/);
-      if (!m) return '';
-      let item = m[1];
-      // Todo checkbox?
-      const tm = item.match(/^\[([ x])\]\s+(.*)$/);
+    const rows = lines.map(l => {
+      const m = l.match(/^([ \t]*)(- |\* |\+ |\d+\. )(.*)$/);
+      if (!m) return null;
+      const indent = m[1].replace(/\t/g, '  ').length;
+      return { depth: Math.floor(indent / 2), ordered: /^\d+\. $/.test(m[2]), raw: m[3] };
+    }).filter(Boolean);
+    if (!rows.length) return _;
+
+    let html = '';
+    const stack = [];  // open list types at each depth: 'ul' | 'ol'
+    rows.forEach(r => {
+      // Close levels deeper than current row
+      while (stack.length > r.depth + 1) html += '</li></' + stack.pop() + '>';
+      if (stack.length === r.depth + 1) {
+        // Same depth — close previous <li>, switch ul↔ol if needed
+        html += '</li>';
+        const want = r.ordered ? 'ol' : 'ul';
+        if (stack[stack.length - 1] !== want) {
+          html += '</' + stack.pop() + '>';
+          html += '<' + want + '>'; stack.push(want);
+        }
+      } else {
+        // Open deeper levels (may need placeholder rows for skipped depths)
+        while (stack.length < r.depth + 1) {
+          const want = r.ordered ? 'ol' : 'ul';
+          html += '<' + want + '>'; stack.push(want);
+        }
+      }
+      // Emit <li> with todo / plain handling
+      const tm = r.raw.match(/^\[([ x])\]\s+(.*)$/);
       if (tm) {
         const checked = tm[1] === 'x';
-        return '<li class="todo"><input type="checkbox"' + (checked ? ' checked' : '') + '>' + tm[2] + '</li>';
+        html += '<li class="todo" data-depth="' + r.depth + '"><input type="checkbox"' +
+                (checked ? ' checked' : '') + '>' + tm[2];
+      } else {
+        html += '<li data-depth="' + r.depth + '">' + r.raw;
       }
-      return '<li>' + item + '</li>';
-    }).filter(Boolean).join('');
-    return '\n<' + tag + '>' + items + '</' + tag + '>\n';
+    });
+    while (stack.length) html += '</li></' + stack.pop() + '>';
+    return '\n' + html + '\n';
   });
   // Paragraphs: lines not already in block elements
   s = s.split(/\n{2,}/).map(block => {
