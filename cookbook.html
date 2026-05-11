@@ -2285,20 +2285,52 @@ async function importRecipesFromBook(id, opts = {}) {
     chunks_processed: 0,
     total_extracted: 0,
     total_inserted: 0,
+    total_duplicates: 0,
     chunk_results: [],
+    // chunk_log holds richer per-chunk entries for the live toast: each
+    // entry has { idx, pages, extracted, inserted, duplicates, error,
+    // status } and accumulates across the run so the user sees an
+    // ever-growing log instead of a flickering "current chunk only" line.
+    chunk_log: [],
     insert_errors: [],
     all_recipes: [],     // collects sample titles for the live toast
     api_error: null,
     dry_run: dryRun,
   };
 
+  // Render the toast — called every time the diag changes. Persistent
+  // per-chunk log + running totals.
+  function paintToast(currentChunkIdx) {
+    const progressHeader = dryRun ? '🔍 Dry-Run' : '🧠 Import';
+    const totalLabel = diag.total_chunks ? `${diag.chunks_processed}/${diag.total_chunks}` : `${diag.chunks_processed}`;
+    const dupLabel = diag.total_duplicates ? ` · ${diag.total_duplicates} Dup` : '';
+    const savedLabel = dryRun ? '' : ` · gespeichert: <strong style="color:#5dd58f">${diag.total_inserted}</strong>`;
+    const logRows = diag.chunk_log.map(c => {
+      if (c.error) {
+        return `<div style="padding:2px 0;color:#ef9090">⚠️ Chunk ${c.idx} (${escapeHtml(c.pages || '')}): ${escapeHtml(String(c.error).slice(0, 70))}</div>`;
+      }
+      if (c.status === 'running') {
+        return `<div style="padding:2px 0;color:var(--accent)">⏳ Chunk ${c.idx} (${escapeHtml(c.pages || '?')}): wird analysiert…</div>`;
+      }
+      const dryParts = dryRun
+        ? `<strong>${c.extracted}</strong> erkannt${c.duplicates ? ` · ${c.duplicates} schon in DB` : ''}`
+        : `<strong>${c.extracted}</strong> erkannt · <strong style="color:#5dd58f">${c.inserted}</strong> gespeichert${c.duplicates ? ` · ${c.duplicates} Dup` : ''}`;
+      return `<div style="padding:2px 0">✓ Chunk ${c.idx} (${escapeHtml(c.pages || '?')}): ${dryParts}</div>`;
+    }).join('');
+
+    t.innerHTML = `${progressHeader} · ${totalLabel} Chunks
+      <div style="margin-top:6px;font-size:12px">Total: <strong style="color:var(--text)">${diag.total_extracted}</strong> Rezepte erkannt${savedLabel}${dupLabel}</div>
+      <div style="margin-top:8px;font-size:11px;color:var(--text-2);max-height:160px;overflow:auto;border-top:1px solid var(--border);padding-top:6px;font-family:ui-monospace,SFMono-Regular,monospace">${logRows || '<div style="color:var(--text-2);font-style:italic">…</div>'}</div>`;
+  }
+
   let next = 0;
   for (let iter = 0; iter < 20 && next != null; iter++) {
-    // Live progress toast — shows chunk progress + running recipe count
-    const progressHeader = dryRun ? '🔍 Dry-Run' : '🧠 Import';
-    t.innerHTML = `${progressHeader} · Chunk <strong>${diag.chunks_processed + 1}${diag.total_chunks ? '/' + diag.total_chunks : ''}</strong> wird analysiert…
-      <div style="margin-top:6px;font-size:11px;color:var(--text-2)">Bisher erkannt: <strong style="color:var(--text)">${diag.total_extracted}</strong> Rezepte${diag.total_inserted ? ' · gespeichert: ' + diag.total_inserted : ''}</div>
-      ${diag.all_recipes.length ? '<div style="margin-top:6px;font-size:11px;color:var(--text-2);max-height:60px;overflow:auto">Zuletzt: ' + diag.all_recipes.slice(-8).map(r => escapeHtml(r.title || '?')).join(' · ') + '</div>' : ''}`;
+    const chunkIdx = diag.chunks_processed + 1;
+    // Add a "running" placeholder so the log shows progress IMMEDIATELY
+    const logEntry = { idx: chunkIdx, pages: null, status: 'running', extracted: 0, inserted: 0, duplicates: 0 };
+    diag.chunk_log.push(logEntry);
+    paintToast(chunkIdx);
+
     try {
       const r = await fetch('/api/cookbooks/extract?id=' + id, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -2306,12 +2338,25 @@ async function importRecipesFromBook(id, opts = {}) {
       });
       const data = await r.json();
       if (!r.ok) {
-        diag.api_error = `Chunk ${diag.chunks_processed + 1}: ${data.error || 'HTTP ' + r.status}`;
+        logEntry.status = 'error';
+        logEntry.error = data.error || ('HTTP ' + r.status);
+        diag.api_error = `Chunk ${chunkIdx}: ${data.error || 'HTTP ' + r.status}`;
         if (data.raw) diag.api_error += '\n\nClaude raw output:\n' + data.raw;
+        paintToast(chunkIdx);
         break;
       }
+      // Update the running log entry with the actual result
+      const chunkResult = (data.chunk_results || [])[0] || {};
+      logEntry.pages = chunkResult.pages || `Chunk ${next + 1}`;
+      logEntry.extracted = data.extracted || 0;
+      logEntry.inserted = data.inserted || 0;
+      logEntry.duplicates = data.duplicates_skipped || 0;
+      logEntry.status = chunkResult.error ? 'error' : 'done';
+      if (chunkResult.error) logEntry.error = chunkResult.error;
+
       diag.total_inserted += data.inserted || 0;
       diag.total_extracted += data.extracted || 0;
+      diag.total_duplicates += data.duplicates_skipped || 0;
       diag.insert_errors.push(...(data.errors || []));
       diag.chunks_processed += (data.processed_chunks || 1);
       diag.total_chunks = data.total_chunks || diag.total_chunks;
@@ -2321,8 +2366,12 @@ async function importRecipesFromBook(id, opts = {}) {
       if (Array.isArray(data.recipes)) diag.all_recipes.push(...data.recipes);
       else if (Array.isArray(data.sample)) diag.all_recipes.push(...data.sample);
       next = data.next_chunk;
+      paintToast(chunkIdx);
     } catch (e) {
-      diag.api_error = `Chunk ${diag.chunks_processed + 1}: ${e?.message || e}`;
+      logEntry.status = 'error';
+      logEntry.error = e?.message || String(e);
+      diag.api_error = `Chunk ${chunkIdx}: ${e?.message || e}`;
+      paintToast(chunkIdx);
       break;
     }
     if (next == null) break;
@@ -2334,10 +2383,13 @@ async function importRecipesFromBook(id, opts = {}) {
   const ok = diag.total_inserted > 0 || (dryRun && diag.total_extracted > 0);
   t.style.background = ok ? '#1f3a25' : '#3a1f1f';
   t.style.borderColor = ok ? '#2a5b34' : '#5b2a2a';
+  const dupNote = diag.total_duplicates
+    ? ` · <strong style="color:#f5b800">${diag.total_duplicates}</strong> Duplikat${diag.total_duplicates === 1 ? '' : 'e'} übersprungen`
+    : '';
   const summaryHtml = dryRun
-    ? `🔍 <strong>Dry-Run fertig</strong> · ${diag.total_extracted} Rezepte erkannt (${diag.chunks_processed}/${diag.total_chunks || '?'} Chunks). Nichts gespeichert.`
-    : (diag.total_inserted > 0
-        ? `✓ <strong>${diag.total_inserted}</strong> Rezepte importiert (${diag.chunks_processed}/${diag.total_chunks || '?'} Chunks${diag.insert_errors.length ? `, ${diag.insert_errors.length} Insert-Fehler` : ''}).`
+    ? `🔍 <strong>Dry-Run fertig</strong> · ${diag.total_extracted} Rezepte erkannt (${diag.chunks_processed}/${diag.total_chunks || '?'} Chunks)${dupNote}. Nichts gespeichert.`
+    : (diag.total_inserted > 0 || diag.total_duplicates > 0
+        ? `✓ <strong>${diag.total_inserted}</strong> Rezepte importiert (${diag.chunks_processed}/${diag.total_chunks || '?'} Chunks${diag.insert_errors.length ? `, ${diag.insert_errors.length} Insert-Fehler` : ''})${dupNote}.`
         : `⚠️ <strong>0</strong> Rezepte importiert. ${diag.api_error ? 'API: ' + escapeHtml(diag.api_error.slice(0, 80)) : 'Claude hat nichts erkannt oder Insert-Fehler.'}`);
   t.innerHTML = summaryHtml +
     `<div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">
@@ -2367,9 +2419,28 @@ function showExtractDetails() {
       (d.insert_errors.length > 20 ? `<li>…und ${d.insert_errors.length - 20} weitere</li>` : '') +
       '</ul></div>'
     : '';
-  const chunkList = d.chunk_results?.length
-    ? '<div style="margin-top:10px"><strong>Per Chunk:</strong><ul style="font-size:11px;margin:6px 0;padding-left:18px;color:var(--text-2)">' +
-        d.chunk_results.map(c => `<li>Chunk ${c.chunk}: ${c.pages || ''}${c.error ? ' — ⚠️ ' + escapeHtml(c.error) : ' — ' + (c.recipes_found || 0) + ' erkannt'}</li>`).join('') +
+  // Richer per-chunk log (uses diag.chunk_log if available — falls back
+  // to chunk_results from the API for legacy diag objects).
+  const chunkLog = (d.chunk_log && d.chunk_log.length)
+    ? d.chunk_log
+    : (d.chunk_results || []).map(c => ({
+        idx: (c.chunk || 0) + 1,
+        pages: c.pages,
+        extracted: c.recipes_found || 0,
+        inserted: 0, duplicates: 0,
+        status: c.error ? 'error' : 'done',
+        error: c.error,
+      }));
+  const chunkList = chunkLog.length
+    ? '<div style="margin-top:10px"><strong>Per Chunk:</strong><ul style="font-size:11px;margin:6px 0;padding-left:18px;color:var(--text-2);list-style:none">' +
+        chunkLog.map(c => {
+          if (c.error) return `<li style="color:#ef9090">⚠️ Chunk ${c.idx} (${escapeHtml(c.pages || '?')}): ${escapeHtml(String(c.error).slice(0, 100))}</li>`;
+          const parts = [];
+          parts.push(`<strong style="color:var(--text)">${c.extracted}</strong> erkannt`);
+          if (c.inserted != null) parts.push(`<strong style="color:#5dd58f">${c.inserted}</strong> neu`);
+          if (c.duplicates) parts.push(`<strong style="color:#f5b800">${c.duplicates}</strong> Dup`);
+          return `<li>✓ Chunk ${c.idx} (${escapeHtml(c.pages || '?')}): ${parts.join(' · ')}</li>`;
+        }).join('') +
       '</ul></div>'
     : '';
   // Full identified-recipe list — was missing before, this is what the
@@ -2400,7 +2471,8 @@ function showExtractDetails() {
       <div><strong>Mode:</strong> ${d.dry_run ? '🔍 Dry-Run (nichts gespeichert)' : '💾 Live-Import'}</div>
       <div><strong>Chunks verarbeitet:</strong> ${d.chunks_processed} / ${d.total_chunks || '?'}</div>
       <div><strong>Rezepte erkannt:</strong> ${d.total_extracted}</div>
-      <div><strong>Rezepte importiert:</strong> ${d.total_inserted}</div>
+      <div><strong>Rezepte importiert (neu):</strong> <span style="color:#5dd58f">${d.total_inserted}</span></div>
+      <div><strong>Duplikate übersprungen:</strong> <span style="color:#f5b800">${d.total_duplicates || 0}</span> ${d.dry_run ? '(würden bei Live-Import übersprungen)' : '(schon vorher in DB)'}</div>
       <div><strong>Insert-Fehler:</strong> ${d.insert_errors?.length || 0}</div>
       ${d.api_error ? `<div style="color:#ef4444;margin-top:10px"><strong>API-Fehler:</strong><pre style="background:var(--surface-2);padding:10px;border-radius:6px;font-size:11px;white-space:pre-wrap;margin-top:4px">${escapeHtml(d.api_error)}</pre></div>` : ''}
       ${chunkList}

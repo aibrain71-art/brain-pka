@@ -254,12 +254,35 @@ LIEBER UNVOLLSTÄNDIG als FEHLEND: wenn deine Antwort an die max_tokens-Grenze s
   const nextChunk = hasMore ? (startChunk + chunkRange.length) : null;
 
   if (dryRun) {
+    // Even in dry-run, count how many of these are already in the DB
+    // so the user sees the would-be-new vs would-be-duplicate split.
+    let dryDupCount = 0;
+    try {
+      const existing = await env.DB.prepare(
+        "SELECT title, source_meta FROM notes WHERE note_type = 'recipe'"
+      ).all();
+      const existT = new Set();
+      const existN = new Set();
+      for (const row of (existing.results || [])) {
+        let meta = null;
+        try { meta = row.source_meta ? JSON.parse(row.source_meta) : null; } catch(_) {}
+        if (meta?.cookbook_id !== book.id) continue;
+        if (row.title) existT.add(row.title.toLowerCase().replace(/\s+/g, ' ').trim());
+        if (meta?.recipe?.recipe_number) existN.add(String(meta.recipe.recipe_number).trim());
+      }
+      for (const r of allParsedRecipes) {
+        const tk = String(r.title || '').toLowerCase().replace(/\s+/g, ' ').trim();
+        const nk = (r.recipe_number || r.recipe?.recipe_number || '').toString().trim();
+        if ((nk && existN.has(nk)) || (tk && existT.has(tk))) dryDupCount++;
+      }
+    } catch (_) {}
     return json({
       ok: true, dry_run: true,
       total_chunks: pdfChunks.length,
       processed_chunks: chunkRange.length,
       next_chunk: nextChunk,
       extracted: allParsedRecipes.length,
+      duplicates_skipped: dryDupCount,
       // Return ALL recipes in the dry-run response (not just first 10) so
       // the user sees the full identification list in the Details modal —
       // we use slim records to stay under the response-size budget.
@@ -286,14 +309,58 @@ LIEBER UNVOLLSTÄNDIG als FEHLEND: wenn deine Antwort an die max_tokens-Grenze s
 
   const parsed = allParsedRecipes.slice(0, maxRecipes);
 
+  // ─── De-duplication ────────────────────────────────────────────
+  // Fetch existing recipes for this cookbook so we don't insert
+  // duplicates on re-runs OR when Claude returns the same recipe in
+  // two adjacent chunks (page overlap, double-listings). We match on:
+  //   1. Recipe number (e.g. "245") — the most reliable identifier when
+  //      the cookbook prints sideways margin numbers.
+  //   2. Normalized title (lowercased, trimmed, whitespace-collapsed)
+  //      as fallback when no number exists.
+  const existingTitles = new Set();
+  const existingNumbers = new Set();
+  try {
+    const existing = await env.DB.prepare(
+      "SELECT title, source_meta FROM notes WHERE note_type = 'recipe'"
+    ).all();
+    for (const row of (existing.results || [])) {
+      let meta = null;
+      try { meta = row.source_meta ? JSON.parse(row.source_meta) : null; } catch(_) {}
+      if (meta?.cookbook_id !== book.id) continue;  // only this cookbook
+      if (row.title) {
+        existingTitles.add(row.title.toLowerCase().replace(/\s+/g, ' ').trim());
+      }
+      const rn = meta?.recipe?.recipe_number;
+      if (rn) existingNumbers.add(String(rn).trim());
+    }
+  } catch (_) { /* if query fails, just don't dedup — fail open */ }
+
   // Insert each recipe
   const insertedIds = [];
   const errors = [];
+  let duplicatesSkipped = 0;
+  const duplicateTitles = [];
   for (const r of parsed.slice(0, maxRecipes)) {
     if (!r?.title || !r.recipe?.ingredients?.length || !r.recipe?.steps?.length) {
       errors.push({ title: r?.title, reason: 'Missing required fields' });
       continue;
     }
+    // De-dup check (number first because more reliable, then title)
+    const titleKey = String(r.title).toLowerCase().replace(/\s+/g, ' ').trim();
+    const numKey = (typeof r.recipe_number === 'string' && r.recipe_number.trim())
+      ? r.recipe_number.trim()
+      : (typeof r.recipe?.recipe_number === 'string' && r.recipe.recipe_number.trim())
+        ? r.recipe.recipe_number.trim() : null;
+    if ((numKey && existingNumbers.has(numKey)) || existingTitles.has(titleKey)) {
+      duplicatesSkipped++;
+      if (duplicateTitles.length < 50) duplicateTitles.push(r.title);
+      continue;
+    }
+    // Reserve this title+number BEFORE the insert so a second copy in
+    // the same response (Claude sometimes lists a recipe twice) gets
+    // caught even before the next-chunk DB query refreshes.
+    existingTitles.add(titleKey);
+    if (numKey) existingNumbers.add(numKey);
     const recipe = {
       servings:      Number.isInteger(r.recipe.servings)      ? r.recipe.servings      : baseServings,
       total_minutes: Number.isInteger(r.recipe.total_minutes) ? r.recipe.total_minutes : null,
@@ -383,6 +450,8 @@ LIEBER UNVOLLSTÄNDIG als FEHLEND: wenn deine Antwort an die max_tokens-Grenze s
     next_chunk: nextChunk,
     extracted: parsed.length,
     inserted: insertedIds.length,
+    duplicates_skipped: duplicatesSkipped,
+    duplicate_titles: duplicateTitles,
     errors,
     // Pass full title list back for the toast/Details so the user sees
     // every recipe that was identified (not just 3 sample titles)
