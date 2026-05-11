@@ -11894,13 +11894,33 @@ async function vaRespond(userText) {
 
   const voiceLang = getPref('translationLang') || 'de';
   const voiceLangName = LANG_NAMES[voiceLang] || 'Deutsch';
+  // Today's date is computed once here so Larry can default journal entry
+  // dates correctly when creating one without a specified date.
+  const todayISO = new Date().toISOString().slice(0, 10);
   const systemPrompt = [
     personaPrompt,
     '',
     `WICHTIG: Antworte AUSSCHLIESSLICH auf ${voiceLangName}.`,
     'Antworte sehr knapp und gesprächig — die Antwort wird laut vorgelesen.',
     'Maximal 2–3 kurze Sätze, kein Markdown, keine Aufzählungen, keine Überschriften.',
-    'Stütze dich wo möglich auf die folgenden Notizen aus dem persönlichen Wissensgarten:',
+    '',
+    '## Tools — du hast Zugriff auf das persönliche Wissensbank-System:',
+    '- create_note(title, body, note_type?, tags?) — wenn der User eine Notiz diktiert oder dich bittet „merk dir…", „schreib auf…", „notiere…".',
+    '- search_notes(query) / list_recent_notes — wenn er fragt „was war meine Notiz zu…", „wann hab ich…".',
+    '- delete_note(id) — NUR nach expliziter Bestätigung des Users.',
+    '- create_journal(title, body, mood?) — wenn er einen Tagebucheintrag macht („heute habe ich…", „mein Tag war…").',
+    '- search_journal / list_recent_journal — Rückblick auf vergangene Tage.',
+    '- create_task(title, priority?, due_date?) — wenn er etwas TUN muss (Action-Item).',
+    '- list_open_tasks / complete_task(id) — TODO-Verwaltung.',
+    '- create_idea(title, body?) — halbgare Idee zum späteren Ausarbeiten.',
+    '- list_ideas / search_people — orientierung.',
+    '- web_search — wenn er nach aktuellen Infos fragt („was passiert grad…", „Aktien", „Wetter", News).',
+    '',
+    `Heutiges Datum: ${todayISO}. Sprache des Inhalts: ${voiceLangName}.`,
+    'Nach jeder Mutation (create/delete) IMMER kurz bestätigen, z.B. „Notiert, Sir."',
+    'Wenn Suche keine Treffer hat, das ehrlich sagen statt halluzinieren.',
+    '',
+    'Falls KEIN Tool nötig — stütze dich auf die folgenden Notizen aus dem persönlichen Wissensgarten:',
     '',
     groundingText,
   ].join('\n');
@@ -11924,7 +11944,8 @@ async function vaRespond(userText) {
         model: modelUsed,
         system: systemPrompt,
         messages,
-        max_tokens: 400,  // shorter for voice — TTS-friendly
+        max_tokens: 800,    // wider for agentic — tools + final answer in one budget
+        enable_tools: true,  // server exposes DB tools + web_search
       }),
     });
     // Detect specific error states BEFORE trying to JSON-parse the body
@@ -11948,6 +11969,15 @@ async function vaRespond(userText) {
     reply = (data.content || []).filter(c => c.type === 'text').map(c => c.text).join(' ').trim();
     if (!reply) reply = 'Hmm, ich habe keine Antwort generieren können.';
     if (data.usage) meta = { usage: data.usage, model: modelUsed };
+    // Tool-trace surfaces what Larry did under the hood — logged for
+    // debugging (window._lastChatTrace) and a short visible hint.
+    if (Array.isArray(data._trace) && data._trace.length > 1) {
+      window._lastChatTrace = data._trace;
+      const toolBlocks = data._trace.flatMap(r => (r.blocks || []).filter(b => b === 'tool_use'));
+      if (toolBlocks.length > 0) {
+        console.log('[Larry] Tool calls this turn:', data._trace);
+      }
+    }
   } catch (err) {
     // Surface the actual reason in the BUBBLE STATUS (very visible) plus a
     // chat message — but DON'T speak the error via TTS, that's annoying.
