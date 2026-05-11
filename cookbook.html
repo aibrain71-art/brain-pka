@@ -332,6 +332,80 @@
   .pdf-search-hits { position: absolute; pointer-events: none; }
   .pdf-search-hit { background: rgba(255,235,0,0.4); border-radius: 2px; }
 
+  /* Fullscreen PDF viewer */
+  section.lib-viewer.fullscreen {
+    position: fixed; inset: 0; z-index: 9998;
+    border-radius: 0; background: #1c1c1c;
+    max-height: none; height: 100vh;
+    box-shadow: 0 0 60px rgba(0,0,0,0.8);
+  }
+  .lib-viewer.fullscreen .pdf-header { display: none; }
+  .lib-viewer.fullscreen .pdf-canvas-wrap { padding: 60px 24px 80px; }
+  .lib-viewer.fullscreen .pdf-pager {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: rgba(28,28,28,0.92); backdrop-filter: blur(8px);
+    border-top: 1px solid rgba(255,255,255,0.1); z-index: 10000;
+  }
+  /* Floating top corner buttons in fullscreen */
+  .fs-corner {
+    position: fixed; top: 14px; z-index: 10001;
+    display: none; gap: 8px;
+  }
+  .lib-viewer.fullscreen ~ .fs-corner,
+  .lib-viewer.fullscreen .fs-corner { display: flex; }
+  .fs-corner.left  { left: 14px; }
+  .fs-corner.right { right: 14px; }
+  .fs-btn {
+    background: rgba(0,0,0,0.6); color: white;
+    border: 1px solid rgba(255,255,255,0.25); border-radius: 22px;
+    height: 40px; min-width: 40px; padding: 0 14px;
+    cursor: pointer; font-size: 14px; font-weight: 600;
+    display: inline-flex; align-items: center; gap: 6px;
+    backdrop-filter: blur(6px); transition: all .12s;
+  }
+  .fs-btn:hover { background: rgba(0,0,0,0.85); border-color: var(--accent); }
+  .fs-btn-round {
+    width: 40px; padding: 0; border-radius: 50%;
+    justify-content: center; font-size: 18px;
+  }
+
+  /* TOC drawer (slides in from left in fullscreen) */
+  .fs-drawer {
+    position: fixed; top: 0; bottom: 0; left: -360px;
+    width: 340px; max-width: 90vw;
+    background: var(--surface); border-right: 1px solid var(--border);
+    z-index: 10002; padding: 64px 16px 16px;
+    overflow-y: auto; transition: left .24s ease;
+    box-shadow: 4px 0 24px rgba(0,0,0,0.5);
+  }
+  .fs-drawer.open { left: 0; }
+  .fs-drawer h3 {
+    margin: 0 0 12px 0; font-family: 'Playfair Display', Georgia, serif;
+    font-size: 18px;
+  }
+  .fs-drawer ol { list-style: none; padding: 0; margin: 0; }
+  .fs-drawer ol li {
+    padding: 7px 10px; margin: 1px 0;
+    font-size: 13px; cursor: pointer;
+    border-radius: 4px; border: 1px solid transparent;
+    transition: all .12s;
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    color: var(--text);
+  }
+  .fs-drawer ol li:hover {
+    background: var(--surface-2); border-color: var(--accent);
+    color: var(--accent-2);
+  }
+  .fs-drawer ol li .toc-pg {
+    color: var(--text-2); font-size: 11px; font-variant-numeric: tabular-nums;
+    background: rgba(255,255,255,0.04); padding: 1px 6px; border-radius: 4px;
+  }
+  .fs-drawer-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+    z-index: 10001; display: none;
+  }
+  .fs-drawer-backdrop.open { display: block; }
+
   /* Shopping list */
   main.shop-main {
     max-width: 900px; margin: 0 auto; padding: 32px 24px;
@@ -899,6 +973,7 @@ function renderPdfViewer() {
       <h3>${escapeHtml(_PDF_BOOK.title)}</h3>
       <div class="pdf-actions">
         <button onclick="importRecipesFromBook(${_PDF_BOOK.id})" class="primary">📥 Rezepte importieren</button>
+        <button onclick="toggleFullscreenPdf()">⛶ Vollbild</button>
         <button onclick="pdfZoom(-0.2)">−</button>
         <button onclick="pdfZoom(+0.2)">+</button>
       </div>
@@ -910,7 +985,22 @@ function renderPdfViewer() {
       <button onclick="pdfPage(-1)" id="pdf-prev">‹</button>
       <span>Seite <input class="page-input" id="pdf-page-input" type="number" min="1" value="${_PDF_PAGE}"> / <span id="pdf-page-total">?</span></span>
       <button onclick="pdfPage(+1)" id="pdf-next">›</button>
-    </div>`;
+    </div>
+    <!-- Floating fullscreen controls (visible only when .fullscreen) -->
+    <div class="fs-corner left">
+      <button class="fs-btn" onclick="toggleFsDrawer()" title="Inhaltsverzeichnis (T)">📑 <span>Inhalt</span></button>
+    </div>
+    <div class="fs-corner right">
+      <button class="fs-btn fs-btn-round" onclick="pdfZoom(-0.2)" title="Verkleinern">−</button>
+      <button class="fs-btn fs-btn-round" onclick="pdfZoom(+0.2)" title="Vergrößern">+</button>
+      <button class="fs-btn" onclick="toggleFullscreenPdf()" title="Vollbild verlassen (Esc)">✕ <span>Schliessen</span></button>
+    </div>
+    <!-- TOC drawer (renders alongside fullscreen canvas) -->
+    <div class="fs-drawer-backdrop" id="fs-drawer-backdrop" onclick="toggleFsDrawer(false)"></div>
+    <aside class="fs-drawer" id="fs-drawer">
+      <h3>📑 Inhaltsverzeichnis</h3>
+      <ol id="fs-toc"></ol>
+    </aside>`;
   $('#pdf-page-input').addEventListener('change', (e) => {
     const p = parseInt(e.target.value, 10);
     if (p && _PDF_DOC && p <= _PDF_DOC.numPages) { _PDF_PAGE = p; renderPdfPage(); }
@@ -1067,12 +1157,77 @@ function jumpToTocEntry(idx) {
   if (!Number.isFinite(target) || target < 1) return;
   _PDF_PAGE = Math.min(_PDF_DOC.numPages, Math.max(1, target));
   renderPdfPage();
+  // If we're in fullscreen mode with the TOC drawer open, close it so
+  // the user sees the page they just navigated to.
+  toggleFsDrawer(false);
 }
+
+// ── Fullscreen toggle + TOC drawer ─────────────────────────────
+function toggleFullscreenPdf() {
+  const viewer = $('#lib-viewer');
+  const fs = viewer.classList.toggle('fullscreen');
+  document.body.style.overflow = fs ? 'hidden' : '';
+  if (fs) {
+    populateFsDrawer();
+    // Re-render the page so it can use the larger canvas dimensions
+    renderPdfPage();
+  } else {
+    // Close drawer + restore scale-aware page render
+    toggleFsDrawer(false);
+    renderPdfPage();
+  }
+}
+
+function toggleFsDrawer(force) {
+  const drawer = $('#fs-drawer');
+  const bd = $('#fs-drawer-backdrop');
+  if (!drawer || !bd) return;
+  const shouldOpen = (typeof force === 'boolean')
+    ? force
+    : !drawer.classList.contains('open');
+  drawer.classList.toggle('open', shouldOpen);
+  bd.classList.toggle('open', shouldOpen);
+}
+
+// Fill the fullscreen TOC drawer using the same entries the sidebar
+// uses, so navigating from fullscreen behaves identically.
+function populateFsDrawer() {
+  const ol = $('#fs-toc');
+  if (!ol) return;
+  if (!_TOC_ENTRIES?.length) {
+    ol.innerHTML = '<li style="color:var(--text-2);font-style:italic;cursor:default">Kein Inhaltsverzeichnis gefunden.</li>';
+    return;
+  }
+  ol.innerHTML = _TOC_ENTRIES.map((it, i) => {
+    const pg = it.page || 0;
+    const pdfPg = pg + (_TOC_SOURCE === 'auto-scan' ? _PAGE_OFFSET : 0);
+    return `<li style="padding-left:${(it.depth || 0) * 14 + 10}px" onclick="jumpToTocEntry(${i})"
+                title="PDF-Seite ${pdfPg}">
+              <span>${escapeHtml(it.title)}</span>
+              ${pg ? `<span class="toc-pg">${pg}</span>` : ''}
+            </li>`;
+  }).join('');
+}
+
+// Keyboard shortcuts in fullscreen: Esc exits, T toggles drawer,
+// arrow keys page through.
+document.addEventListener('keydown', (e) => {
+  const viewer = $('#lib-viewer');
+  if (!viewer?.classList.contains('fullscreen')) return;
+  // Don't interfere when typing in an input
+  if (['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
+  if (e.key === 'Escape') { e.preventDefault(); toggleFullscreenPdf(); }
+  else if (e.key === 't' || e.key === 'T') { e.preventDefault(); toggleFsDrawer(); }
+  else if (e.key === 'ArrowRight' || e.key === 'PageDown') { e.preventDefault(); pdfPage(+1); }
+  else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); pdfPage(-1); }
+});
 
 function adjustTocOffset(delta) {
   _PAGE_OFFSET += delta;
   try { localStorage.setItem('pdfOffset_' + _PDF_BOOK.id, String(_PAGE_OFFSET)); } catch(_) {}
   drawTocList();
+  // Refresh the fullscreen drawer too (if it's mounted)
+  if ($('#fs-toc')) populateFsDrawer();
 }
 
 // Best-effort offset detector: scan early PDF pages for a page-number
