@@ -5828,15 +5828,15 @@ const NE_COMMANDS = [
   { trigger: '<', group: 'Hinweise', icon: '🔥', label: 'Caution',   match: ['caution','vorsicht'],
     insert: '> [!CAUTION]\n> ', cursorOffset: 0 },
   // AI assists — trigger "\"
-  { trigger: '\\', group: 'AI', icon: '✨', label: 'Zusammenfassen',       match: ['summarize','tldr','zusammenfassen','summary'], ai: 'summarize', mode: 'append' },
-  { trigger: '\\', group: 'AI', icon: '✍',  label: 'Weiterschreiben',       match: ['continue','weiterschreiben','weiter'], ai: 'continue', mode: 'insert' },
-  { trigger: '\\', group: 'AI', icon: '📝', label: 'Sprache verbessern',     match: ['improve','verbessern','correct','grammar'], ai: 'improve', mode: 'replace_selection_or_all' },
-  { trigger: '\\', group: 'AI', icon: '🌍', label: 'Übersetzen…',           match: ['translate','uebersetzen','übersetzen'], ai: 'translate', mode: 'replace_selection_or_all', askLanguage: true },
-  { trigger: '\\', group: 'AI', icon: '🔍', label: 'Bullet ausarbeiten',    match: ['expand','ausarbeiten','elaborate'], ai: 'expand', mode: 'replace_selection_or_line' },
-  { trigger: '\\', group: 'AI', icon: '📋', label: 'In Outline umwandeln',  match: ['outline','gliederung'], ai: 'outline', mode: 'append' },
-  { trigger: '\\', group: 'AI', icon: '💡', label: 'Ideen generieren',      match: ['ideas','ideen','brainstorm'], ai: 'ideas', mode: 'append', askPrompt: 'Thema (leer = aus Notiz)' },
-  { trigger: '\\', group: 'AI', icon: '🎯', label: 'Titel vorschlagen',     match: ['title','titel'], ai: 'title', mode: 'set_title' },
-  { trigger: '\\', group: 'AI', icon: '🔄', label: 'Umformulieren…',         match: ['rewrite','umformulieren'], ai: 'rewrite', mode: 'replace_selection_or_all', askPrompt: 'Stil (z.B. "förmlicher", "einfacher")' },
+  { trigger: '/', group: 'AI', icon: '✨', label: 'Zusammenfassen',       match: ['summarize','tldr','zusammenfassen','summary'], ai: 'summarize', mode: 'append' },
+  { trigger: '/', group: 'AI', icon: '✍',  label: 'Weiterschreiben',       match: ['continue','weiterschreiben','weiter'], ai: 'continue', mode: 'insert' },
+  { trigger: '/', group: 'AI', icon: '📝', label: 'Sprache verbessern',     match: ['improve','verbessern','correct','grammar'], ai: 'improve', mode: 'replace_selection_or_all' },
+  { trigger: '/', group: 'AI', icon: '🌍', label: 'Übersetzen…',           match: ['translate','uebersetzen','übersetzen'], ai: 'translate', mode: 'replace_selection_or_all', askLanguage: true },
+  { trigger: '/', group: 'AI', icon: '🔍', label: 'Bullet ausarbeiten',    match: ['expand','ausarbeiten','elaborate'], ai: 'expand', mode: 'replace_selection_or_line' },
+  { trigger: '/', group: 'AI', icon: '📋', label: 'In Outline umwandeln',  match: ['outline','gliederung'], ai: 'outline', mode: 'append' },
+  { trigger: '/', group: 'AI', icon: '💡', label: 'Ideen generieren',      match: ['ideas','ideen','brainstorm'], ai: 'ideas', mode: 'append', askPrompt: 'Thema (leer = aus Notiz)' },
+  { trigger: '/', group: 'AI', icon: '🎯', label: 'Titel vorschlagen',     match: ['title','titel'], ai: 'title', mode: 'set_title' },
+  { trigger: '/', group: 'AI', icon: '🔄', label: 'Umformulieren…',         match: ['rewrite','umformulieren'], ai: 'rewrite', mode: 'replace_selection_or_all', askPrompt: 'Stil (z.B. "förmlicher", "einfacher")' },
 ];
 
 let _NE_CMD_STATE = { open: false, trigger: null, triggerPos: -1, query: '', filtered: [], selectedIdx: 0 };
@@ -5845,7 +5845,7 @@ function wireNoteCommandMenu(ta) {
   const menu = document.getElementById('ne-cmd-menu');
   if (!menu) return;
 
-  // Detect typing of "<" → Hinweise menu OR "\" → AI menu.
+  // Detect typing of "<" → Hinweise menu OR "/" → AI menu.
   // Both regexes match from the start of the most recent trigger up
   // to the cursor, capturing the query string the user has typed.
   ta.addEventListener('input', () => {
@@ -5853,11 +5853,11 @@ function wireNoteCommandMenu(ta) {
     const upto = ta.value.slice(0, pos);
     let trigger = null, m = null;
     // Prefer the LAST trigger character entered — find the position
-    // of the most recent "<" and the most recent "\\", pick whichever
+    // of the most recent "<" and the most recent "/", pick whichever
     // is later in the string.
     const lastLt = upto.lastIndexOf('<');
-    const lastBs = upto.lastIndexOf('\\');
-    const usePos = Math.max(lastLt, lastBs);
+    const lastSl = upto.lastIndexOf('/');
+    const usePos = Math.max(lastLt, lastSl);
     if (usePos < 0) {
       if (_NE_CMD_STATE.open) closeCommandMenu(menu);
       return;
@@ -15859,7 +15859,7 @@ document.addEventListener('dblclick', (e) => {
       <!-- Slash-style command menu, triggered by typing "<" in the textarea -->
       <div id="ne-cmd-menu" class="ne-cmd-menu" role="listbox" aria-label="Editor-Befehle"></div>
       <textarea id="ne-textarea" class="ne-textarea"
-                placeholder="Hier tippen…&#10;&#10;# Heading mit #&#10;- Bullets mit -&#10;- [ ] Todos mit - [ ]&#10;**fett**, *kursiv*, `code`&#10;[[Note-Name]] für Verbindungen&#10;#tag für Tags&#10;&#10;Tab zum Einrücken, Shift+Tab zum Ausrücken.&#10;Enter setzt Bullet/Number automatisch fort.&#10;&#10;< → Hinweise einfügen (Note, Tip, Warning…)&#10;\ → AI-Funktionen (Zusammenfassen, Weiterschreiben, Übersetzen…)"
+                placeholder="Hier tippen…&#10;&#10;# Heading mit #&#10;- Bullets mit -&#10;- [ ] Todos mit - [ ]&#10;**fett**, *kursiv*, `code`&#10;[[Note-Name]] für Verbindungen&#10;#tag für Tags&#10;&#10;Tab zum Einrücken, Shift+Tab zum Ausrücken.&#10;Enter setzt Bullet/Number automatisch fort.&#10;&#10;< → Hinweise einfügen (Note, Tip, Warning…)&#10;/ → AI-Funktionen (Zusammenfassen, Weiterschreiben, Übersetzen…)"
                 spellcheck="true" autocomplete="off" autocapitalize="sentences"></textarea>
       <div class="ne-preview" id="ne-preview" aria-hidden="true"></div>
     </div>
