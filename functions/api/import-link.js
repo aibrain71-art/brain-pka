@@ -59,40 +59,116 @@ async function fetchYouTubeOEmbed(url) {
   } catch { return null; }
 }
 
-// ── YouTube: scrape transcript via the watch page ────────────
-// YouTube doesn't expose transcripts via the public Data API on the free
-// tier, but the watch-page HTML embeds ytInitialPlayerResponse which
-// includes a captionTracks array. Each track has a baseUrl returning XML.
+// ── YouTube transcript fetch ─────────────────────────────────
+// Multi-step strategy because Cloudflare Workers' egress IPs are often
+// blocked by YouTube's anti-bot rules on the public watch page:
+//
+//   Attempt 1: Innertube API (the JSON endpoint that YouTube's own
+//              web client uses). Usually NOT blocked because it's the
+//              same endpoint a real browser hits.
+//   Attempt 2: Watch-page HTML scrape (fallback, classic approach).
+//   Attempt 3: Hand back a clear "this approach is blocked" message
+//              so the user knows they can paste the transcript manually.
 async function fetchYouTubeTranscript(videoId) {
-  const watchUrl = 'https://www.youtube.com/watch?v=' + videoId;
-  const html = await fetch(watchUrl, { headers: { 'User-Agent': UA, 'Accept-Language': 'de-DE,de,en;q=0.7' } })
-    .then(r => r.ok ? r.text() : null);
-  if (!html) return { error: 'YouTube watch-page unreachable' };
+  // ── Attempt 1: Innertube /youtubei/v1/player ──
+  // This endpoint speaks JSON natively. Default keys for the WEB client
+  // are publicly known (extracted from youtube.com's own JS bundles).
+  let captionTracks = null;
+  let attemptErrors = [];
 
-  // Extract ytInitialPlayerResponse JS variable
-  const m = html.match(/ytInitialPlayerResponse\s*=\s*(\{[\s\S]+?\});/);
-  if (!m) return { error: 'ytInitialPlayerResponse not found — page format changed?' };
-  let data;
-  try { data = JSON.parse(m[1]); }
-  catch (e) { return { error: 'Could not parse ytInitialPlayerResponse: ' + e.message }; }
-
-  const tracks = data?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
-  if (!Array.isArray(tracks) || tracks.length === 0) {
-    return { error: 'no_captions', message: 'Video hat keine Auto-Untertitel — kein Transkript verfügbar.' };
+  try {
+    const r = await fetch('https://www.youtube.com/youtubei/v1/player?key=AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': UA,
+        'X-YouTube-Client-Name': '1',
+        'X-YouTube-Client-Version': '2.20240101.00.00',
+      },
+      body: JSON.stringify({
+        videoId,
+        context: {
+          client: {
+            clientName: 'WEB',
+            clientVersion: '2.20240101.00.00',
+            hl: 'de',
+            gl: 'CH',
+          },
+        },
+      }),
+    });
+    if (r.ok) {
+      const data = await r.json();
+      const tracks = data?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
+      if (Array.isArray(tracks) && tracks.length) captionTracks = tracks;
+      else attemptErrors.push('Innertube: response has no captionTracks (video has no captions or is restricted)');
+    } else {
+      attemptErrors.push('Innertube HTTP ' + r.status);
+    }
+  } catch (e) {
+    attemptErrors.push('Innertube error: ' + (e?.message || e));
   }
+
+  // ── Attempt 2: classic watch-page HTML scrape ──
+  if (!captionTracks) {
+    try {
+      const watchUrl = 'https://www.youtube.com/watch?v=' + videoId;
+      const html = await fetch(watchUrl, {
+        headers: {
+          'User-Agent': UA,
+          'Accept-Language': 'de-DE,de;q=0.9,en;q=0.7',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        },
+      }).then(r => r.ok ? r.text() : null);
+      if (!html) {
+        attemptErrors.push('Watch-page unreachable (Cloudflare egress likely blocked by YouTube)');
+      } else {
+        const m = html.match(/ytInitialPlayerResponse\s*=\s*(\{[\s\S]+?\});/);
+        if (m) {
+          try {
+            const data = JSON.parse(m[1]);
+            const tracks = data?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
+            if (Array.isArray(tracks) && tracks.length) captionTracks = tracks;
+            else attemptErrors.push('Watch-page: no captionTracks in ytInitialPlayerResponse');
+          } catch (e) {
+            attemptErrors.push('Watch-page JSON parse failed: ' + e.message);
+          }
+        } else {
+          attemptErrors.push('Watch-page: ytInitialPlayerResponse not present (page format changed or bot block)');
+        }
+      }
+    } catch (e) {
+      attemptErrors.push('Watch-page fetch error: ' + (e?.message || e));
+    }
+  }
+
+  if (!captionTracks) {
+    return {
+      error: 'transcript_unavailable',
+      message: 'Transkript konnte nicht geladen werden. YouTube blockt Cloudflare-Server-Requests aktiv. Mögliche Ursachen: (1) Video hat keine Untertitel, (2) Video ist altersbeschränkt oder privat, (3) YouTube blockt unsere IP. Versuche bei Bedarf einen anderen Link oder warte ein paar Stunden.',
+      diagnostics: attemptErrors,
+    };
+  }
+
   // Prefer German, then English, then first available
-  const track = tracks.find(t => t.languageCode === 'de')
-             || tracks.find(t => t.languageCode === 'en')
-             || tracks[0];
-  if (!track?.baseUrl) return { error: 'Caption track without baseUrl' };
+  const track = captionTracks.find(t => t.languageCode === 'de')
+             || captionTracks.find(t => t.languageCode === 'en')
+             || captionTracks[0];
+  if (!track?.baseUrl) return { error: 'Caption track without baseUrl', diagnostics: attemptErrors };
 
-  const xml = await fetch(track.baseUrl, { headers: { 'User-Agent': UA } })
+  // Force XML format if the URL specifies something else (sometimes "json3")
+  let captionUrl = track.baseUrl;
+  if (captionUrl.includes('fmt=')) captionUrl = captionUrl.replace(/fmt=[^&]+/, 'fmt=srv3');
+  else captionUrl = captionUrl + (captionUrl.includes('?') ? '&' : '?') + 'fmt=srv3';
+
+  const xml = await fetch(captionUrl, { headers: { 'User-Agent': UA } })
     .then(r => r.ok ? r.text() : null);
-  if (!xml) return { error: 'Caption XML unreachable' };
+  if (!xml) return { error: 'Caption XML unreachable', diagnostics: attemptErrors };
 
-  // Parse <text start="6.5" dur="3.2">line</text> entries
+  // Parse <text start="6.5" dur="3.2">line</text> entries.
+  // srv3 format also has timedTextLatestRenderer, but srv1/srv3 XML works the same here.
   const entries = [];
-  const rx = /<text[^>]*start="([^"]+)"[^>]*dur="([^"]+)"[^>]*>([\s\S]*?)<\/text>/g;
+  const rx = /<text[^>]*\bstart="([^"]+)"[^>]*\bdur="([^"]+)"[^>]*>([\s\S]*?)<\/text>/g;
   let mm;
   while ((mm = rx.exec(xml))) {
     const txt = mm[3]
@@ -101,6 +177,9 @@ async function fetchYouTubeTranscript(videoId) {
       .replace(/<br\s*\/?>/g, ' ').replace(/<[^>]+>/g, '').trim();
     if (!txt) continue;
     entries.push({ start: parseFloat(mm[1]), duration: parseFloat(mm[2]), text: txt });
+  }
+  if (entries.length === 0) {
+    return { error: 'Transcript XML parsed but empty — caption format unknown', diagnostics: attemptErrors };
   }
   return { entries, language: track.languageCode || 'unknown' };
 }
@@ -298,11 +377,17 @@ export async function onRequestPost({ request, env }) {
       fetchYouTubeOEmbed(url),
       fetchYouTubeTranscript(ytId),
     ]);
-    if (transcript.error === 'no_captions') {
-      return json({ error: transcript.message }, 422);
+    if (transcript.error === 'transcript_unavailable' || transcript.error === 'no_captions') {
+      return json({
+        error: transcript.message || 'Transkript nicht verfügbar.',
+        diagnostics: transcript.diagnostics || [],
+      }, 422);
     }
     if (transcript.error) {
-      return json({ error: 'Transcript fetch failed: ' + transcript.error }, 502);
+      return json({
+        error: 'Transcript fetch failed: ' + transcript.error,
+        diagnostics: transcript.diagnostics || [],
+      }, 502);
     }
     if (!transcript.entries || transcript.entries.length === 0) {
       return json({ error: 'Transcript empty — video may have only music or speech recognition failed.' }, 422);

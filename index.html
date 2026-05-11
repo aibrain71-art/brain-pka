@@ -4856,8 +4856,15 @@ async function importLinkFlow(url) {
     if (!res.ok) {
       toast.style.background = '#3a1f1f';
       toast.style.borderColor = '#5b2a2a';
-      toast.textContent = '⚠️ ' + (data.error || `HTTP ${res.status}`);
-      setTimeout(() => toast.remove(), 6000);
+      // Build a richer error display when diagnostics are present
+      let html = '⚠️ ' + (data.error || `HTTP ${res.status}`);
+      if (Array.isArray(data.diagnostics) && data.diagnostics.length) {
+        const diagText = data.diagnostics.map(d => '• ' + d).join('<br>');
+        html += '<div style="margin-top:8px;font-size:11px;color:var(--text-2);line-height:1.45">' + diagText + '</div>';
+      }
+      toast.innerHTML = html;
+      console.warn('[import-link] failed:', data);
+      setTimeout(() => toast.remove(), 12000);
       return;
     }
 
