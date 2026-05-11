@@ -3169,12 +3169,14 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
   <div class="detail-tabs">
     <div class="detail-tab active" onclick="switchTab('summary',this)" title="Übersicht — Kurz- + Detail-Beschreibung in einem Tab">Übersicht</div>
     <div class="detail-tab" onclick="switchTab('full',this)" title="Volltext — vollständiger Wikipedia-Artikel mit Bildergalerie">Full</div>
+    <div class="detail-tab" id="tab-btn-transcript" onclick="switchTab('transcript',this)" title="YouTube Auto-Transkript mit klickbaren Timestamps" style="display:none">Transkript</div>
     <div class="detail-tab" onclick="switchTab('related',this)" title="Verbindungen zu anderen Einträgen">Verbindungen</div>
   </div>
   <div class="detail-content">
     <div id="tab-summary"></div>
     <div id="tab-detail" style="display:none"></div>
     <div id="tab-full" style="display:none"></div>
+    <div id="tab-transcript" style="display:none"></div>
     <div id="tab-related" style="display:none"></div>
   </div>
 </div>
@@ -3747,17 +3749,47 @@ async function loadFromD1() {
 
   if (n?.notes) {
     for (const row of n.notes) {
-      ENTRIES.push({
+      // Imported links (source_type=youtube|website) get rendered like the
+      // hardcoded Garden cards: icon ▶️ for YouTube, 📰 for websites, with
+      // sourceUrl + youtubeId so the existing detail view "play" button works.
+      const isImportedLink = row.source_type === 'youtube' || row.source_type === 'website';
+      let icon = '📝';
+      if (row.note_type === 'quote')  icon = '”';
+      else if (row.note_type === 'recipe') icon = '🍳';
+      else if (row.source_type === 'youtube') icon = '▶️';
+      else if (row.source_type === 'website') icon = '📰';
+
+      let meta = null;
+      try { meta = row.source_meta ? JSON.parse(row.source_meta) : null; } catch(_) {}
+
+      const entry = {
         id: 'd1-note-' + row.id,
-        type: 'note',
-        icon: row.note_type === 'quote' ? '"' : (row.note_type === 'recipe' ? '🍳' : '📝'),
+        // Imported links get type 'garden' so the existing Garden-rendering
+        // (with "Open source" button, etc.) picks them up automatically.
+        type: isImportedLink ? 'garden' : 'note',
+        icon,
         date: toIso(row.created_at),
         title: row.title,
         preview: (row.body || '').slice(0, 220),
         detailed: row.body || '',
-        body: row.body || '',
+        body: row.full_summary || row.body || '',
         topics: splitTags(row.related_topics),
-      });
+      };
+      if (isImportedLink) {
+        entry.garden_type = row.garden_type || (row.source_type === 'youtube' ? 'Video' : 'Article');
+        entry.sourceUrl = row.source_url || '';
+        if (row.source_type === 'youtube' && meta) {
+          entry.youtubeId = meta.youtubeId || null;
+          entry.youtubeCreator = meta.youtubeCreator || null;
+          entry.youtubeCreatorUrl = meta.youtubeCreatorUrl || null;
+          if (meta.thumbnailUrl) entry.portraitUrl = meta.thumbnailUrl;
+        }
+        // Stash full transcript + summary so the detail view's new
+        // "Transkript" tab can show it.
+        if (meta?.transcript) entry.transcript = meta.transcript;
+        if (row.full_summary)  entry.fullSummary = row.full_summary;
+      }
+      ENTRIES.push(entry);
     }
   }
   if (j?.journal) {
@@ -4788,6 +4820,88 @@ function resetLogo() {
   updateLogoPreview();
 }
 
+// ── Link import flow (YouTube + Website) ──────────────────────
+// Called from the Add-Content modal's Link tile, and also from the
+// share-target handler when the user shares a URL into the PWA from
+// another app. Shows a progress toast, hits /api/import-link, refreshes
+// the entries list from D1 when done.
+async function importLinkFlow(url) {
+  if (!url || !/^https?:\/\//i.test(url)) {
+    alert('Bitte eine gültige URL eingeben (mit http:// oder https://).');
+    return;
+  }
+  // Quick visual toast — sticks until done, replaced by success/error
+  const toast = document.createElement('div');
+  toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:9999;background:var(--surface-2);color:var(--text);border:1px solid var(--border);padding:14px 18px;border-radius:10px;font-size:13px;box-shadow:0 4px 16px rgba(0,0,0,.4);max-width:90vw';
+  toast.textContent = '🔄 Lade Quelle + analysiere…';
+  document.body.appendChild(toast);
+
+  try {
+    const ytId = (() => {
+      try {
+        const u = new URL(url);
+        if (u.hostname === 'youtu.be') return u.pathname.slice(1) || null;
+        if (u.hostname.includes('youtube.com')) return u.searchParams.get('v') || null;
+        return null;
+      } catch { return null; }
+    })();
+    toast.textContent = ytId ? '🎬 YouTube erkannt — lade Transkript…' : '🌐 Webseite — lade Inhalt…';
+
+    const res = await fetch('/api/import-link', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      toast.style.background = '#3a1f1f';
+      toast.style.borderColor = '#5b2a2a';
+      toast.textContent = '⚠️ ' + (data.error || `HTTP ${res.status}`);
+      setTimeout(() => toast.remove(), 6000);
+      return;
+    }
+
+    toast.style.background = '#1f3a25';
+    toast.style.borderColor = '#2a5b34';
+    toast.textContent = `✓ „${data.title}" gespeichert (${data.kind}, ${data.sections_count} Abschnitte). Aktualisiere Liste…`;
+
+    if (typeof loadFromD1 === 'function') {
+      await loadFromD1();
+    }
+    setTimeout(() => toast.remove(), 3500);
+  } catch (e) {
+    toast.style.background = '#3a1f1f';
+    toast.style.borderColor = '#5b2a2a';
+    toast.textContent = '⚠️ Fehler: ' + (e?.message || e);
+    setTimeout(() => toast.remove(), 6000);
+  }
+}
+
+// Mobile share-target handler. When the PWA's manifest declares share_target,
+// the OS share-sheet navigates to "/?share=1&url=...&text=...". We check
+// these params on load and run the import flow.
+(function handleShareTarget() {
+  try {
+    const params = new URLSearchParams(location.search);
+    if (params.get('share') !== '1') return;
+    // The URL may come in 'url' param (when receiving a structured share),
+    // or in 'text' (Android often puts the link in text). Pick the first
+    // valid URL we can find.
+    const candidates = [params.get('url'), params.get('text'), params.get('title')]
+      .filter(Boolean);
+    let target = null;
+    for (const c of candidates) {
+      const m = c.match(/https?:\/\/\S+/);
+      if (m) { target = m[0]; break; }
+    }
+    if (!target) return;
+    // Clean URL from search so a refresh doesn't re-import
+    history.replaceState(null, '', location.pathname);
+    // Give the rest of the app a beat to initialise before showing the toast
+    setTimeout(() => importLinkFlow(target), 800);
+  } catch (e) { console.warn('share-target handler failed:', e); }
+})();
+
 // ── Add-Content modal ─────────────────────────────────────────
 function openAddContent() {
   document.getElementById('add-overlay')?.classList.add('visible');
@@ -4811,8 +4925,8 @@ function addContent(kind) {
       if (typeof openVoiceAssistant === 'function') openVoiceAssistant('note');
       break;
     case 'link': {
-      const url = prompt('URL einfügen (YouTube, Artikel, …):');
-      if (url) alert('Link erkannt:\n' + url + '\n\n(Speicher-Logik kommt im nächsten Schritt.)');
+      const url = prompt('URL einfügen (YouTube, Artikel, Webseite):');
+      if (url) importLinkFlow(url.trim());
       break;
     }
     case 'pdf': {
@@ -6795,6 +6909,13 @@ function openDetail(entry) {
   selectedEntryId = entry.id;
   document.querySelectorAll('.card-item').forEach(c => c.classList.toggle('selected', parseInt(c.dataset.id) === entry.id));
 
+  // Show / hide the Transkript tab based on whether this entry has a
+  // transcript array attached (only D1-imported YouTube videos do).
+  const transcriptBtn = document.getElementById('tab-btn-transcript');
+  if (transcriptBtn) {
+    transcriptBtn.style.display = (Array.isArray(entry.transcript) && entry.transcript.length > 0) ? '' : 'none';
+  }
+
   const header = document.querySelector('#detail-panel .detail-header');
 
   if (entry.type === 'garden') {
@@ -6935,6 +7056,8 @@ function switchTab(name, el) {
   if (detTab) detTab.style.display = 'none';
   document.getElementById('tab-full').style.display = name === 'full' ? '' : 'none';
   document.getElementById('tab-related').style.display = name === 'related' ? '' : 'none';
+  const transcriptEl = document.getElementById('tab-transcript');
+  if (transcriptEl) transcriptEl.style.display = name === 'transcript' ? '' : 'none';
   // Re-render Übersicht when entered. Cheap + idempotent, defends against the
   // race where the AI fetch resolves while the user is on another tab.
   if (name === 'summary') {
@@ -6952,6 +7075,44 @@ function switchTab(name, el) {
     const entry = ENTRIES.find(e => e.id === selectedEntryId);
     if (entry && detTab && detTab.dataset.loaded !== '1') renderDetailTab(entry);
   }
+  if (name === 'transcript') {
+    const entry = ENTRIES.find(x => x.id === selectedEntryId);
+    if (entry && transcriptEl) renderTranscriptTab(entry, transcriptEl);
+  }
+}
+
+// Render the YouTube auto-transcript with clickable timestamps that
+// open the video at the right moment. transcript array is [{start, text}].
+function renderTranscriptTab(entry, container) {
+  const t = entry?.transcript;
+  if (!Array.isArray(t) || t.length === 0) {
+    container.innerHTML = '<div style="color:var(--text-2);padding:18px;font-style:italic">Kein Transkript verfügbar für diesen Eintrag.</div>';
+    return;
+  }
+  const fmt = (s) => {
+    const m = Math.floor(s / 60);
+    const ss = Math.floor(s % 60);
+    return String(m).padStart(2,'0') + ':' + String(ss).padStart(2,'0');
+  };
+  const url = entry.sourceUrl || '';
+  const lang = entry.transcriptLanguage || '';
+  const headerNote = lang ? `<div style="color:var(--text-2);font-size:11px;margin-bottom:12px">Auto-Transkript (Sprache: ${lang})</div>` : '';
+  const lines = t.map(item => {
+    const sec = Math.floor(item.start || 0);
+    const linkUrl = url
+      ? (url + (url.includes('?') ? '&' : '?') + 't=' + sec + 's')
+      : null;
+    const safeText = String(item.text || '')
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    if (linkUrl) {
+      return `<div style="display:flex;gap:10px;align-items:flex-start;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+        <a href="${linkUrl}" target="_blank" rel="noopener" style="font-variant-numeric:tabular-nums;color:var(--accent);text-decoration:none;font-size:11px;flex-shrink:0;min-width:42px;padding-top:2px">${fmt(sec)}</a>
+        <span style="font-size:13px;line-height:1.45">${safeText}</span>
+      </div>`;
+    }
+    return `<div style="display:flex;gap:10px;padding:4px 0"><span style="color:var(--text-2);font-size:11px;min-width:42px">${fmt(sec)}</span><span style="font-size:13px;line-height:1.45">${safeText}</span></div>`;
+  }).join('');
+  container.innerHTML = headerNote + '<div>' + lines + '</div>';
 }
 
 // Detail tab — KI-gemixte Beschreibung aus Notiz + Wikipedia (Phase 3a).

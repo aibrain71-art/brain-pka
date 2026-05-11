@@ -15,12 +15,12 @@
     { "src": "./icon-512.png",  "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ],
   "share_target": {
-    "action": "./",
+    "action": "./?share=1",
     "method": "GET",
     "params": {
-      "title": "share_title",
-      "text":  "share_text",
-      "url":   "share_url"
+      "title": "title",
+      "text":  "text",
+      "url":   "url"
     }
   }
 }

@@ -15,7 +15,7 @@ export async function onRequestGet({ env, request }) {
 
   try {
     const rows = await env.DB.prepare(
-      'SELECT id, slug, title, body, note_type, related_topics, created_at FROM notes ORDER BY created_at DESC LIMIT ?'
+      'SELECT id, slug, title, body, note_type, related_topics, source_url, source_type, source_meta, full_summary, garden_type, created_at FROM notes ORDER BY created_at DESC LIMIT ?'
     ).bind(limit).all();
     return new Response(JSON.stringify({ ok: true, count: rows.results.length, notes: rows.results }), {
       headers: { 'Content-Type': 'application/json' },
