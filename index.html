@@ -4951,9 +4951,14 @@ async function importLinkFlow(url, opts = {}) {
 
     toast.style.background = '#1f3a25';
     toast.style.borderColor = '#2a5b34';
-    const successLabel = data.kind === 'bookmark'
-      ? `🔖 „${data.title}" als Lesezeichen gespeichert.`
-      : `✓ „${data.title}" gespeichert (${data.kind}${data.sections_count ? ', ' + data.sections_count + ' Abschnitte' : ''}). Aktualisiere Liste…`;
+    let successLabel;
+    if (data.kind === 'bookmark') {
+      successLabel = `🔖 „${data.title}" als Lesezeichen gespeichert.`;
+    } else if (data.is_recipe) {
+      successLabel = `🍳 Rezept erkannt: „${data.title}" — landet im Kochbuch.`;
+    } else {
+      successLabel = `✓ „${data.title}" gespeichert (${data.kind}${data.sections_count ? ', ' + data.sections_count + ' Abschnitte' : ''}). Aktualisiere Liste…`;
+    }
     toast.textContent = successLabel;
 
     if (typeof loadFromD1 === 'function') {

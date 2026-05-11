@@ -267,7 +267,7 @@ Liefere AUSSCHLIESSLICH ein einzelnes JSON-Objekt mit dieser Struktur:
   "title": "Polierter Titel (max 80 Zeichen, auf Deutsch wenn der Inhalt deutsch ist, sonst Originaltitel beibehalten)",
   "preview": "Kurze Einleitung, max 200 Zeichen, ein Satz",
   "detailed": "Ausführlichere Beschreibung, ca 400-600 Zeichen, 2-3 Sätze, sagt klar worum es geht",
-  "garden_type": "Eine von: Business, Article, Book, Health, Tech, Politics, Science, History, Philosophy, Lifestyle, Finance, Education, Other",
+  "garden_type": "Eine von: Business, Article, Book, Recipe, Health, Tech, Politics, Science, History, Philosophy, Lifestyle, Finance, Education, Other",
   "topics": ["hierarchische pfade kleinbuchstaben mit slashes, z.B. business/leadership oder health/nutrition. 2-5 Tags."],
   "entities": [
     { "name": "Tony Stark", "type": "Person" },
@@ -282,10 +282,37 @@ Liefere AUSSCHLIESSLICH ein einzelnes JSON-Objekt mit dieser Struktur:
         ${kind === 'youtube' ? '{ "text": "Aussage als ganzer Satz auf Deutsch, paraphrasiert nicht wörtlich zitiert, ~50-200 Zeichen", "seconds": 6 }' : '{ "text": "Aussage als ganzer Satz auf Deutsch, paraphrasiert" }'}
       ]
     }
-  ]
+  ],
+  "is_recipe": false,
+  "recipe": null
 }
 
-Regeln:
+WENN der Inhalt ein REZEPT ist (Kochrezept, Backrezept, Cocktail-Anleitung mit Zutaten + Zubereitungsschritten), setze "is_recipe": true UND fülle "recipe" mit dieser Struktur:
+
+{
+  "servings": 4,
+  "total_minutes": 45,
+  "prep_minutes": 15,
+  "cook_minutes": 30,
+  "location": "Herd, Backofen",
+  "equipment": ["Backofen", "grosse Pfanne", "Sieb"],
+  "ingredients": ["500 g Spaghetti", "4 Tomaten", "1 Zwiebel"],
+  "steps": ["Wasser zum Kochen bringen", "Zwiebel und Knoblauch hacken"],
+  "calories_per_serving": 650,
+  "protein_g": 30,
+  "carbs_g": 80,
+  "fat_g": 20,
+  "tags": ["italienisch", "schnell"],
+  "notes": "Optionale Anmerkungen"
+}
+
+Rezept-Regeln:
+- "is_recipe": true NUR wenn der Inhalt klar Zutaten UND Schritte enthält. Kochvideos die nur über Essen reden zählen nicht als Rezept.
+- garden_type bei Rezepten = "Recipe".
+- ingredients[] und steps[] sind PFLICHT bei is_recipe=true.
+- Fehlende Felder (z.B. Nährwerte nicht angegeben) → null oder weglassen, NICHT halluzinieren.
+
+Allgemeine Regeln:
 - ${kind === 'youtube' ? 'Bei YouTube IMMER "seconds" pro Bullet — nimm den Start-Timestamp der Caption-Zeile in der die Aussage beginnt.' : 'Bei Websites KEIN seconds-Feld.'}
 - 4-8 Sections insgesamt, jede Section 2-5 Bullets.
 - Bullets sind paraphrasiert (eigene Worte), nicht 1:1 zitiert.
@@ -536,6 +563,35 @@ export async function onRequestPost({ request, env }) {
       .slice(0, 30);
   }
 
+  // Recipe auto-detection: if Claude recognised this as a recipe, attach
+  // the structured recipe data so the Rezept tab + Cookbook page render
+  // it properly. Note: we keep the regular preview/detailed/sections AS
+  // WELL — recipes still benefit from a short overview blurb.
+  const isRecipe = analysis.is_recipe === true
+    && analysis.recipe
+    && Array.isArray(analysis.recipe.ingredients)
+    && analysis.recipe.ingredients.length > 0
+    && Array.isArray(analysis.recipe.steps)
+    && analysis.recipe.steps.length > 0;
+  if (isRecipe) {
+    sourceMeta.recipe = {
+      servings:      Number.isInteger(analysis.recipe.servings)      ? analysis.recipe.servings      : 4,
+      total_minutes: Number.isInteger(analysis.recipe.total_minutes) ? analysis.recipe.total_minutes : null,
+      prep_minutes:  Number.isInteger(analysis.recipe.prep_minutes)  ? analysis.recipe.prep_minutes  : null,
+      cook_minutes:  Number.isInteger(analysis.recipe.cook_minutes)  ? analysis.recipe.cook_minutes  : null,
+      location:      typeof analysis.recipe.location === 'string'   ? analysis.recipe.location      : null,
+      equipment:     Array.isArray(analysis.recipe.equipment) ? analysis.recipe.equipment.filter(Boolean) : [],
+      ingredients:   analysis.recipe.ingredients.filter(Boolean),
+      steps:         analysis.recipe.steps.filter(Boolean),
+      calories_per_serving: Number.isInteger(analysis.recipe.calories_per_serving) ? analysis.recipe.calories_per_serving : null,
+      protein_g:     Number.isInteger(analysis.recipe.protein_g) ? analysis.recipe.protein_g : null,
+      carbs_g:       Number.isInteger(analysis.recipe.carbs_g)   ? analysis.recipe.carbs_g   : null,
+      fat_g:         Number.isInteger(analysis.recipe.fat_g)     ? analysis.recipe.fat_g     : null,
+      tags:          Array.isArray(analysis.recipe.tags) ? analysis.recipe.tags.filter(Boolean) : [],
+      notes:         typeof analysis.recipe.notes === 'string' ? analysis.recipe.notes : '',
+    };
+  }
+
   // Build the long-form markdown summary with timestamp links
   const full_summary = buildFullSummary(analysis.sections, kind, url);
 
@@ -544,7 +600,11 @@ export async function onRequestPost({ request, env }) {
   const slug  = slugify(title) + '-' + Date.now().toString(36);
   const preview  = analysis.preview  || '';
   const detailed = analysis.detailed || '';
-  const garden_type = analysis.garden_type || (kind === 'youtube' ? 'Video' : 'Article');
+  // When auto-detected as recipe, note_type='recipe' so it shows up in
+  // /api/recipes and on the cookbook page. Otherwise note_type tracks
+  // the source kind (youtube|website).
+  const noteType = isRecipe ? 'recipe' : kind;
+  const garden_type = isRecipe ? 'Recipe' : (analysis.garden_type || (kind === 'youtube' ? 'Video' : 'Article'));
   const tags = Array.isArray(analysis.topics) ? analysis.topics.join(',') : '';
 
   try {
@@ -552,7 +612,7 @@ export async function onRequestPost({ request, env }) {
       'INSERT INTO notes (slug, title, body, note_type, related_topics, source_url, source_type, source_meta, full_summary, garden_type) ' +
       'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     ).bind(
-      slug, title, detailed, kind, tags,
+      slug, title, detailed, noteType, tags,
       url, kind, JSON.stringify(sourceMeta), full_summary, garden_type
     ).run();
     return json({
@@ -561,6 +621,7 @@ export async function onRequestPost({ request, env }) {
       slug, title, preview, detailed, garden_type, topics: analysis.topics || [],
       sections_count: (analysis.sections || []).length,
       kind,
+      is_recipe: isRecipe,
       transcript_source: manualTranscript ? 'manual_paste' : 'auto_fetch',
     });
   } catch (e) {
