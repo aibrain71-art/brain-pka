@@ -3312,7 +3312,44 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
         <div class="settings-hint">Lädt für jede Person und Organisation eine Kurz-, Detail- und Vollzusammenfassung sowie Bild + Cross-References aus Wikipedia. Bereits angereicherte Einträge werden übersprungen. Mit Pause zwischen Requests, damit Wikipedia uns nicht limitiert.</div>
       </div>
 
-      <!-- Voice-mode chat-thread timelines toggle -->
+      <!-- Reihenfolge: Stimme zuerst (am häufigsten benutzt), dann Selbsttest
+           (Diagnose), dann Personas (Setup), dann Darstellung (UI-Toggles). -->
+
+      <!-- ElevenLabs voice — minimalistisch: ein Lade-Button, ein Dropdown,
+           ein Test-Button. Auswahl persistiert sofort beim Wechsel.
+           Schliessen der Settings = aktive Stimme. -->
+      <div class="settings-group" data-section="voice">
+        <div class="settings-label">PKA-Stimme (ElevenLabs)</div>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+          <button class="settings-btn" id="btn-load-voices" onclick="onLoadVoicesManual()">Stimmen laden</button>
+          <button class="settings-btn ghost" onclick="onTestElevenVoice()" title="Spielt einen Testsatz mit der ausgewählten Stimme ab">▶ Test</button>
+        </div>
+        <select id="settings-eleven-voice" class="settings-input" style="width:100%">
+          <option value="">⏳ Klick „Stimmen laden" oder warte…</option>
+        </select>
+        <div id="settings-eleven-status" style="margin-top:8px;font-size:11px;line-height:1.5;color:var(--text-3)"></div>
+        <div class="settings-hint">Stimme auswählen → Settings schliessen → ist aktiv. Falls Stimmen nicht laden, ist der Cloudflare-Secret <code>ELEVENLABS_API_KEY</code> nicht gesetzt (im <a href="https://dash.cloudflare.com/?to=/:account/pages" target="_blank" style="color:var(--accent)">Cloudflare Dashboard</a> nachprüfen).</div>
+      </div>
+
+      <!-- System-Selbsttest — diagnostiziert in einem Klick wo's hängt:
+           Mikrofon-Permission, /api/voices, /api/chat, /api/tts —
+           jeweils mit Fix-Anweisung bei Fehler. -->
+      <div class="settings-group" data-section="voice">
+        <div class="settings-label">System-Selbsttest</div>
+        <button class="settings-btn" onclick="vaRunSelfTest()" style="margin-bottom:8px">🩺 Selbsttest starten</button>
+        <pre id="selftest-output" style="font-size:11px;line-height:1.6;color:var(--text-2);background:var(--surface-2);padding:10px 12px;border-radius:6px;border:1px solid var(--border);white-space:pre-wrap;word-break:break-word;max-height:280px;overflow-y:auto;display:none"></pre>
+        <div class="settings-hint">Prüft Mikro + Backend-Endpoints + End-to-End. Bei Fehler steht direkt darunter wie du's fixt (mit Link zum richtigen Cloudflare-Setting).</div>
+      </div>
+
+      <!-- Voice-mode personas — scoped to the PKA voice assistant only -->
+      <div class="settings-group" data-section="voice">
+        <div class="settings-label">Sprach-Personas (nur PKA-Sprachmodus)</div>
+        <div id="settings-personas-list" class="personas-list"></div>
+        <button class="settings-btn" onclick="addPersona()">+ Neue Persona</button>
+        <div class="settings-hint">Diese Personas gelten <strong>nur</strong> im Sprachassistenten-Modus (das blaue-Bubble-Fenster) — sie beeinflussen <strong>nicht</strong> den App-Chat oder andere Teile von Larry. Jede Persona hat einen System-Prompt (Sprachverhalten). Eine ist Standard; jederzeit umschaltbar.</div>
+      </div>
+
+      <!-- Voice-mode display + sound options (less-frequently changed, so at the bottom) -->
       <div class="settings-group" data-section="voice">
         <div class="settings-label">Sprachmodus — Darstellung</div>
         <div class="settings-pref-row">
@@ -3366,43 +3403,6 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
             <button class="settings-btn" onclick="vaUploadCustomSound()" title="Audio-Datei hochladen">+ Eigener Sound</button>
           </div>
         </div>
-      </div>
-      <!-- Voice-mode personas — scoped to the PKA voice assistant only -->
-      <div class="settings-group" data-section="voice">
-        <div class="settings-label">Sprach-Personas (nur PKA-Sprachmodus)</div>
-        <div id="settings-personas-list" class="personas-list"></div>
-        <button class="settings-btn" onclick="addPersona()">+ Neue Persona</button>
-        <div class="settings-hint">Diese Personas gelten <strong>nur</strong> im Sprachassistenten-Modus (das blaue-Bubble-Fenster) — sie beeinflussen <strong>nicht</strong> den App-Chat oder andere Teile von Larry. Jede Persona hat einen System-Prompt (Sprachverhalten) und eine optionale ElevenLabs-Stimme. Eine ist Standard; jederzeit umschaltbar im Sprachfenster.</div>
-      </div>
-
-      <!-- System-Selbsttest — diagnostiziert in einem Klick wo's hängt:
-           Mikrofon-Permission, /api/voices, /api/chat, /api/tts —
-           jeweils mit Fix-Anweisung bei Fehler. -->
-      <div class="settings-group" data-section="voice">
-        <div class="settings-label">System-Selbsttest</div>
-        <button class="settings-btn" onclick="vaRunSelfTest()" style="margin-bottom:8px">🩺 Selbsttest starten</button>
-        <pre id="selftest-output" style="font-size:11px;line-height:1.6;color:var(--text-2);background:var(--surface-2);padding:10px 12px;border-radius:6px;border:1px solid var(--border);white-space:pre-wrap;word-break:break-word;max-height:280px;overflow-y:auto;display:none"></pre>
-        <div class="settings-hint">Prüft Mikro + Backend-Endpoints + End-to-End. Bei Fehler steht direkt darunter wie du's fixt (mit Link zum richtigen Cloudflare-Setting).</div>
-      </div>
-
-      <!-- API-Keys werden server-seitig in Cloudflare Secrets verwaltet —
-           keine Eingabe in der UI nötig. Falls für lokale Entwicklung doch
-           ein Key gesetzt werden muss: Browser-Konsole → setAnthropicKey('sk-ant-...') -->
-
-      <!-- ElevenLabs voice — minimalistisch: ein Lade-Button, ein Dropdown,
-           ein Test-Button. Auswahl persistiert sofort beim Wechsel.
-           Schliessen der Settings = aktive Stimme. -->
-      <div class="settings-group" data-section="voice">
-        <div class="settings-label">PKA-Stimme (ElevenLabs)</div>
-        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
-          <button class="settings-btn" id="btn-load-voices" onclick="onLoadVoicesManual()">Stimmen laden</button>
-          <button class="settings-btn ghost" onclick="onTestElevenVoice()" title="Spielt einen Testsatz mit der ausgewählten Stimme ab">▶ Test</button>
-        </div>
-        <select id="settings-eleven-voice" class="settings-input" style="width:100%">
-          <option value="">⏳ Klick „Stimmen laden" oder warte…</option>
-        </select>
-        <div id="settings-eleven-status" style="margin-top:8px;font-size:11px;line-height:1.5;color:var(--text-3)"></div>
-        <div class="settings-hint">Stimme auswählen → Settings schliessen → ist aktiv. Falls Stimmen nicht laden, ist der Cloudflare-Secret <code>ELEVENLABS_API_KEY</code> nicht gesetzt (im <a href="https://dash.cloudflare.com/?to=/:account/pages" target="_blank" style="color:var(--accent)">Cloudflare Dashboard</a> nachprüfen).</div>
       </div>
     </div><!-- /settings-body -->
     </div><!-- /settings-layout -->
