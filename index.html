@@ -3801,6 +3801,9 @@ async function loadFromD1() {
         // "Transkript" tab can show it.
         if (meta?.transcript) entry.transcript = meta.transcript;
         if (row.full_summary)  entry.fullSummary = row.full_summary;
+        // Entities Claude extracted from the transcript/website — passed
+        // through to the Verbindungen tab. Each entry: { name, type }.
+        if (Array.isArray(meta?.entities)) entry.linkEntities = meta.entities;
         if (isBookmark) {
           entry.isBookmark = true;
           // Prefix the title with 📖 in the list view so it's clear at
@@ -3857,6 +3860,37 @@ async function loadFromD1() {
         topics: splitTags(row.tags),
       });
     }
+  }
+
+  // ── Entity matching for D1-imports ──────────────────────────
+  // For every D1 import that has linkEntities (Claude-extracted names),
+  // match the names against existing ENTRIES (1722 Garden cards + other
+  // D1 entries) by lowercased title. Matched IDs go into extractedEntities
+  // so the existing Verbindungen renderer picks them up. Unmatched names
+  // stay on entry.linkEntities and are rendered as plain "mentioned" chips.
+  const titleToId = new Map();
+  for (const e of ENTRIES) {
+    if (!e || !e.title) continue;
+    const t = String(e.title).trim().toLowerCase().replace(/^📖\s*/, '');
+    if (t.length < 3) continue;
+    if (!titleToId.has(t)) titleToId.set(t, e.id);
+  }
+  for (const e of ENTRIES) {
+    if (!Array.isArray(e.linkEntities) || !e.linkEntities.length) continue;
+    const ids = [];
+    const unmatched = [];
+    for (const ent of e.linkEntities) {
+      const n = (ent?.name || '').trim().toLowerCase();
+      if (!n) continue;
+      const id = titleToId.get(n);
+      if (id != null && id !== e.id) {
+        if (!ids.includes(id)) ids.push(id);
+      } else {
+        unmatched.push(ent);
+      }
+    }
+    e.extractedEntities = Array.from(new Set([...(e.extractedEntities || []), ...ids]));
+    e.unmatchedEntities = unmatched;
   }
 
   _D1_LOADED = true;
@@ -8140,9 +8174,12 @@ function gardenCardsMentionedInSummary(entry) {
 function renderRelatedTab(entry) {
   const tab = document.getElementById('tab-related');
 
-  // Garden card: full Verbindungen schema (same as Note-Taking), driven by
+  // Garden card OR D1-imported link: full Verbindungen schema driven by
   // extractedEntities from body + journal-side cross-references via aliases.
-  if (entry.type === 'garden') {
+  // D1 imports are type='note' (so they show in the standard notes list)
+  // but flagged with fromD1Link=true so they participate in the same
+  // entity graph as hardcoded Garden cards.
+  if (entry.type === 'garden' || entry.fromD1Link === true) {
     // Entities mentioned IN this card's body (other Garden cards by id)
     const myEntities = (entry.extractedEntities || [])
       .map(id => ENTRIES.find(e => e.id === id))
@@ -8185,6 +8222,26 @@ function renderRelatedTab(entry) {
           ${wikiBtn}
         </div>
       </div>`;
+
+    // Creator block — for D1-imported YouTube videos surface the channel
+    // as a distinct first-class connection. Click → opens the creator
+    // channel in a new tab (we don't have an internal page for them).
+    if (entry.fromD1Link && entry.youtubeCreator) {
+      const creator = entry.youtubeCreator;
+      const creatorUrl = entry.youtubeCreatorUrl || '';
+      html += `
+        <div class="conn-section">
+          <div class="conn-section-head plain">Creator</div>
+          <div class="entity-chips">
+            <div class="entity-chip" onclick="${creatorUrl ? `window.open(${attrJson(creatorUrl)}, '_blank')` : ''}"
+                 title="${escapeHtml(creator)} — YouTube-Channel öffnen">
+              <div class="entity-avatar" style="background:#cc0000;color:white">▶</div>
+              <span class="entity-name">${escapeHtml(creator)}</span>
+              ${creatorUrl ? `<span class="web-link" title="YouTube-Channel">🔗</span>` : ''}
+            </div>
+          </div>
+        </div>`;
+    }
 
     if (outbound.length) {
       html += `
@@ -8250,7 +8307,54 @@ function renderRelatedTab(entry) {
         </div>`;
     });
 
-    if (!outbound.length && !myEntities.length) {
+    // Unmatched entities — names Claude extracted that don't have a card.
+    // Shown as plain text chips grouped by type. Click → search the term
+    // across all entries so the user can decide if they want to create a
+    // card for it later.
+    if (Array.isArray(entry.unmatchedEntities) && entry.unmatchedEntities.length) {
+      const byKind = {};
+      for (const u of entry.unmatchedEntities) {
+        const t = (u.type || 'Topic');
+        (byKind[t] = byKind[t] || []).push(u);
+      }
+      const kindLabel = {
+        Person: 'Erwähnte Personen (ohne Karte)',
+        Place: 'Erwähnte Orte (ohne Karte)',
+        Organization: 'Erwähnte Organisationen (ohne Karte)',
+        Topic: 'Themen',
+        Book: 'Bücher',
+        Movie: 'Filme',
+        Product: 'Produkte',
+        Event: 'Ereignisse',
+      };
+      const kindEmoji = {
+        Person: '👤', Place: '📍', Organization: '🏢',
+        Topic: '🏷', Book: '📚', Movie: '🎬', Product: '📦', Event: '📅',
+      };
+      for (const k of Object.keys(byKind)) {
+        const label = kindLabel[k] || ('Erwähnt: ' + k);
+        const emoji = kindEmoji[k] || '•';
+        html += `
+          <div class="conn-section">
+            <div class="conn-section-head plain">${label}</div>
+            <div class="entity-chips">
+              ${byKind[k].map(u => `<div class="entity-chip"
+                  style="opacity:.85"
+                  title="${escapeHtml(u.name)} — kein Eintrag in der Datenbank. Klick durchsucht alle Einträge."
+                  onclick="document.getElementById('search').value=${attrJson(u.name)}; if(typeof applyFilters==='function') applyFilters();">
+                <div class="entity-avatar" style="background:#444">${emoji}</div>
+                <span class="entity-name">${escapeHtml(u.name)}</span>
+              </div>`).join('')}
+            </div>
+          </div>`;
+      }
+    }
+
+    const hasAnyConnection = outbound.length
+      || myEntities.length
+      || (entry.unmatchedEntities && entry.unmatchedEntities.length)
+      || (entry.fromD1Link && entry.youtubeCreator);
+    if (!hasAnyConnection) {
       html += `<div class="loading-md">Noch keine Verbindungen erkannt. Klicke „Mehr Verbindungen generieren" oder erweitere die Zusammenfassung.</div>`;
     }
     tab.innerHTML = html;

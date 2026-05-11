@@ -269,6 +269,12 @@ Liefere AUSSCHLIESSLICH ein einzelnes JSON-Objekt mit dieser Struktur:
   "detailed": "Ausführlichere Beschreibung, ca 400-600 Zeichen, 2-3 Sätze, sagt klar worum es geht",
   "garden_type": "Eine von: Business, Article, Book, Health, Tech, Politics, Science, History, Philosophy, Lifestyle, Finance, Education, Other",
   "topics": ["hierarchische pfade kleinbuchstaben mit slashes, z.B. business/leadership oder health/nutrition. 2-5 Tags."],
+  "entities": [
+    { "name": "Tony Stark", "type": "Person" },
+    { "name": "Manhattan", "type": "Place" },
+    { "name": "Stark Industries", "type": "Organization" },
+    { "name": "Quantenphysik", "type": "Topic" }
+  ],
   "sections": [
     {
       "heading": "Section-Überschrift auf Deutsch (Sentence-Case)",
@@ -285,7 +291,8 @@ Regeln:
 - Bullets sind paraphrasiert (eigene Worte), nicht 1:1 zitiert.
 - garden_type strikt eine der vorgegebenen Optionen.
 - topics: hierarchische Slugs in Kleinbuchstaben, mit '/' getrennt, ohne Umlaute (ae/oe/ue/ss).
-- Falls Inhalt englisch ist, übersetze die Bullets und Headings auf Deutsch (paraphrasiert).
+- entities: ALLE namentlich erwähnten Personen, Orte/Städte/Länder/Kontinente, Organisationen/Firmen/Universitäten, sowie 3-8 zentrale Themen/Konzepte. WICHTIG: nur explizit erwähnte Eigennamen, KEINE allgemeinen Wörter ("der Mann", "ein Unternehmen"). type-Optionen: Person, Place, Organization, Topic, Book, Movie, Product, Event. Mindestens 5 Einträge wenn der Inhalt es hergibt, max 30. Halluziniere NIE Namen die nicht im Inhalt vorkommen.
+- Falls Inhalt englisch ist, übersetze die Bullets und Headings auf Deutsch (paraphrasiert) ABER lasse Eigennamen (Personen/Orte) in ihrer Originalform.
 - KEINE Erklärung vor oder nach dem JSON, KEIN \`\`\`json-Block — nur das pure JSON.
 
 Heute: ${today}`;
@@ -512,10 +519,22 @@ export async function onRequestPost({ request, env }) {
     sourceMeta = { websiteTitle: site.title || null, websiteDescription: site.description || null };
   }
 
+  // Store the analysis entities in source_meta so the browser can render
+  // them in the Verbindungen tab without re-running Claude. Done AFTER
+  // analyseWithClaude returns below.
+
   // Run Claude analysis
   let analysis;
   try { analysis = await analyseWithClaude(env, kind, analysisInput); }
   catch (e) { return json({ error: 'Analysis failed: ' + (e.message || e) }, 502); }
+
+  // Attach extracted entities to source_meta so the browser can render
+  // them in the Verbindungen tab + match them against existing Garden cards.
+  if (Array.isArray(analysis.entities)) {
+    sourceMeta.entities = analysis.entities
+      .filter(e => e && typeof e.name === 'string' && e.name.trim().length > 1)
+      .slice(0, 30);
+  }
 
   // Build the long-form markdown summary with timestamp links
   const full_summary = buildFullSummary(analysis.sections, kind, url);
