@@ -805,10 +805,13 @@ export async function executeTool(name, args, env) {
         const qtyUnit = args.qty_unit ? String(args.qty_unit).slice(0, 24) : null;
         const notes = args.notes ? String(args.notes).slice(0, 500) : null;
         const r = await env.DB.prepare(
+          // NULL-preserving — see pantry.js for rationale
           `INSERT INTO pantry (item, item_key, qty_value, qty_unit, notes, source)
              VALUES (?, ?, ?, ?, ?, 'manual')
              ON CONFLICT(item_key) DO UPDATE SET
-               qty_value = COALESCE(pantry.qty_value, 0) + COALESCE(excluded.qty_value, 0),
+               qty_value = CASE
+                 WHEN pantry.qty_value IS NULL OR excluded.qty_value IS NULL THEN NULL
+                 ELSE pantry.qty_value + excluded.qty_value END,
                qty_unit = COALESCE(pantry.qty_unit, excluded.qty_unit),
                notes = COALESCE(excluded.notes, pantry.notes),
                updated_at = CURRENT_TIMESTAMP

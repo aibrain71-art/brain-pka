@@ -130,10 +130,15 @@ export async function onRequestPut({ env, request }) {
           const itemKey = normalizeItemKey(row.item);
           if (itemKey) {
             await env.DB.prepare(
+              // NULL-preserving qty addition: NULL means "vorhanden, Menge
+              // egal" — once a row is NULL, adding more NULL or anything
+              // else must keep it NULL (don't accidentally collapse to 0).
               `INSERT INTO pantry (item, item_key, qty_value, qty_unit, source)
                  VALUES (?, ?, ?, ?, 'auto-shopping')
                  ON CONFLICT(item_key) DO UPDATE SET
-                   qty_value = COALESCE(pantry.qty_value, 0) + COALESCE(excluded.qty_value, 0),
+                   qty_value = CASE
+                     WHEN pantry.qty_value IS NULL OR excluded.qty_value IS NULL THEN NULL
+                     ELSE pantry.qty_value + excluded.qty_value END,
                    qty_unit = COALESCE(pantry.qty_unit, excluded.qty_unit),
                    updated_at = CURRENT_TIMESTAMP`
             ).bind(

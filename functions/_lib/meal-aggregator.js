@@ -28,21 +28,23 @@ export function normalizeItemKey(name) {
   // Collapse whitespace
   s = s.replace(/\s+/g, ' ');
   // Light German plural stemming — only the final word, conservative.
-  // Apply at most ONE rule. Order matters: longest endings first.
+  // We strip ONLY the trailing 'n'. That collapses both common patterns:
+  //   "Karotten" → "karotte"   AND   "Karotte" stays "karotte"   → MATCH
+  //   "Zwiebeln" → "zwiebel"   AND   "Zwiebel" stays "zwiebel"   → MATCH
+  //   "Tomaten" → "tomate"     AND   "Tomate" stays "tomate"     → MATCH
+  //   "Bohnen" → "bohne"       AND   "Bohne" stays "bohne"       → MATCH
+  //
+  // Earlier version stripped '-en' which broke this: "Karotten" → "karott"
+  // didn't match "Karotte" → "karotte". The fix is to keep the trailing
+  // 'e' which is the German plural's link letter.
+  //
+  // Length check: only strip when the stem stays ≥3 chars (so "Ei" / "An" /
+  // similar short words don't get over-shortened).
   const words = s.split(' ');
   const lastIdx = words.length - 1;
   const last = words[lastIdx];
-  // -innen → keep root (e.g. "Lehrerinnen" — irrelevant for cooking but safe)
-  // -er    → keep (e.g. "Kinder" — irrelevant; could be "Eier" though, leave it)
-  // -en    → drop -en           ("Tomaten" → "tomat", "Zwiebeln" → "zwiebel")
-  // -n     → drop -n             ("Kartoffeln" → "kartoffel", "Karotten" → "karotte")
-  // -e     → drop -e             ("Mehle" → "mehl"; minimal risk)
-  // Skip if root would be <3 chars (e.g. "Tee" stays "tee", not "t")
-  for (const suffix of ['en', 'n']) {
-    if (last.endsWith(suffix) && last.length - suffix.length >= 4) {
-      words[lastIdx] = last.slice(0, -suffix.length);
-      break;
-    }
+  if (last.endsWith('n') && last.length >= 4) {
+    words[lastIdx] = last.slice(0, -1);
   }
   return words.join(' ');
 }
@@ -248,27 +250,49 @@ export function subtractPantry(aggregated, pantryRows) {
     // If any pantry row has qty_value NULL → "have it, don't buy"
     if (matches.some(p => p.qty_value == null)) continue;
 
-    // Try to subtract within same unit-family
+    // Item has no qty (e.g. "Salz nach Bedarf") — keep but no subtraction
     if (item.qty_value == null) { result.push(item); continue; }
-    const itemBase = toBaseUnit(item.qty_value, item.qty_unit);
-    if (!itemBase) { result.push(item); continue; } // can't compute → keep as-is
 
-    let pantryHaveBase = 0;
-    for (const p of matches) {
-      const pb = toBaseUnit(p.qty_value, p.qty_unit);
-      if (pb && pb.family === itemBase.family) pantryHaveBase += pb.qty;
+    // Path A: convertible unit (g/kg/ml/dl/l) — sum in base unit
+    const itemBase = toBaseUnit(item.qty_value, item.qty_unit);
+    if (itemBase) {
+      let pantryHaveBase = 0;
+      for (const p of matches) {
+        const pb = toBaseUnit(p.qty_value, p.qty_unit);
+        if (pb && pb.family === itemBase.family) pantryHaveBase += pb.qty;
+      }
+      if (pantryHaveBase >= itemBase.qty) continue; // fully covered
+      const remainingBase = itemBase.qty - pantryHaveBase;
+      const formatted = fromBaseUnit(remainingBase, itemBase.family);
+      result.push({
+        ...item,
+        qty_value: roundQty(formatted.qty),
+        qty_unit: formatted.unit,
+        notes: (item.notes ? item.notes + '; ' : '') + 'Vorrat berücksichtigt',
+      });
+      continue;
     }
 
-    if (pantryHaveBase >= itemBase.qty) continue; // fully covered
-    const remainingBase = itemBase.qty - pantryHaveBase;
-    const formatted = fromBaseUnit(remainingBase, itemBase.family);
-    result.push({
-      ...item,
-      qty_value: roundQty(formatted.qty),
-      qty_unit: formatted.unit,
-      notes: (item.notes ? item.notes + '; ' : '') +
-             'Vorrat berücksichtigt',
-    });
+    // Path B: non-convertible unit (Stk, Bund, EL, Eier, empty…) —
+    // subtract only if pantry uses the SAME raw unit string. "6 Stk" +
+    // "2 Stk" = subtract scalars. Different raw units → no match,
+    // keep full quantity.
+    const itemUnit = (item.qty_unit || '').toLowerCase().trim();
+    let rawHave = 0;
+    for (const p of matches) {
+      const pUnit = (p.qty_unit || '').toLowerCase().trim();
+      if (pUnit === itemUnit && Number.isFinite(p.qty_value)) rawHave += p.qty_value;
+    }
+    if (rawHave >= item.qty_value) continue;
+    if (rawHave > 0) {
+      result.push({
+        ...item,
+        qty_value: roundQty(item.qty_value - rawHave),
+        notes: (item.notes ? item.notes + '; ' : '') + 'Vorrat berücksichtigt',
+      });
+    } else {
+      result.push(item);
+    }
   }
   return result;
 }

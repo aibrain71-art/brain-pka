@@ -43,12 +43,16 @@ export async function onRequestPost({ env, request }) {
   const notes = body.notes ? String(body.notes).slice(0, 500) : null;
 
   try {
-    // UPSERT via item_key — add qty if existing, insert if new
+    // UPSERT via item_key — add qty if existing, insert if new.
+    // NULL-preserving: if either side is NULL ("vorhanden, Menge egal"),
+    // result stays NULL — don't collapse to 0.
     const r = await env.DB.prepare(
       `INSERT INTO pantry (item, item_key, qty_value, qty_unit, notes, source)
        VALUES (?, ?, ?, ?, ?, 'manual')
        ON CONFLICT(item_key) DO UPDATE SET
-         qty_value = COALESCE(pantry.qty_value, 0) + COALESCE(excluded.qty_value, 0),
+         qty_value = CASE
+           WHEN pantry.qty_value IS NULL OR excluded.qty_value IS NULL THEN NULL
+           ELSE pantry.qty_value + excluded.qty_value END,
          qty_unit = COALESCE(pantry.qty_unit, excluded.qty_unit),
          notes = COALESCE(excluded.notes, pantry.notes),
          updated_at = CURRENT_TIMESTAMP

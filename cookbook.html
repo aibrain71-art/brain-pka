@@ -3218,6 +3218,25 @@ document.addEventListener('input', e => {
   if (e.target.id === 'rp-search') renderPickerList(e.target.value);
 });
 
+// Modal close UX — Esc + click-outside for all plan-overlay modals.
+// Fixes the "unclosable modal" bug also seen in extract-details
+// earlier; same fix pattern (data-modal tag + listeners attached once
+// at init time rather than per-open).
+function wirePlanModalClose() {
+  ['rp-overlay', 'ps-overlay', 'ph-overlay'].forEach(id => {
+    const ov = document.getElementById(id);
+    if (!ov || ov.dataset.closeWired) return;
+    ov.dataset.closeWired = '1';
+    ov.addEventListener('click', e => {
+      if (e.target === ov) ov.classList.remove('open');
+    });
+  });
+}
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  document.querySelectorAll('.rp-overlay.open').forEach(o => o.classList.remove('open'));
+});
+
 // ─── Drag and Drop (Recipe card → Slot) ───────────────────────────
 function wirePlanDragDrop() {
   // Source: recipe cards in the Rezepte tab get draggable. We attach
@@ -3398,6 +3417,7 @@ async function removePantry(id) {
 async function init() {
   wireTabs();
   wireShoppingControls();
+  wirePlanModalClose();
   await loadRecipes();
   await refreshShoppingBadge();
   // Geofence check on load + every 5 min
