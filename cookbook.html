@@ -1100,8 +1100,24 @@ async function renderPdfOutline() {
   }
 
   if (!flat || !flat.length) {
-    wrap.style.display = 'none';
-    if (head) head.textContent = '📑 Kapitel';
+    // Show an empty-state with action buttons so user can retry or fall back to AI
+    wrap.style.display = '';
+    if (head) head.textContent = '📑 Kein Inhaltsverzeichnis erkannt';
+    const list = $('#lib-toc');
+    list.innerHTML = `
+      <li style="cursor:default;color:var(--text-2);font-style:italic;flex-direction:column;align-items:flex-start;gap:6px">
+        <span>Auto-Scan hat nichts gefunden.</span>
+        ${window._tocDebug ? '<span style="font-size:11px">Gescannt: ' + window._tocDebug.pageCount + ' Seiten · ' + (window._tocDebug.allLines?.length || 0) + ' Zeilen</span>' : ''}
+      </li>
+      <li style="cursor:pointer;justify-content:center;border-color:var(--accent);background:var(--accent);color:#0c1015;font-weight:600;margin-top:8px" onclick="tocRescanDeeper()">
+        🔄 Tiefer scannen (40 Seiten)
+      </li>
+      <li style="cursor:pointer;justify-content:center;border-color:var(--border)" onclick="tocAiFallback()">
+        🧠 Mit AI erkennen
+      </li>
+      <li style="cursor:pointer;justify-content:center;border-color:var(--border)" onclick="tocShowDebug()">
+        🔍 Diagnose anzeigen
+      </li>`;
     return;
   }
   wrap.style.display = '';
@@ -1249,6 +1265,78 @@ function adjustTocOffset(delta) {
   if ($('#fs-toc')) populateFsDrawer();
 }
 
+// === TOC fallback actions ===
+
+// Re-scan with a wider page window (40 instead of 20)
+async function tocRescanDeeper() {
+  const head = $('#lib-toc-wrap').querySelector('.lib-toc-head');
+  const list = $('#lib-toc');
+  if (head) head.textContent = '📑 Scanne 40 Seiten…';
+  list.innerHTML = '<li style="color:var(--text-2);font-style:italic">…</li>';
+  const scanned = await scanFirstPagesForTOC(40);
+  if (scanned && scanned.length >= 2) {
+    _TOC_ENTRIES = scanned;
+    _TOC_SOURCE = 'auto-scan';
+    _PAGE_OFFSET = await detectPageOffset(scanned);
+    try { localStorage.setItem('pdfOffset_' + _PDF_BOOK.id, String(_PAGE_OFFSET)); } catch(_) {}
+    drawTocList();
+  } else {
+    if (head) head.textContent = '📑 Kein Inhaltsverzeichnis erkannt';
+    list.innerHTML = '<li style="cursor:default;color:var(--text-2);font-style:italic">Auch bei 40 Seiten nichts gefunden.</li><li style="cursor:pointer;justify-content:center;border-color:var(--accent);background:var(--accent);color:#0c1015;font-weight:600" onclick="tocAiFallback()">🧠 Mit AI erkennen</li>';
+  }
+}
+
+// Use Claude to detect TOC entries from the extracted text
+async function tocAiFallback() {
+  const head = $('#lib-toc-wrap').querySelector('.lib-toc-head');
+  const list = $('#lib-toc');
+  if (head) head.textContent = '🧠 Claude analysiert die ersten 20 Seiten…';
+  list.innerHTML = '<li style="color:var(--text-2);font-style:italic">Bitte warten…</li>';
+  const aiEntries = await detectTocViaAI();
+  if (aiEntries && aiEntries.length >= 2) {
+    _TOC_ENTRIES = aiEntries;
+    _TOC_SOURCE = 'auto-scan';
+    _PAGE_OFFSET = await detectPageOffset(aiEntries);
+    try { localStorage.setItem('pdfOffset_' + _PDF_BOOK.id, String(_PAGE_OFFSET)); } catch(_) {}
+    drawTocList();
+    toast('✓ ' + aiEntries.length + ' Einträge mit AI erkannt');
+  } else {
+    if (head) head.textContent = '📑 Kein Inhaltsverzeichnis erkannt';
+    list.innerHTML = '<li style="color:var(--text-2);font-style:italic">Auch AI hat nichts gefunden. PDF könnte gescannt/Bild-basiert sein.</li>';
+  }
+}
+
+// Open a modal with the extracted text + detection diagnostics so the
+// user can paste it back to me for further regex tuning.
+function tocShowDebug() {
+  const dbg = window._tocDebug;
+  if (!dbg) { alert('Noch keine Daten — erst PDF öffnen.'); return; }
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:10005;display:flex;align-items:center;justify-content:center;padding:24px';
+  const m = document.createElement('div');
+  m.style.cssText = 'background:var(--surface);border:1px solid var(--border);border-radius:10px;max-width:760px;width:100%;max-height:80vh;overflow:auto;padding:22px';
+  const sample = (dbg.allLines || []).slice(0, 200).map(l => '[S.' + l.page + '] ' + l.text).join('\n');
+  m.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <h3 style="margin:0;font-family:'Playfair Display',Georgia,serif;font-size:18px">🔍 TOC-Diagnose</h3>
+      <button onclick="this.closest('div[style*=\\"position:fixed\\"]').remove()" style="background:transparent;border:0;color:var(--text-2);font-size:22px;cursor:pointer">✕</button>
+    </div>
+    <div style="font-size:12px;color:var(--text-2);margin-bottom:12px;line-height:1.6">
+      Gescannt: ${dbg.pageCount} Seiten · ${dbg.allLines?.length || 0} Zeilen · Strategie: ${dbg.scannedBy || 'unbekannt'}<br>
+      Gefunden: <strong style="color:var(--text)">${dbg.foundCount || 0}</strong> Einträge ${dbg.rejectedReason ? '(verworfen: ' + dbg.rejectedReason + ')' : ''}<br>
+      ${dbg.firstFew?.length ? 'Erste Treffer: ' + dbg.firstFew.map(e => e.title + ' → S.' + e.page).join(' · ') : ''}
+    </div>
+    <div style="font-size:11px;color:var(--text-2);margin-bottom:6px">Erste 200 extrahierte Zeilen (kannst du mir schicken zur Regex-Anpassung):</div>
+    <pre style="background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:12px;font-size:11px;font-family:ui-monospace,SFMono-Regular,monospace;max-height:50vh;overflow:auto;white-space:pre-wrap;color:var(--text)">${escapeHtml(sample)}</pre>
+    <div style="margin-top:14px;display:flex;gap:8px">
+      <button onclick="navigator.clipboard?.writeText(\`${sample.replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`).then(()=>this.textContent='✓ Kopiert')" style="background:var(--accent);color:#0c1015;border:0;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:600;font-size:12px">📋 Text kopieren</button>
+      <button onclick="this.closest('div[style*=\\"position:fixed\\"]').remove()" style="background:transparent;color:var(--text);border:1px solid var(--border);padding:8px 14px;border-radius:6px;cursor:pointer;font-size:12px">Schliessen</button>
+    </div>
+  `;
+  ov.appendChild(m);
+  document.body.appendChild(ov);
+}
+
 // Best-effort offset detector: scan early PDF pages for a page-number
 // footer matching the first TOC entry's printed page number. If found,
 // offset = pdf-page - printed-page. Caps the search to avoid burning
@@ -1278,10 +1366,10 @@ async function detectPageOffset(tocEntries) {
   return 0;
 }
 
-// Heuristic: scan the first N pages, look for an "Inhaltsverzeichnis"
-// heading, then parse subsequent lines as "<title>........<page>"
-// entries. Works for most German/English/French cookbooks even when
-// the PDF has no proper bookmark outline.
+// Heuristic: scan the first N pages, find a likely table-of-contents
+// region (either via heading detection or via clustering of
+// "<text>...<number>" lines), then parse the entries. Stores
+// diagnostics in window._tocDebug so user can troubleshoot.
 async function scanFirstPagesForTOC(maxPages) {
   const pageCount = Math.min(maxPages || 20, _PDF_DOC.numPages);
   const allLines = [];
@@ -1289,56 +1377,149 @@ async function scanFirstPagesForTOC(maxPages) {
     try {
       const page = await _PDF_DOC.getPage(p);
       const txt = await page.getTextContent();
-      // Build text-lines from items. pdf.js v4 marks line breaks via
-      // hasEOL; otherwise we fall back to y-coordinate grouping.
       const lines = textContentToLines(txt);
       for (const ln of lines) allLines.push({ text: ln, page: p });
     } catch (_) { /* skip unreadable page */ }
   }
+  window._tocDebug = { allLines, pageCount, scannedBy: 'regex' };
 
-  // Find heading
-  const headingRe = /^\s*(Inhaltsverzeichnis|Inhalt|Table\s+of\s+Contents|Contents|Sommaire|Index|Indice)\s*$/i;
+  // === Strategy A: heading-based detection ===
+  // Loose match — heading line CONTAINS the word, doesn't have to be alone.
+  const headingRe = /(Inhaltsverzeichnis|Inhalt|Table\s+of\s+Contents|Contents|Sommaire|Verzeichnis|Übersicht|Rezeptverzeichnis|Rezepte)/i;
   let startIdx = -1;
   for (let i = 0; i < allLines.length; i++) {
-    if (headingRe.test(allLines[i].text)) { startIdx = i; break; }
+    const t = allLines[i].text.trim();
+    // Only short heading-ish lines (<50 chars) qualify as headings
+    if (t.length < 50 && headingRe.test(t)) { startIdx = i; break; }
   }
-  if (startIdx < 0) return null;
 
-  // Parse "<title> ... <page>" entries after the heading.
-  // Common patterns:
-  //   "Suppen ................. 23"
-  //   "Suppen   23"
-  //   "1.2 Suppen 23"
-  // Accept dot-leader, ellipsis, spaces, or just whitespace between
-  // the title and the trailing page number.
-  const entryRe = /^(.{2,80}?)[\s.…]{2,}(\d{1,4})\s*$/;
-  const simpleRe = /^(.{2,80}?)\s+(\d{1,4})\s*$/;
-  const entries = [];
-  let nonMatchStreak = 0;
-  for (let i = startIdx + 1; i < allLines.length; i++) {
-    const txt = allLines[i].text.trim();
-    if (!txt) continue;
-    let m = txt.match(entryRe) || txt.match(simpleRe);
-    if (m) {
-      let title = m[1].trim().replace(/[\s….]+$/, '');
-      // Strip leading numbering like "1.2.3 " or "I. "
+  // Entry-line patterns (try all)
+  const patterns = [
+    /^(.{2,90}?)[\s.…·\-]{2,}(\d{1,4})\s*$/,   // dot/ellipsis/dash leaders
+    /^(.{2,90}?)\s{2,}(\d{1,4})\s*$/,          // 2+ spaces between
+    /^(.{2,90}?)\s+(\d{1,4})\s*$/,             // any whitespace
+  ];
+
+  function tryParseEntry(text) {
+    for (const re of patterns) {
+      const m = text.match(re);
+      if (!m) continue;
+      let title = m[1].trim().replace(/[\s….·\-]+$/, '');
+      const rawNum = m[1].match(/^(\d+(?:\.\d+)*)\.?\s+/);
       title = title.replace(/^(\d+(?:\.\d+)*\.?\s+|[IVX]+\.\s+|[a-z]\)\s+)/i, '');
       const page = parseInt(m[2], 10);
-      // Sanity: title alphanumeric, page within document, page increasing or close
-      if (title.length >= 2 && /[A-Za-zÄÖÜäöüß]/.test(title) && page > 0 && page <= _PDF_DOC.numPages) {
-        // Detect depth by indentation (leading number levels) — best-effort
-        const numLevels = (m[1].match(/\d+\.\d+/) || [''])[0].split('.').length - 1;
-        const depth = Math.min(numLevels, 3);
-        entries.push({ title, page, depth });
-        nonMatchStreak = 0;
-        continue;
+      // Sanity: must contain alpha (so "13 14" doesn't match), page valid
+      if (title.length >= 2 && /[A-Za-zÄÖÜäöüß]/.test(title)
+          && page > 0 && page <= _PDF_DOC.numPages) {
+        const numLevels = rawNum ? rawNum[1].split('.').length - 1 : 0;
+        return { title, page, depth: Math.min(numLevels, 3) };
       }
     }
-    nonMatchStreak++;
-    // After a streak of non-matching lines (likely past TOC), stop.
-    if (nonMatchStreak > 8 && entries.length >= 3) break;
+    return null;
   }
+
+  let entries = [];
+
+  if (startIdx >= 0) {
+    let nonMatchStreak = 0;
+    for (let i = startIdx + 1; i < allLines.length; i++) {
+      const txt = allLines[i].text.trim();
+      if (!txt) continue;
+      const entry = tryParseEntry(txt);
+      if (entry) { entries.push(entry); nonMatchStreak = 0; }
+      else { nonMatchStreak++; if (nonMatchStreak > 10 && entries.length >= 3) break; }
+    }
+  }
+
+  // === Strategy B: cluster detection (no heading found, OR weak result) ===
+  if (entries.length < 3) {
+    // Sliding window — find the longest run of consecutive matching lines.
+    const candidates = allLines.map(l => ({ ...l, parsed: tryParseEntry(l.text.trim()) }));
+    let bestStart = -1, bestLen = 0, runStart = -1, runLen = 0;
+    for (let i = 0; i < candidates.length; i++) {
+      const ok = !!candidates[i].parsed;
+      // Allow one non-matching line in between
+      const skipOk = ok || (i > 0 && i < candidates.length - 1 &&
+                            candidates[i-1].parsed && candidates[i+1].parsed);
+      if (skipOk) {
+        if (runStart < 0) runStart = i;
+        runLen++;
+        if (runLen > bestLen) { bestLen = runLen; bestStart = runStart; }
+      } else {
+        runStart = -1; runLen = 0;
+      }
+    }
+    if (bestLen >= 5) {
+      const clusterEntries = [];
+      for (let i = bestStart; i < bestStart + bestLen && i < candidates.length; i++) {
+        if (candidates[i].parsed) clusterEntries.push(candidates[i].parsed);
+      }
+      if (clusterEntries.length > entries.length) {
+        entries = clusterEntries;
+        window._tocDebug.scannedBy = 'cluster';
+        window._tocDebug.clusterAt = candidates[bestStart]?.page;
+      }
+    }
+  }
+
+  // Sanity: page numbers should generally INCREASE across the TOC.
+  // If we found a big chunk where they go backwards, trim it.
+  if (entries.length >= 5) {
+    let decreasing = 0;
+    for (let i = 1; i < entries.length; i++) {
+      if (entries[i].page < entries[i-1].page) decreasing++;
+    }
+    if (decreasing > entries.length * 0.4) {
+      // Probably caught random "<text> <number>" noise, not a TOC
+      window._tocDebug.rejectedReason = 'pages not monotonic';
+      window._tocDebug.entriesRejected = entries;
+      entries = [];
+    }
+  }
+
+  window._tocDebug.foundCount = entries.length;
+  window._tocDebug.firstFew = entries.slice(0, 5);
   return entries.length >= 2 ? entries : null;
+}
+
+// ── AI-powered fallback: send extracted text to Claude ────────
+// Triggered when regex/cluster detection fails. Uses /api/note-assist
+// with a custom prompt asking for a TOC JSON array.
+async function detectTocViaAI() {
+  const dbg = window._tocDebug;
+  if (!dbg?.allLines?.length) {
+    alert('Erst PDF laden + Auto-Scan durchlaufen lassen.');
+    return null;
+  }
+  // Compose first ~20 pages of text, capped
+  const blob = dbg.allLines.map(l => l.text).join('\n').slice(0, 16000);
+  // Reuse the chat endpoint (has tools off), with a structured ask
+  try {
+    const r = await fetch('/api/chat', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5',
+        max_tokens: 4000,
+        system: 'Du analysierst extrahierten Text aus den ersten 20 Seiten eines Kochbuch-PDFs. Identifiziere das Inhaltsverzeichnis und liefere AUSSCHLIESSLICH ein JSON-Array zurück (kein Markdown, kein \`\`\`-Block, NUR pures JSON):\n\n[{"title":"Suppen","page":23,"depth":0},{"title":"Kartoffelsuppe","page":24,"depth":1}, ...]\n\nRegeln:\n- title = der lesbare Eintrags-Name (Kapitel oder Rezept). Ohne führende Nummerierung.\n- page = die GEDRUCKTE Seitenzahl wie sie im Inhaltsverzeichnis steht (NICHT die PDF-Seite).\n- depth = 0 für Kapitel, 1 für Unterpunkte, 2 für tiefer.\n- 0-200 Einträge.\n- Wenn KEIN Inhaltsverzeichnis erkennbar: leeres Array [].',
+        messages: [{ role: 'user', content: 'Extrahiere alle TOC-Einträge aus diesem Text:\n\n' + blob }],
+      }),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error?.message || data.error || 'HTTP ' + r.status);
+    const txt = (data.content || []).filter(c => c.type === 'text').map(c => c.text).join('').trim();
+    let jsonStr = txt;
+    if (jsonStr.startsWith('```')) jsonStr = jsonStr.replace(/^```(?:json)?\s*/, '').replace(/```\s*$/, '');
+    const a = jsonStr.indexOf('[');
+    const b = jsonStr.lastIndexOf(']');
+    if (a >= 0 && b > a) jsonStr = jsonStr.slice(a, b + 1);
+    const parsed = JSON.parse(jsonStr);
+    if (!Array.isArray(parsed)) throw new Error('Claude returned non-array');
+    return parsed.filter(e => e && typeof e.title === 'string' && Number.isInteger(e.page))
+                 .map(e => ({ title: String(e.title).slice(0, 120), page: e.page, depth: Math.max(0, Math.min(3, e.depth || 0)) }));
+  } catch (e) {
+    alert('AI-Fallback fehlgeschlagen: ' + (e?.message || e));
+    return null;
+  }
 }
 
 // Convert pdf.js textContent.items into a list of strings, one per
