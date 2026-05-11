@@ -10923,6 +10923,8 @@ function openVoiceAssistant(mode) {
   // Sync the flow-button state with the persisted preference
   const btn = document.getElementById('va-flow-btn');
   if (btn) btn.classList.toggle('active', _vaWhisperFlow);
+  // Sync the speed-button label with the persisted rate
+  if (typeof updateSpeechRateButton === 'function') updateSpeechRateButton();
   // Clear chat thread when starting a fresh session in note mode so the
   // capture flow stays focused on the new note.
   if (_vaMode === 'note') {
@@ -12313,6 +12315,10 @@ async function vaSpeakElevenLabs(text, voiceIdOverride) {
     const blob = await res.blob();
     const url  = URL.createObjectURL(blob);
     const a = new Audio(url);
+    // Apply user-selected speech speed BEFORE play() — set on the element
+    // so the browser also pitch-corrects ("preservesPitch" defaults to true
+    // on Chromium-based browsers, which we run on).
+    try { a.playbackRate = getSpeechRate(); } catch(_) {}
     _vaActiveAudio = a;
     a.onplay  = () => {
       _vaIsSpeaking = true;
@@ -12362,6 +12368,37 @@ function vaStopSpeaking() {
   if (typeof vaStopBargeInWatcher === 'function') vaStopBargeInWatcher();
   _vaIsSpeaking = false;
   vaSetBubbleState(null);
+}
+
+// ── TTS playback-speed control ──────────────────────────────────
+// Cycles through 1× → 1.5× → 2× → 3× → 1×. Applied via HTMLAudioElement
+// .playbackRate when each TTS clip starts playing. Browser auto-pitches
+// to keep the voice sounding natural at higher rates.
+const VA_SPEECH_RATES = [1, 1.5, 2, 3];
+function getSpeechRate() {
+  const v = parseFloat(localStorage.getItem('vaSpeechRate'));
+  return VA_SPEECH_RATES.includes(v) ? v : 1;
+}
+function setSpeechRate(v) {
+  const r = VA_SPEECH_RATES.includes(v) ? v : 1;
+  localStorage.setItem('vaSpeechRate', String(r));
+  updateSpeechRateButton();
+  // Hot-apply to a currently-playing TTS so the change is audible immediately
+  if (_vaActiveAudio) { try { _vaActiveAudio.playbackRate = r; } catch(_) {} }
+}
+function cycleSpeechRate() {
+  const cur = getSpeechRate();
+  const idx = VA_SPEECH_RATES.indexOf(cur);
+  const next = VA_SPEECH_RATES[(idx + 1) % VA_SPEECH_RATES.length];
+  setSpeechRate(next);
+}
+function updateSpeechRateButton() {
+  const lbl = document.getElementById('va-speed-label');
+  if (lbl) lbl.textContent = getSpeechRate() + '×';
+  // Visually mark "non-1×" state so the user sees at a glance that the
+  // speed deviates from the default — uses the existing .active class.
+  const btn = document.getElementById('va-speed-btn');
+  if (btn) btn.classList.toggle('active', getSpeechRate() !== 1);
 }
 
 // Helpers exposed so the user can configure ElevenLabs from the console or
@@ -13964,6 +14001,9 @@ document.addEventListener('dblclick', (e) => {
   <div class="va-input">
     <button class="va-mode-btn" id="va-flow-btn" onclick="toggleWhisperFlow()" title="Wispr ein/aus — säubert Eingaben (Füllwörter, Großschreibung, Punktion)">
       <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M12 1v22"/><path d="M5 8c0 0 2-3 7-3s7 3 7 3"/><path d="M5 16c0 0 2 3 7 3s7-3 7-3"/></svg>
+    </button>
+    <button class="va-mode-btn va-speed-btn" id="va-speed-btn" onclick="cycleSpeechRate()" title="Sprechgeschwindigkeit (klicken zum Wechseln: 1× / 1.5× / 2× / 3×)">
+      <span id="va-speed-label" style="font-size:11px;font-weight:700;letter-spacing:-0.5px">1×</span>
     </button>
     <input class="va-text-input" id="va-text-input" type="text" inputmode="text"
            autocomplete="off" autocapitalize="sentences"
