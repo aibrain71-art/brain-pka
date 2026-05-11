@@ -118,6 +118,10 @@ export async function onRequestPost({ request, env }) {
   // turns as the loop progresses.
   const workingMessages = messages.slice();
   const trace = [];  // visible to client for debugging in DevTools
+  // Action hints — tools can return JSON marker results (like
+  // open_cookbook → navigate_to: "/cookbook.html"). We collect them
+  // across rounds and surface to the client in the final response.
+  const actionHints = {};
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     let apiRes;
@@ -144,9 +148,10 @@ export async function onRequestPost({ request, env }) {
     // Append Claude's assistant turn to the working messages
     workingMessages.push({ role: 'assistant', content: data.content });
 
-    // If Claude is done (no more tools needed), return the final response.
+    // If Claude is done (no more tools needed), return the final response
+    // — plus any action hints accumulated from tool calls (e.g. navigate_to).
     if (data.stop_reason !== 'tool_use') {
-      return json({ ...data, _trace: trace });
+      return json({ ...data, _trace: trace, ...actionHints });
     }
 
     // Otherwise execute every tool_use block and add a single user turn
@@ -163,6 +168,14 @@ export async function onRequestPost({ request, env }) {
         tool_use_id: block.id,
         content: resultStr,
       });
+      // Sniff for "action" markers in the tool result so the client can
+      // act on them (e.g. open_cookbook returns navigate_to).
+      try {
+        const parsed = JSON.parse(resultStr);
+        if (parsed?.navigate_to && typeof parsed.navigate_to === 'string') {
+          actionHints.navigate_to = parsed.navigate_to;
+        }
+      } catch (_) { /* not JSON, ignore */ }
     }
     workingMessages.push({ role: 'user', content: toolResults });
     // Loop continues — Claude now sees the results and can act on them.

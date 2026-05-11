@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Kochbuch · Brain PKA</title>
+<link rel="manifest" href="./pwa.webmanifest">
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161c24;
+    --surface-2: #1f2730;
+    --border: #2a3441;
+    --text: #e6edf3;
+    --text-2: #8b96a3;
+    --accent: #c4831e;         /* warm cooking-magazine ochre */
+    --accent-2: #e9aa4a;
+    --accent-soft: #2a1e10;
+    --paper: #f7f0e3;          /* light "paper" backdrop for recipe cards */
+    --ink: #1a1a1a;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text);
+    font-family: 'Helvetica Neue', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Header band — magazine masthead vibe */
+  header.masthead {
+    background: linear-gradient(180deg, #1c2531 0%, #141a23 100%);
+    border-bottom: 2px solid var(--accent);
+    padding: 28px 24px;
+  }
+  header.masthead .row {
+    max-width: 1280px; margin: 0 auto;
+    display: flex; justify-content: space-between; align-items: end; gap: 24px; flex-wrap: wrap;
+  }
+  header.masthead h1 {
+    margin: 0; font-family: 'Playfair Display', Georgia, serif;
+    font-size: clamp(28px, 5vw, 48px); font-weight: 800; letter-spacing: -0.5px;
+    color: var(--accent-2);
+  }
+  header.masthead .tagline {
+    color: var(--text-2); font-size: 13px; letter-spacing: 2px; text-transform: uppercase;
+    margin-top: 6px;
+  }
+  header.masthead a.back {
+    color: var(--text-2); text-decoration: none; font-size: 13px;
+    border: 1px solid var(--border); padding: 8px 14px; border-radius: 18px;
+    transition: all .15s;
+  }
+  header.masthead a.back:hover { color: var(--text); border-color: var(--accent); }
+
+  /* Stats strip */
+  .stats {
+    max-width: 1280px; margin: 0 auto; padding: 18px 24px;
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .stat {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 18px;
+  }
+  .stat-num {
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: 30px; font-weight: 700; color: var(--accent-2); line-height: 1;
+  }
+  .stat-lbl {
+    font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-2);
+    margin-top: 6px;
+  }
+
+  /* Main layout: sticky TOC + content */
+  main {
+    max-width: 1280px; margin: 0 auto;
+    display: grid; grid-template-columns: 280px 1fr; gap: 36px;
+    padding: 32px 24px;
+  }
+  @media (max-width: 860px) {
+    main { grid-template-columns: 1fr; }
+    aside.toc { position: static; max-height: none; }
+  }
+
+  /* TOC */
+  aside.toc {
+    position: sticky; top: 24px; align-self: start;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 18px; max-height: calc(100vh - 48px); overflow-y: auto;
+  }
+  aside.toc h2 {
+    margin: 0 0 4px 0; font-family: 'Playfair Display', Georgia, serif; font-size: 18px;
+  }
+  aside.toc .toc-sub { font-size: 11px; color: var(--text-2); margin-bottom: 14px; letter-spacing: 0.6px; }
+  aside.toc input.toc-search {
+    width: 100%; padding: 8px 10px; border-radius: 6px;
+    background: var(--surface-2); border: 1px solid var(--border);
+    color: var(--text); font-size: 13px; outline: none; margin-bottom: 14px;
+  }
+  aside.toc input.toc-search:focus { border-color: var(--accent); }
+  aside.toc ol {
+    list-style: none; padding: 0; margin: 0;
+    counter-reset: recipe;
+  }
+  aside.toc li {
+    counter-increment: recipe; padding: 6px 0; border-bottom: 1px solid var(--border);
+  }
+  aside.toc li:last-child { border-bottom: 0; }
+  aside.toc li::before {
+    content: counter(recipe, decimal-leading-zero);
+    color: var(--text-2); font-size: 10px; letter-spacing: 1px; margin-right: 8px;
+    font-variant-numeric: tabular-nums;
+  }
+  aside.toc a {
+    color: var(--text); text-decoration: none; font-size: 13px;
+    border-bottom: 1px dashed transparent; transition: all .12s;
+  }
+  aside.toc a:hover { color: var(--accent-2); border-bottom-color: var(--accent); }
+
+  /* Recipe articles */
+  section.recipes { display: grid; gap: 36px; }
+  article.recipe {
+    background: var(--paper); color: var(--ink); border-radius: 14px;
+    padding: 36px 40px; box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    scroll-margin-top: 24px;
+  }
+  @media (max-width: 600px) { article.recipe { padding: 26px 24px; } }
+
+  article.recipe h2 {
+    margin: 0; font-family: 'Playfair Display', Georgia, serif;
+    font-size: 30px; line-height: 1.15; letter-spacing: -0.3px;
+  }
+  article.recipe .meta-row {
+    display: flex; flex-wrap: wrap; gap: 8px 14px; margin: 14px 0 22px 0;
+    font-size: 12px; color: #5a5a5a; letter-spacing: 0.4px;
+  }
+  article.recipe .meta-chip {
+    background: rgba(196,131,30,0.08); border: 1px solid rgba(196,131,30,0.25);
+    border-radius: 14px; padding: 4px 10px;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  article.recipe .meta-emoji { font-size: 13px; }
+
+  /* Recipe two-column body: ingredients left, steps right */
+  article.recipe .body-grid {
+    display: grid; grid-template-columns: 280px 1fr; gap: 32px;
+    margin-top: 8px;
+  }
+  @media (max-width: 700px) { article.recipe .body-grid { grid-template-columns: 1fr; gap: 22px; } }
+  article.recipe h3 {
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: 16px; letter-spacing: 1.6px; text-transform: uppercase;
+    border-bottom: 2px solid var(--accent); padding-bottom: 6px;
+    margin: 0 0 14px 0; color: var(--ink);
+  }
+  article.recipe ul.ingredients { list-style: none; padding: 0; margin: 0; font-size: 14px; line-height: 1.7; }
+  article.recipe ul.ingredients li { padding: 3px 0; border-bottom: 1px dotted #ddd0b2; }
+  article.recipe ul.ingredients li::before { content: '·'; color: var(--accent); margin-right: 8px; font-weight: 700; }
+  article.recipe ol.steps {
+    list-style: none; padding: 0; margin: 0; counter-reset: step;
+    font-size: 15px; line-height: 1.65;
+  }
+  article.recipe ol.steps li { counter-increment: step; position: relative; padding: 8px 0 14px 44px; min-height: 36px; }
+  article.recipe ol.steps li::before {
+    content: counter(step); position: absolute; left: 0; top: 4px;
+    width: 30px; height: 30px; border-radius: 50%;
+    background: var(--accent); color: white; display: flex; align-items: center; justify-content: center;
+    font-family: 'Playfair Display', Georgia, serif; font-weight: 700; font-size: 14px;
+  }
+
+  /* Nutrients tile */
+  .nutrients {
+    margin-top: 28px; background: rgba(196,131,30,0.06); border-left: 3px solid var(--accent);
+    padding: 14px 18px; border-radius: 0 8px 8px 0;
+  }
+  .nutrients-title { font-size: 11px; letter-spacing: 1.4px; text-transform: uppercase; color: #6b6b6b; margin-bottom: 8px; }
+  .nutrients-row { display: flex; gap: 24px; flex-wrap: wrap; }
+  .nutrient { font-size: 12px; color: #4a4a4a; }
+  .nutrient strong { display: block; font-family: 'Playfair Display', Georgia, serif; font-size: 20px; color: var(--ink); font-weight: 700; }
+
+  .recipe-tags { margin-top: 22px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .recipe-tag { background: rgba(196,131,30,0.12); color: #6b4d18; padding: 4px 10px; border-radius: 12px; font-size: 11px; }
+
+  .recipe-notes { margin-top: 18px; font-style: italic; color: #5a5a5a; font-size: 13px; border-left: 3px solid #ddd0b2; padding: 6px 14px; }
+
+  .empty {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 44px; text-align: center; color: var(--text-2);
+  }
+  .empty h2 { color: var(--text); font-family: 'Playfair Display', Georgia, serif; font-size: 24px; margin: 0 0 10px 0; }
+
+  .loading { padding: 60px; text-align: center; color: var(--text-2); font-style: italic; }
+
+  footer { padding: 36px 24px; text-align: center; color: var(--text-2); font-size: 11px; letter-spacing: 1px; border-top: 1px solid var(--border); }
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<header class="masthead">
+  <div class="row">
+    <div>
+      <h1>📕 Kochbuch</h1>
+      <div class="tagline">Persönliche Rezeptsammlung · Brain PKA</div>
+    </div>
+    <a class="back" href="./">← Zurück zur App</a>
+  </div>
+</header>
+
+<div class="stats" id="stats">
+  <div class="loading">Lade Statistik…</div>
+</div>
+
+<main>
+  <aside class="toc">
+    <h2>Inhalt</h2>
+    <div class="toc-sub" id="toc-count">…</div>
+    <input class="toc-search" type="search" placeholder="Rezept suchen…" id="toc-search" autocomplete="off">
+    <ol id="toc-list"><li class="loading">Lade…</li></ol>
+  </aside>
+
+  <section class="recipes" id="recipes">
+    <div class="loading">Lade Rezepte aus der Datenbank…</div>
+  </section>
+</main>
+
+<footer>© Brain PKA · alphanumerisch sortiert</footer>
+
+<script>
+const $ = (sel) => document.querySelector(sel);
+const fmtNum = (n) => Number.isFinite(n) ? n.toLocaleString('de-CH') : '–';
+function escapeHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function slugForAnchor(s, id) {
+  return 'rec-' + (id || '0') + '-' +
+    String(s || '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g,'')
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+}
+
+function renderStats(stats) {
+  const el = $('#stats');
+  if (!stats) { el.innerHTML = '<div class="loading">Keine Daten.</div>'; return; }
+  const tiles = [
+    { n: stats.total,           lbl: 'Rezepte gesamt' },
+    { n: stats.totalIngredients, lbl: 'Zutaten erfasst' },
+    { n: stats.avgMinutes ? stats.avgMinutes + ' Min' : '–', lbl: 'Ø Zubereitungszeit' },
+    { n: Object.keys(stats.topTags || {}).length, lbl: 'Verschlagwortungen' },
+  ];
+  el.innerHTML = tiles.map(t =>
+    `<div class="stat"><div class="stat-num">${typeof t.n === 'number' ? fmtNum(t.n) : escapeHtml(t.n)}</div><div class="stat-lbl">${escapeHtml(t.lbl)}</div></div>`
+  ).join('');
+}
+
+function renderRecipe(r) {
+  const rec = r.recipe || {};
+  const anchor = slugForAnchor(r.title, r.id);
+  const chips = [];
+  if (rec.servings) chips.push({ e: '👥', t: rec.servings + ' Pers.' });
+  if (rec.total_minutes) chips.push({ e: '⏱', t: rec.total_minutes + ' Min gesamt' });
+  if (rec.prep_minutes) chips.push({ e: '🔪', t: rec.prep_minutes + ' Min Prep' });
+  if (rec.cook_minutes) chips.push({ e: '🔥', t: rec.cook_minutes + ' Min Garen' });
+  if (rec.location) chips.push({ e: '📍', t: rec.location });
+  if (Array.isArray(rec.equipment) && rec.equipment.length) chips.push({ e: '🛠', t: rec.equipment.join(' · ') });
+
+  const ingredientsHtml = Array.isArray(rec.ingredients) && rec.ingredients.length
+    ? '<ul class="ingredients">' + rec.ingredients.map(i => '<li>' + escapeHtml(i) + '</li>').join('') + '</ul>'
+    : '<p style="color:#8a7a5a;font-style:italic">Keine Zutatenliste hinterlegt.</p>';
+
+  const stepsHtml = Array.isArray(rec.steps) && rec.steps.length
+    ? '<ol class="steps">' + rec.steps.map(s => '<li>' + escapeHtml(s) + '</li>').join('') + '</ol>'
+    : '<p style="color:#8a7a5a;font-style:italic">Keine Zubereitungsschritte hinterlegt.</p>';
+
+  const hasNutrients = rec.calories_per_serving || rec.protein_g || rec.carbs_g || rec.fat_g;
+  const nutrientsHtml = hasNutrients ? `
+    <div class="nutrients">
+      <div class="nutrients-title">Nährwerte pro Portion</div>
+      <div class="nutrients-row">
+        ${rec.calories_per_serving ? `<div class="nutrient"><strong>${rec.calories_per_serving}</strong> kcal</div>` : ''}
+        ${rec.protein_g ? `<div class="nutrient"><strong>${rec.protein_g} g</strong> Eiweiss</div>` : ''}
+        ${rec.carbs_g ? `<div class="nutrient"><strong>${rec.carbs_g} g</strong> Kohlenhydrate</div>` : ''}
+        ${rec.fat_g ? `<div class="nutrient"><strong>${rec.fat_g} g</strong> Fett</div>` : ''}
+      </div>
+    </div>` : '';
+
+  const tagsHtml = Array.isArray(r.tags) && r.tags.length
+    ? `<div class="recipe-tags">${r.tags.map(t => `<span class="recipe-tag">${escapeHtml(t)}</span>`).join('')}</div>`
+    : '';
+
+  const notesHtml = rec.notes ? `<div class="recipe-notes">${escapeHtml(rec.notes)}</div>` : '';
+
+  return `
+    <article class="recipe" id="${anchor}" data-title="${escapeHtml(r.title.toLowerCase())}">
+      <h2>${escapeHtml(r.title)}</h2>
+      <div class="meta-row">
+        ${chips.map(c => `<span class="meta-chip"><span class="meta-emoji">${c.e}</span>${escapeHtml(c.t)}</span>`).join('')}
+      </div>
+      <div class="body-grid">
+        <div>
+          <h3>Zutaten</h3>
+          ${ingredientsHtml}
+        </div>
+        <div>
+          <h3>Zubereitung</h3>
+          ${stepsHtml}
+        </div>
+      </div>
+      ${nutrientsHtml}
+      ${notesHtml}
+      ${tagsHtml}
+    </article>`;
+}
+
+function renderTOC(recipes) {
+  const el = $('#toc-list');
+  $('#toc-count').textContent = recipes.length + ' Rezept' + (recipes.length === 1 ? '' : 'e');
+  if (!recipes.length) { el.innerHTML = '<li style="color:var(--text-2)">Keine Rezepte vorhanden.</li>'; return; }
+  el.innerHTML = recipes.map(r => {
+    const anchor = slugForAnchor(r.title, r.id);
+    return `<li data-title="${escapeHtml(r.title.toLowerCase())}"><a href="#${anchor}">${escapeHtml(r.title)}</a></li>`;
+  }).join('');
+}
+
+function wireSearch() {
+  const input = $('#toc-search');
+  input.addEventListener('input', () => {
+    const q = input.value.trim().toLowerCase();
+    document.querySelectorAll('#toc-list li').forEach(li => {
+      li.style.display = (!q || li.dataset.title?.includes(q)) ? '' : 'none';
+    });
+    document.querySelectorAll('section.recipes article').forEach(art => {
+      art.style.display = (!q || art.dataset.title?.includes(q)) ? '' : 'none';
+    });
+  });
+}
+
+async function init() {
+  try {
+    const r = await fetch('/api/recipes');
+    if (!r.ok) {
+      document.body.innerHTML += `<div class="empty"><h2>Fehler beim Laden</h2><p>${r.status}: ${escapeHtml(await r.text())}</p></div>`;
+      return;
+    }
+    const data = await r.json();
+    renderStats(data.stats);
+    const recs = data.recipes || [];
+    renderTOC(recs);
+    if (!recs.length) {
+      $('#recipes').innerHTML = `
+        <div class="empty">
+          <h2>Noch keine Rezepte</h2>
+          <p>Sag zu Larry: <i>„Larry, neues Rezept: Bolognese für 4 Personen, du brauchst…"</i> und er legt es strukturiert hier ab.</p>
+        </div>`;
+      return;
+    }
+    $('#recipes').innerHTML = recs.map(renderRecipe).join('');
+    wireSearch();
+  } catch (e) {
+    $('#recipes').innerHTML = `<div class="empty"><h2>Fehler</h2><p>${escapeHtml(e?.message || String(e))}</p></div>`;
+  }
+}
+init();
+</script>
+</body>
+</html>

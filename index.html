@@ -3170,6 +3170,7 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
     <div class="detail-tab active" onclick="switchTab('summary',this)" title="Übersicht — Kurz- + Detail-Beschreibung in einem Tab">Übersicht</div>
     <div class="detail-tab" onclick="switchTab('full',this)" title="Volltext — vollständiger Wikipedia-Artikel mit Bildergalerie">Full</div>
     <div class="detail-tab" id="tab-btn-transcript" onclick="switchTab('transcript',this)" title="YouTube Auto-Transkript mit klickbaren Timestamps" style="display:none">Transkript</div>
+    <div class="detail-tab" id="tab-btn-recipe" onclick="switchTab('recipe',this)" title="Rezept — Portionen, Zutaten, Zubereitung, Nährwerte" style="display:none">Rezept</div>
     <div class="detail-tab" onclick="switchTab('related',this)" title="Verbindungen zu anderen Einträgen">Verbindungen</div>
   </div>
   <div class="detail-content">
@@ -3177,6 +3178,7 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
     <div id="tab-detail" style="display:none"></div>
     <div id="tab-full" style="display:none"></div>
     <div id="tab-transcript" style="display:none"></div>
+    <div id="tab-recipe" style="display:none"></div>
     <div id="tab-related" style="display:none"></div>
   </div>
 </div>
@@ -3758,9 +3760,10 @@ async function loadFromD1() {
       let meta_pre = null;
       try { meta_pre = row.source_meta ? JSON.parse(row.source_meta) : null; } catch(_) {}
       const isBookmark = !!meta_pre?.isBookmark;
+      const isRecipe = row.note_type === 'recipe';
       let icon = '📝';
       if (row.note_type === 'quote')  icon = '”';
-      else if (row.note_type === 'recipe') icon = '🍳';
+      else if (isRecipe) icon = '🍳';
       else if (isBookmark) icon = '📖';
       else if (row.source_type === 'youtube') icon = '▶️';
       else if (row.source_type === 'website') icon = '📰';
@@ -3784,6 +3787,10 @@ async function loadFromD1() {
         body: row.full_summary || row.body || '',
         topics: splitTags(row.related_topics),
       };
+      // Recipe-specific structured data → expose to renderRecipeTab
+      if (isRecipe && meta?.recipe) {
+        entry.recipeData = meta.recipe;
+      }
       if (isImportedLink) {
         // Flag this as a D1-imported link so the detail view knows to
         // use the rich Garden-style header (without changing entry.type
@@ -7076,6 +7083,12 @@ function openDetail(entry) {
   if (transcriptBtn) {
     transcriptBtn.style.display = (Array.isArray(entry.transcript) && entry.transcript.length > 0) ? '' : 'none';
   }
+  // Show / hide the Rezept tab — only for recipe-type notes with
+  // structured data attached.
+  const recipeBtn = document.getElementById('tab-btn-recipe');
+  if (recipeBtn) {
+    recipeBtn.style.display = entry.recipeData ? '' : 'none';
+  }
 
   const header = document.querySelector('#detail-panel .detail-header');
 
@@ -7224,6 +7237,8 @@ function switchTab(name, el) {
   document.getElementById('tab-related').style.display = name === 'related' ? '' : 'none';
   const transcriptEl = document.getElementById('tab-transcript');
   if (transcriptEl) transcriptEl.style.display = name === 'transcript' ? '' : 'none';
+  const recipeEl = document.getElementById('tab-recipe');
+  if (recipeEl) recipeEl.style.display = name === 'recipe' ? '' : 'none';
   // Re-render Übersicht when entered. Cheap + idempotent, defends against the
   // race where the AI fetch resolves while the user is on another tab.
   if (name === 'summary') {
@@ -7245,6 +7260,75 @@ function switchTab(name, el) {
     const entry = ENTRIES.find(x => x.id === selectedEntryId);
     if (entry && transcriptEl) renderTranscriptTab(entry, transcriptEl);
   }
+  if (name === 'recipe') {
+    const entry = ENTRIES.find(x => x.id === selectedEntryId);
+    if (entry && recipeEl) renderRecipeTab(entry, recipeEl);
+  }
+}
+
+// Render structured recipe data — same layout as the cookbook page
+// (cookbook.html) but inside the detail panel so the user sees their
+// recipe in nice form without leaving the app.
+function renderRecipeTab(entry, container) {
+  const rec = entry?.recipeData;
+  if (!rec) {
+    container.innerHTML = '<div style="color:var(--text-2);padding:18px;font-style:italic">Keine strukturierten Rezept-Daten vorhanden.</div>';
+    return;
+  }
+  const chips = [];
+  if (rec.servings) chips.push({ e: '👥', t: rec.servings + ' Pers.' });
+  if (rec.total_minutes) chips.push({ e: '⏱', t: rec.total_minutes + ' Min gesamt' });
+  if (rec.prep_minutes) chips.push({ e: '🔪', t: rec.prep_minutes + ' Min Prep' });
+  if (rec.cook_minutes) chips.push({ e: '🔥', t: rec.cook_minutes + ' Min Garen' });
+  if (rec.location) chips.push({ e: '📍', t: rec.location });
+  if (Array.isArray(rec.equipment) && rec.equipment.length) chips.push({ e: '🛠', t: rec.equipment.join(' · ') });
+
+  const ingredients = Array.isArray(rec.ingredients) ? rec.ingredients : [];
+  const steps = Array.isArray(rec.steps) ? rec.steps : [];
+  const hasN = rec.calories_per_serving || rec.protein_g || rec.carbs_g || rec.fat_g;
+
+  const css = `
+    .rec-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px;margin-bottom:14px}
+    .rec-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+    .rec-chip{background:rgba(196,131,30,0.12);border:1px solid rgba(196,131,30,0.3);border-radius:12px;padding:4px 10px;font-size:11px;color:#e9aa4a;display:inline-flex;gap:5px;align-items:center}
+    .rec-h{font-size:11px;letter-spacing:1.6px;text-transform:uppercase;color:var(--text-2);border-bottom:2px solid var(--accent);padding-bottom:5px;margin-bottom:10px}
+    .rec-ing{list-style:none;padding:0;margin:0;font-size:13px;line-height:1.65}
+    .rec-ing li{padding:3px 0;border-bottom:1px dotted var(--border)}
+    .rec-ing li::before{content:'·';color:var(--accent);margin-right:8px;font-weight:700}
+    .rec-steps{list-style:none;padding:0;margin:0;counter-reset:s;font-size:13px;line-height:1.6}
+    .rec-steps li{counter-increment:s;position:relative;padding:6px 0 12px 38px;min-height:32px}
+    .rec-steps li::before{content:counter(s);position:absolute;left:0;top:2px;width:26px;height:26px;border-radius:50%;background:var(--accent);color:white;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px}
+    .rec-nut{background:rgba(196,131,30,0.06);border-left:3px solid var(--accent);padding:12px 14px;border-radius:0 6px 6px 0;margin-top:12px;font-size:12px}
+    .rec-nut-row{display:flex;gap:18px;flex-wrap:wrap;margin-top:6px}
+    .rec-nut-row strong{display:block;font-size:16px;color:var(--text)}
+    .rec-notes{margin-top:14px;font-style:italic;color:var(--text-2);font-size:13px;border-left:3px solid var(--border);padding:6px 14px}
+  `;
+  container.innerHTML = `
+    <style>${css}</style>
+    <div class="rec-card">
+      ${chips.length ? `<div class="rec-chips">${chips.map(c => `<span class="rec-chip">${c.e}<span>${c.t}</span></span>`).join('')}</div>` : ''}
+      <div class="rec-h">Zutaten</div>
+      ${ingredients.length ? `<ul class="rec-ing">${ingredients.map(i => `<li>${escapeHtml(i)}</li>`).join('')}</ul>` : '<div style="color:var(--text-2);font-style:italic;font-size:13px">Keine Zutaten hinterlegt.</div>'}
+    </div>
+    <div class="rec-card">
+      <div class="rec-h">Zubereitung</div>
+      ${steps.length ? `<ol class="rec-steps">${steps.map(s => `<li>${escapeHtml(s)}</li>`).join('')}</ol>` : '<div style="color:var(--text-2);font-style:italic;font-size:13px">Keine Schritte hinterlegt.</div>'}
+    </div>
+    ${hasN ? `
+    <div class="rec-card">
+      <div class="rec-h">Nährwerte pro Portion</div>
+      <div class="rec-nut">
+        <div class="rec-nut-row">
+          ${rec.calories_per_serving ? `<div><strong>${rec.calories_per_serving}</strong>kcal</div>` : ''}
+          ${rec.protein_g ? `<div><strong>${rec.protein_g} g</strong>Eiweiss</div>` : ''}
+          ${rec.carbs_g ? `<div><strong>${rec.carbs_g} g</strong>Kohlenhydrate</div>` : ''}
+          ${rec.fat_g ? `<div><strong>${rec.fat_g} g</strong>Fett</div>` : ''}
+        </div>
+      </div>
+    </div>` : ''}
+    ${rec.notes ? `<div class="rec-card"><div class="rec-h">Anmerkungen</div><div class="rec-notes">${escapeHtml(rec.notes)}</div></div>` : ''}
+    <div style="margin-top:14px;font-size:12px;color:var(--text-2)">→ <a href="/cookbook.html" style="color:var(--accent);text-decoration:none">Im Kochbuch ansehen</a></div>
+  `;
 }
 
 // Render the YouTube auto-transcript with clickable timestamps that
@@ -12519,6 +12603,8 @@ async function vaRespond(userText) {
     '- list_open_tasks / complete_task(id) — TODO-Verwaltung.',
     '- create_idea(title, body?) — halbgare Ideen.',
     '- list_ideas / search_people — Orientierung.',
+    '- create_recipe(title, servings, total_minutes, equipment[], ingredients[], steps[], ...) — wenn der User ein Rezept diktiert („Rezept Bolognese für 4 Personen, du brauchst…"). Extrahiere ALLE strukturierten Felder aus dem Diktat — Portionen, Zeit, Zutaten als Liste, Schritte als Liste, Geräte, Nährwerte falls erwähnt. Bestätige kurz „Rezept gespeichert, Sir."',
+    '- open_cookbook — wenn der User sagt „öffne Kochbuch", „zeig mir alle Rezepte", „Kochbuch", „where are my recipes". Antwort: „Öffne das Kochbuch, Sir." (sehr kurz, da Larry kurz danach zur Seite navigiert).',
     '- web_search — bei aktuellen Infos („was passiert grad…", News, Aktien, Wetter).',
     '',
     `Heutiges Datum: ${todayISO}. Sprache: ${voiceLangName}.`,
@@ -12594,6 +12680,14 @@ async function vaRespond(userText) {
           loadFromD1().catch(e => console.warn('D1 refresh failed:', e));
         }
       }
+    }
+    // Server bubbles up navigation hints from tool results (e.g.
+    // open_cookbook returns navigate_to:"/cookbook.html"). Schedule
+    // the navigation for AFTER the TTS finishes so the user hears
+    // Larry's confirmation before the page swaps.
+    if (typeof data.navigate_to === 'string' && /^\/[^\s]/.test(data.navigate_to)) {
+      window._vaPendingNavigate = data.navigate_to;
+      console.log('[Larry] navigate_to:', data.navigate_to);
     }
   } catch (err) {
     // Surface the actual reason in the BUBBLE STATUS (very visible) plus a
@@ -12743,6 +12837,15 @@ async function vaSpeakElevenLabs(text, voiceIdOverride) {
       vaSetStatus('Bereit');
       URL.revokeObjectURL(url);
       if (_vaActiveAudio === a) _vaActiveAudio = null;
+      // Voice-triggered navigation (e.g. "open the cookbook") — fires
+      // AFTER the TTS confirmation finishes so the user hears Larry
+      // say "ich öffne…" before the page changes.
+      if (window._vaPendingNavigate) {
+        const target = window._vaPendingNavigate;
+        window._vaPendingNavigate = null;
+        setTimeout(() => { window.location.href = target; }, 300);
+        return;  // skip vaMaybeAutoListen — page is about to navigate
+      }
       vaMaybeAutoListen();
     };
     a.onerror = () => {

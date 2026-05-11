@@ -153,6 +153,41 @@ export const TOOLS = [
     },
   },
 
+  // ───── recipes (structured notes with note_type='recipe') ─
+  {
+    name: 'create_recipe',
+    description: 'Strukturiertes Rezept anlegen — Larry sollte das nutzen wenn der User Kochbuch-Inhalt diktiert ("Rezept Bolognese für 4 Personen…"). Speichert servings, Zeit, Geräte, Nährwerte, Zutaten, Schritte als eigene Felder, damit die Rezept-Webseite (cookbook.html) sie strukturiert rendern kann.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        title:           { type: 'string', description: 'Name des Rezepts.' },
+        servings:        { type: 'integer', description: 'Anzahl Portionen (Standard 4).' },
+        total_minutes:   { type: 'integer', description: 'Gesamtzeit in Minuten.' },
+        prep_minutes:    { type: 'integer', description: 'Vorbereitungszeit.' },
+        cook_minutes:    { type: 'integer', description: 'Koch-/Backzeit.' },
+        location:        { type: 'string', description: 'Wo gekocht wird, z.B. "Herd + Backofen".' },
+        equipment:       { type: 'array', items: { type: 'string' }, description: 'Geräte/Werkzeuge, z.B. ["Backofen","grosse Pfanne","Sieb"].' },
+        ingredients:     { type: 'array', items: { type: 'string' }, description: 'Zutaten als ganze Zeilen, z.B. ["500 g Spaghetti","4 Tomaten","1 Zwiebel"].' },
+        steps:           { type: 'array', items: { type: 'string' }, description: 'Schritte in Reihenfolge, z.B. ["Wasser zum Kochen bringen","Zwiebel hacken","Tomaten anbraten"].' },
+        calories_per_serving: { type: 'integer', description: 'Kalorien pro Portion (kcal).' },
+        protein_g:       { type: 'integer', description: 'Eiweiss pro Portion in Gramm.' },
+        carbs_g:         { type: 'integer', description: 'Kohlenhydrate pro Portion in Gramm.' },
+        fat_g:           { type: 'integer', description: 'Fett pro Portion in Gramm.' },
+        tags:            { type: 'array', items: { type: 'string' }, description: 'Schlagwörter wie ["italienisch","vegetarisch","schnell"].' },
+        notes:           { type: 'string', description: 'Freitext-Anmerkungen.' },
+      },
+      required: ['title', 'ingredients', 'steps'],
+    },
+  },
+  {
+    name: 'open_cookbook',
+    description: 'Öffnet die Kochbuch-Webseite (eine Übersichtsseite mit allen Rezepten, sortiert, mit Inhaltsverzeichnis). Nutze dies wenn der User sagt "öffne Kochbuch", "zeig mir alle Rezepte", "wo sind meine Rezepte", "Kochbuch bitte".',
+    input_schema: {
+      type: 'object',
+      properties: {},
+    },
+  },
+
   // ───── ideas ───────────────────────────────────────────────
   {
     name: 'create_idea',
@@ -287,6 +322,66 @@ export async function executeTool(name, args, env) {
         if (!before) return fail('Task not found');
         await env.DB.prepare('UPDATE tasks SET status = \'done\', completed_at = CURRENT_TIMESTAMP WHERE id = ?').bind(id).run();
         return ok({ completed_id: id, title: before.title });
+      }
+
+      // ───── recipes ───────────────────────────────────────
+      case 'create_recipe': {
+        if (!args.title) return fail('title required');
+        if (!Array.isArray(args.ingredients) || args.ingredients.length === 0) return fail('ingredients[] required');
+        if (!Array.isArray(args.steps) || args.steps.length === 0) return fail('steps[] required');
+        // Bundle all structured fields into the source_meta JSON so the
+        // existing notes table doesn't need new columns.
+        const recipe = {
+          servings:      Number.isInteger(args.servings)      ? args.servings      : 4,
+          total_minutes: Number.isInteger(args.total_minutes) ? args.total_minutes : null,
+          prep_minutes:  Number.isInteger(args.prep_minutes)  ? args.prep_minutes  : null,
+          cook_minutes:  Number.isInteger(args.cook_minutes)  ? args.cook_minutes  : null,
+          location:      typeof args.location === 'string'    ? args.location      : null,
+          equipment:     Array.isArray(args.equipment) ? args.equipment.filter(Boolean) : [],
+          ingredients:   args.ingredients.filter(Boolean),
+          steps:         args.steps.filter(Boolean),
+          calories_per_serving: Number.isInteger(args.calories_per_serving) ? args.calories_per_serving : null,
+          protein_g:     Number.isInteger(args.protein_g) ? args.protein_g : null,
+          carbs_g:       Number.isInteger(args.carbs_g) ? args.carbs_g : null,
+          fat_g:         Number.isInteger(args.fat_g) ? args.fat_g : null,
+          tags:          Array.isArray(args.tags) ? args.tags.filter(Boolean) : [],
+          notes:         typeof args.notes === 'string' ? args.notes : '',
+        };
+        // Build a readable body that contains all info as plain text — this
+        // is what the user sees if they look at the note before clicking
+        // into the Rezept tab. It's also what /api/chat search_notes will
+        // grep over so the recipe is findable by ingredient name.
+        const bodyParts = [];
+        bodyParts.push(`Für ${recipe.servings} Personen.`);
+        if (recipe.total_minutes) bodyParts.push(`Gesamtzeit: ${recipe.total_minutes} Min.`);
+        if (recipe.location) bodyParts.push(`Wo: ${recipe.location}.`);
+        if (recipe.equipment.length) bodyParts.push(`Geräte: ${recipe.equipment.join(', ')}.`);
+        bodyParts.push('');
+        bodyParts.push('Zutaten:');
+        recipe.ingredients.forEach(i => bodyParts.push('  • ' + i));
+        bodyParts.push('');
+        bodyParts.push('Zubereitung:');
+        recipe.steps.forEach((s, i) => bodyParts.push((i + 1) + '. ' + s));
+        if (recipe.notes) { bodyParts.push(''); bodyParts.push('Notizen: ' + recipe.notes); }
+        const body = bodyParts.join('\n');
+
+        const slug = slugify(args.title) + '-' + Date.now().toString(36);
+        const tags = recipe.tags.join(',');
+        const r = await env.DB.prepare(
+          'INSERT INTO notes (slug, title, body, note_type, related_topics, source_meta, garden_type) VALUES (?, ?, ?, ?, ?, ?, ?)'
+        ).bind(slug, args.title, body, 'recipe', tags, JSON.stringify({ recipe }), 'Recipe').run();
+        return ok({ id: r.meta?.last_row_id, title: args.title, servings: recipe.servings });
+      }
+      case 'open_cookbook': {
+        // Marker result — the browser-side chat handler watches for this
+        // tool result and navigates the user to /cookbook.html. The text
+        // we return is also what Larry will say to the user.
+        return JSON.stringify({
+          ok: true,
+          action: 'open_cookbook',
+          navigate_to: '/cookbook.html',
+          spoken: 'Öffne das Kochbuch, Sir.',
+        });
       }
 
       // ───── ideas ─────────────────────────────────────────
