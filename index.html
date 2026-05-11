@@ -5136,7 +5136,7 @@ function addContent(kind) {
       break;
     }
     case 'camera': {
-      pickImageThenImport({ camera: true });
+      openCameraCapture();
       break;
     }
     case 'picture': {
@@ -5147,9 +5147,8 @@ function addContent(kind) {
 }
 
 // ── Image capture / pick → /api/import-image ───────────────────
-// Opens an OS file picker (with capture="environment" set for cameras
-// on mobile, otherwise the standard picker which already has access
-// to Photos / OneDrive / Google Drive / WhatsApp on iOS and Android).
+// Bilder-tile: opens the OS file picker which already has access to
+// Photos / OneDrive / Google Drive / WhatsApp on iOS and Android.
 // Image is read as a base64 data URL and POSTed to /api/import-image
 // where Claude Vision analyses it.
 function pickImageThenImport({ camera }) {
@@ -5163,6 +5162,165 @@ function pickImageThenImport({ camera }) {
     await importImageFlow(file, camera ? 'camera' : 'picker');
   };
   inp.click();
+}
+
+// ── Live camera capture modal ──────────────────────────────────
+// Kamera-tile: opens a modal with a live <video> preview from the
+// user's camera (rear on mobile, webcam on desktop), a capture button
+// that snapshots the current frame to a canvas, and a confirm/retake
+// flow. The captured JPEG is then handed to importImageFlow().
+//
+// Works on:
+//   - Desktop Chrome/Edge/Brave (webcam)
+//   - Mobile Chrome/Safari (rear camera via facingMode "environment")
+// Falls back to the OS file picker if getUserMedia is unavailable or
+// permission is denied.
+async function openCameraCapture() {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    alert('Kamera-API nicht verfügbar in diesem Browser. Wechsle zu „Bilder" um manuell auszuwählen.');
+    pickImageThenImport({ camera: true });
+    return;
+  }
+
+  // Build the modal
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+  const m = document.createElement('div');
+  m.style.cssText = 'background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:12px;max-width:720px;width:100%;max-height:95vh;overflow:auto;padding:20px;box-shadow:0 8px 32px rgba(0,0,0,.7);display:flex;flex-direction:column;gap:14px';
+  m.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div style="font-weight:600;font-size:15px">📷 Kamera</div>
+      <button id="cam-close" style="background:none;border:0;color:var(--text-2);font-size:22px;cursor:pointer;line-height:1">✕</button>
+    </div>
+    <div id="cam-stage" style="position:relative;background:#000;border-radius:8px;overflow:hidden;aspect-ratio:4/3">
+      <video id="cam-video" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover;display:none"></video>
+      <canvas id="cam-canvas" style="width:100%;height:100%;object-fit:contain;display:none"></canvas>
+      <div id="cam-status" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#999;font-size:13px">Initialisiere Kamera…</div>
+    </div>
+    <div id="cam-controls" style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+      <button id="cam-shoot" style="background:var(--accent);color:#0c1015;border:0;padding:14px 28px;border-radius:30px;font-weight:700;font-size:15px;cursor:pointer;display:none;min-width:160px">📸 Foto aufnehmen</button>
+      <button id="cam-switch" style="background:var(--surface-2);color:var(--text);border:1px solid var(--border);padding:14px 18px;border-radius:30px;cursor:pointer;display:none;font-size:13px" title="Front- / Rückkamera tauschen">🔄</button>
+      <button id="cam-retake" style="background:var(--surface-2);color:var(--text);border:1px solid var(--border);padding:14px 22px;border-radius:30px;cursor:pointer;display:none;font-size:14px">↺ Nochmal</button>
+      <button id="cam-use" style="background:#1f8c3a;color:#fff;border:0;padding:14px 26px;border-radius:30px;font-weight:700;cursor:pointer;display:none;font-size:14px">✓ Verwenden</button>
+    </div>
+    <div id="cam-error" style="font-size:12px;color:#ef4444;text-align:center;display:none"></div>
+    <div style="font-size:11px;color:var(--text-2);text-align:center">Tipp: Halte das Bild gut beleuchtet, Larry erkennt den Inhalt dann zuverlässiger.</div>
+  `;
+  overlay.appendChild(m);
+  document.body.appendChild(overlay);
+
+  const $ = (sel) => m.querySelector(sel);
+  const video    = $('#cam-video');
+  const canvas   = $('#cam-canvas');
+  const status   = $('#cam-status');
+  const errBox   = $('#cam-error');
+  const btnShoot = $('#cam-shoot');
+  const btnSwitch = $('#cam-switch');
+  const btnRetake = $('#cam-retake');
+  const btnUse    = $('#cam-use');
+  const btnClose  = $('#cam-close');
+
+  let stream = null;
+  let facing = 'environment';  // prefer rear camera on mobile
+  let snapshotDataUrl = null;
+
+  const stop = () => {
+    if (stream) { stream.getTracks().forEach(t => { try { t.stop(); } catch(_) {} }); stream = null; }
+  };
+  const close = () => { stop(); overlay.remove(); };
+  btnClose.onclick = close;
+
+  async function startStream() {
+    stop();
+    status.style.display = '';
+    status.textContent = 'Initialisiere Kamera…';
+    errBox.style.display = 'none';
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: facing }, width: { ideal: 1920 }, height: { ideal: 1440 } },
+        audio: false,
+      });
+      video.srcObject = stream;
+      video.style.display = '';
+      canvas.style.display = 'none';
+      status.style.display = 'none';
+      btnShoot.style.display = '';
+      // Show camera switcher only if we have multiple video inputs
+      try {
+        const devs = await navigator.mediaDevices.enumerateDevices();
+        const cams = devs.filter(d => d.kind === 'videoinput');
+        if (cams.length > 1) btnSwitch.style.display = '';
+      } catch(_) {}
+    } catch (e) {
+      status.style.display = 'none';
+      errBox.style.display = '';
+      const name = e?.name || '';
+      let msg;
+      if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+        msg = '🚫 Kamera-Berechtigung verweigert. Im Schloss-Icon links neben der URL → Kamera → Zulassen → Reload.';
+      } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+        msg = '🚫 Keine Kamera gefunden.';
+      } else if (name === 'NotReadableError') {
+        msg = '🚫 Kamera wird von einem anderen Programm benutzt (Teams, Zoom, OBS?).';
+      } else {
+        msg = '⚠️ Kamera-Fehler: ' + (e?.message || name || e);
+      }
+      errBox.textContent = msg;
+      console.warn('Camera error:', e);
+    }
+  }
+
+  btnSwitch.onclick = () => {
+    facing = (facing === 'environment') ? 'user' : 'environment';
+    startStream();
+  };
+
+  btnShoot.onclick = () => {
+    if (!stream) return;
+    // Snapshot the current frame at native video resolution
+    const w = video.videoWidth || 1920;
+    const h = video.videoHeight || 1440;
+    canvas.width = w; canvas.height = h;
+    canvas.getContext('2d').drawImage(video, 0, 0, w, h);
+    snapshotDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+    // Switch UI: hide live, show preview + confirm row
+    video.style.display = 'none';
+    canvas.style.display = '';
+    btnShoot.style.display = 'none';
+    btnSwitch.style.display = 'none';
+    btnRetake.style.display = '';
+    btnUse.style.display = '';
+    // Keep the stream open so retake is instant
+  };
+
+  btnRetake.onclick = () => {
+    snapshotDataUrl = null;
+    video.style.display = '';
+    canvas.style.display = 'none';
+    btnShoot.style.display = '';
+    btnRetake.style.display = 'none';
+    btnUse.style.display = 'none';
+    // Re-enable switch if multi-cam
+    btnSwitch.style.display = '';
+    (async () => {
+      try {
+        const devs = await navigator.mediaDevices.enumerateDevices();
+        const cams = devs.filter(d => d.kind === 'videoinput');
+        if (cams.length <= 1) btnSwitch.style.display = 'none';
+      } catch(_) {}
+    })();
+  };
+
+  btnUse.onclick = async () => {
+    if (!snapshotDataUrl) return;
+    // Convert data URL to File for the existing importImageFlow path
+    const blob = await (await fetch(snapshotDataUrl)).blob();
+    const file = new File([blob], 'kamera-' + Date.now() + '.jpg', { type: 'image/jpeg' });
+    close();
+    await importImageFlow(file, 'camera');
+  };
+
+  await startStream();
 }
 
 async function importImageFlow(file, source) {
