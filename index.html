@@ -3769,9 +3769,13 @@ async function loadFromD1() {
 
       const entry = {
         id: 'd1-note-' + row.id,
-        // Imported links get type 'garden' so the existing Garden-rendering
-        // (with "Open source" button, etc.) picks them up automatically.
-        type: isImportedLink ? 'garden' : 'note',
+        // ALL D1 entries (notes + imports + bookmarks) get type 'note' so
+        // they appear in the user's main "Notizenleiste" (the default
+        // standard-mode list, which filters out type==='garden'). The
+        // Garden-style rich detail view (play button, sourceUrl, etc.)
+        // is now triggered by the PRESENCE of sourceUrl/youtubeId in
+        // openDetail, not by the type tag.
+        type: 'note',
         icon,
         date: toIso(row.created_at),
         title: row.title,
@@ -3781,6 +3785,10 @@ async function loadFromD1() {
         topics: splitTags(row.related_topics),
       };
       if (isImportedLink) {
+        // Flag this as a D1-imported link so the detail view knows to
+        // use the rich Garden-style header (without changing entry.type
+        // which controls list visibility).
+        entry.fromD1Link = true;
         entry.garden_type = row.garden_type || (isBookmark ? 'Bookmark' : (row.source_type === 'youtube' ? 'Video' : 'Article'));
         entry.sourceUrl = row.source_url || '';
         if (row.source_type === 'youtube' && meta) {
@@ -7037,8 +7045,13 @@ function openDetail(entry) {
 
   const header = document.querySelector('#detail-panel .detail-header');
 
-  if (entry.type === 'garden') {
-    // Garden cards: replace the standard header with a video-style header
+  // Garden-style header for both:
+  //   - hardcoded Garden manifest entries (type=garden), AND
+  //   - D1-imported links that have a sourceUrl (flag fromD1Link).
+  //     They live as type='note' so they appear in the standard notes
+  //     list, but should still get the rich video-style header here.
+  const useGardenHeader = entry.type === 'garden' || entry.fromD1Link === true;
+  if (useGardenHeader) {
     header.innerHTML = buildGardenHeader(entry);
   } else {
     // Standard journal entry: same editable tag row as Garden, plus a "push to Garden" button
