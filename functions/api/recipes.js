@@ -70,6 +70,8 @@ export async function onRequestGet({ env }) {
         cookbook_title,
         cookbook_source_url,  // ← used by badge link + source-tag link
         cookbook_logo_url,    // ← used by badge img src (overrides default)
+        image_url:    meta?.image_url || null,
+        image_credit: meta?.image_credit || null,
         created_at: row.created_at,
         recipe,
       };
