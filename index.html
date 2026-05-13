@@ -2766,10 +2766,57 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
 .books-detail-link { display: inline-block; padding: 8px 14px; border-radius: 8px; background: var(--accent); color: white;
                      text-decoration: none; font-size: 13px; font-weight: 500; }
 .books-detail-link:hover { filter: brightness(1.1); }
-@media (max-width: 600px) {
-  .books-detail-inner { grid-template-columns: 1fr; }
-  .books-detail-cover { max-width: 160px; margin: 0 auto; }
+
+/* Mobile fullscreen detail (phase 4c). Below 768px the dialog takes the whole
+   viewport, slides up from the bottom, and gets a chunky close button. */
+@keyframes booksDetailSlideUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
 }
+@media (max-width: 768px) {
+  .books-detail {
+    width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh;
+    margin: 0; border-radius: 0; border: none;
+    /* dialog default centers — we want a flush fullscreen sheet */
+    inset: 0; padding: 0;
+  }
+  .books-detail[open] {
+    animation: booksDetailSlideUp 260ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+  .books-detail-inner {
+    grid-template-columns: 1fr; gap: 18px;
+    padding: 56px 18px 24px;
+    max-height: 100dvh; height: 100dvh; overflow-y: auto;
+  }
+  .books-detail-cover { max-width: 200px; margin: 0 auto; }
+  .books-detail-close {
+    top: 12px; right: 12px; font-size: 32px; padding: 6px 12px;
+    background: var(--surface-2, #18203a); color: var(--text);
+    border-radius: 10px; line-height: 1; min-width: 44px; min-height: 44px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .books-detail-close:hover { background: var(--surface-2, #18203a); filter: brightness(1.2); }
+}
+
+/* ── Cover-Wall sub-view (phase 4d) ─────────────────────────────── */
+.books-view-toggle { display: inline-flex; gap: 6px; margin-left: 12px; }
+.books-view-btn { padding: 6px 12px; border-radius: 8px; background: var(--surface-1); color: var(--text-2);
+                   border: 1px solid var(--border); cursor: pointer; font: inherit; font-size: 13px;
+                   transition: color .15s ease, border-color .15s ease, background .15s ease; }
+.books-view-btn:hover { color: var(--text); border-color: var(--accent); }
+.books-view-btn.active { color: var(--accent); border-color: var(--accent); background: var(--surface-2, #18203a); }
+.books-wall { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; padding: 4px; }
+.books-wall-card { aspect-ratio: 2 / 3; background: var(--surface-2, #18203a); border: 1px solid var(--border);
+                    border-radius: 8px; overflow: hidden; cursor: pointer; position: relative;
+                    transition: border-color .15s ease, transform .15s ease; }
+.books-wall-card:hover, .books-wall-card:focus { border-color: var(--accent); transform: translateY(-2px); outline: none; }
+.books-wall-card img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.books-wall-card .books-cover-placeholder { padding: 12px 8px; }
+.books-wall-card .books-ph-title { font-size: 12px; -webkit-line-clamp: 4; }
+.books-wall-card .books-ph-author { font-size: 10px; }
+@media (max-width: 1024px) { .books-wall { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 600px)  { .books-wall { grid-template-columns: repeat(2, 1fr); gap: 10px; } }
+.books-wall-empty { padding: 60px 20px; text-align: center; color: var(--text-2); }
 </style>
 </head>
 <body>
@@ -3556,9 +3603,15 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
       </button>
       <div class="books-header">
         <h2 class="books-title">Bücher</h2>
-        <div class="books-stats" id="books-stats" aria-live="polite">Lade …</div>
+        <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap">
+          <div class="books-stats" id="books-stats" aria-live="polite">Lade …</div>
+          <div class="books-view-toggle" role="tablist" aria-label="Ansicht umschalten">
+            <button type="button" id="books-view-grid" class="books-view-btn active" role="tab" aria-selected="true" title="Standard-Grid mit Titel + Metadaten">▤ Grid</button>
+            <button type="button" id="books-view-wall" class="books-view-btn" role="tab" aria-selected="false" title="Reine Cover-Galerie">▦ Cover-Galerie</button>
+          </div>
+        </div>
       </div>
-      <div class="books-controls">
+      <div class="books-controls" id="books-controls">
         <input id="books-search" class="books-search" type="search" placeholder="Suche nach Titel, Autor oder Beschreibung …" autocomplete="off" aria-label="Volltextsuche">
         <div class="books-filters">
           <label class="books-filter"><span>Genre</span><select id="books-filter-genre" aria-label="Genre filtern"></select></label>
@@ -3575,7 +3628,9 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
         </div>
       </div>
       <div id="books-grid" class="books-grid" role="list"></div>
+      <div id="diverses-books-wall" class="books-wall" role="list" hidden></div>
       <p id="books-empty" class="books-empty" hidden>Keine Bücher gefunden. Filter anpassen oder zurücksetzen.</p>
+      <p id="books-wall-empty" class="books-wall-empty" hidden>Keine Bücher gefunden. Filter anpassen oder zurücksetzen.</p>
       <dialog id="books-detail" class="books-detail" aria-labelledby="books-detail-title">
         <button type="button" class="books-detail-close" aria-label="Schließen" id="books-detail-close">&times;</button>
         <div class="books-detail-inner">
@@ -8029,6 +8084,8 @@ const BOOKS_STATE = {
   loading: null,   // in-flight Promise (de-dupes concurrent opens)
   all: [],         // raw rows from /api/books
   filters: { q: '', genre: '', lang: '', author: '', sort: 'title-asc' },
+  view: 'grid',    // 'grid' | 'wall' (phase 4d)
+  wallIO: null,    // IntersectionObserver for lazy-loading fallback
 };
 
 function booksNorm(s) {
@@ -8127,21 +8184,108 @@ function applyBooksFilters() {
 }
 
 function renderBooks() {
-  const grid  = document.getElementById('books-grid');
-  const empty = document.getElementById('books-empty');
-  const stats = document.getElementById('books-stats');
-  if (!grid) return;
+  const grid       = document.getElementById('books-grid');
+  const wall       = document.getElementById('diverses-books-wall');
+  const empty      = document.getElementById('books-empty');
+  const wallEmpty  = document.getElementById('books-wall-empty');
+  const stats      = document.getElementById('books-stats');
+  if (!grid && !wall) return;
   const list = applyBooksFilters();
   if (stats) stats.textContent = `${list.length} von ${BOOKS_STATE.all.length} Büchern`;
+
+  // Toggle visibility per active view. We always populate the active container
+  // and leave the other empty (cheaper memory, less DOM churn).
+  const isWall = BOOKS_STATE.view === 'wall';
+  if (grid)      grid.hidden      = isWall;
+  if (wall)      wall.hidden      = !isWall;
+  if (empty)     empty.hidden     = true;
+  if (wallEmpty) wallEmpty.hidden = true;
+
   if (list.length === 0) {
-    grid.replaceChildren();
-    if (empty) empty.hidden = false;
+    if (grid) grid.replaceChildren();
+    if (wall) wall.replaceChildren();
+    if (isWall) { if (wallEmpty) wallEmpty.hidden = false; }
+    else        { if (empty)     empty.hidden     = false; }
     return;
   }
-  if (empty) empty.hidden = true;
+
+  if (isWall) {
+    renderBooksWall(list);
+    if (grid) grid.replaceChildren(); // free old grid DOM
+  } else {
+    const frag = document.createDocumentFragment();
+    for (const b of list) frag.appendChild(buildBookCard(b));
+    grid.replaceChildren(frag);
+    if (wall) wall.replaceChildren(); // free old wall DOM
+  }
+}
+
+function renderBooksWall(list) {
+  const wall = document.getElementById('diverses-books-wall');
+  if (!wall) return;
+  // Tear down a previous observer if we have one — we'll re-create with the
+  // fresh card set below.
+  if (BOOKS_STATE.wallIO) { try { BOOKS_STATE.wallIO.disconnect(); } catch(_) {} BOOKS_STATE.wallIO = null; }
+
   const frag = document.createDocumentFragment();
-  for (const b of list) frag.appendChild(buildBookCard(b));
-  grid.replaceChildren(frag);
+  const lazyTargets = []; // for IntersectionObserver fallback
+  for (const b of list) {
+    const card = document.createElement('article');
+    card.className = 'books-wall-card';
+    card.tabIndex = 0;
+    card.setAttribute('role', 'listitem');
+    card.dataset.id = b.node_id;
+    card.setAttribute('aria-label', `${b.title || ''} – ${b.author || ''}`);
+    if (b.cover_image_url) {
+      const img = document.createElement('img');
+      img.alt = ''; img.referrerPolicy = 'no-referrer';
+      // Prefer native lazy-load; the IO fallback below handles browsers
+      // that ignore the attribute (mostly old WebKit). We set data-src
+      // and let the observer swap to .src when the card scrolls near.
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      if ('loading' in HTMLImageElement.prototype) {
+        img.src = b.cover_image_url;
+      } else {
+        img.dataset.src = b.cover_image_url;
+        lazyTargets.push(img);
+      }
+      img.addEventListener('error', () => { card.replaceChildren(bookPlaceholderNode(b)); });
+      card.appendChild(img);
+    } else {
+      card.appendChild(bookPlaceholderNode(b));
+    }
+    card.addEventListener('click', () => openBookDetail(b.node_id));
+    card.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openBookDetail(b.node_id); }
+    });
+    frag.appendChild(card);
+  }
+  wall.replaceChildren(frag);
+
+  if (lazyTargets.length && 'IntersectionObserver' in window) {
+    BOOKS_STATE.wallIO = new IntersectionObserver((entries, obs) => {
+      for (const e of entries) {
+        if (e.isIntersecting) {
+          const img = e.target;
+          if (img.dataset.src) { img.src = img.dataset.src; delete img.dataset.src; }
+          obs.unobserve(img);
+        }
+      }
+    }, { rootMargin: '200px 0px' });
+    for (const img of lazyTargets) BOOKS_STATE.wallIO.observe(img);
+  }
+}
+
+function setBooksView(view) {
+  if (view !== 'grid' && view !== 'wall') return;
+  if (BOOKS_STATE.view === view) return;
+  BOOKS_STATE.view = view;
+  const gridBtn = document.getElementById('books-view-grid');
+  const wallBtn = document.getElementById('books-view-wall');
+  if (gridBtn) { gridBtn.classList.toggle('active', view === 'grid'); gridBtn.setAttribute('aria-selected', String(view === 'grid')); }
+  if (wallBtn) { wallBtn.classList.toggle('active', view === 'wall'); wallBtn.setAttribute('aria-selected', String(view === 'wall')); }
+  renderBooks();
 }
 
 function buildBookCard(b) {
@@ -8282,6 +8426,9 @@ function wireBooksControls() {
     const d = e.currentTarget; const r = d.getBoundingClientRect();
     if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) closeBookDetail();
   });
+  // Phase 4d: Grid <-> Cover-Wall toggle.
+  $('books-view-grid')?.addEventListener('click', () => setBooksView('grid'));
+  $('books-view-wall')?.addEventListener('click', () => setBooksView('wall'));
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wireBooksControls);
 else wireBooksControls();
