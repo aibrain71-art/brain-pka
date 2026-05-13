@@ -94,6 +94,33 @@ def main():
         )
     out("\n")
 
+    # ─── books (Phase 3 hybrid) ────────────────────────────────
+    # The books-specific data files (migration-books.sql, migration-notes-books.sql,
+    # migration-people-authors.sql) are generated separately by
+    # migrate_books_to_hybrid.py --emit-d1, because they need slug-extraction
+    # logic that doesn't fit the simple row-to-INSERT pattern above.
+    # Note: book-author people are ALSO included here under the people block
+    # (if the local DB already has them — which it will after running
+    # migrate_books_to_hybrid.py once locally).
+    rows = db.execute(
+        "SELECT node_id, title, author, publication_year, genre, "
+        "genre_canonical, language, isbn, publisher, page_count, "
+        "average_rating, purchase_link, cover_image_url, description, "
+        "description_source, enriched_at, created_at, updated_at FROM books"
+    ).fetchall()
+    out(f"-- {len(rows)} books\n")
+    for r in rows:
+        out(
+            "INSERT OR REPLACE INTO books "
+            "(node_id, title, author, publication_year, genre, genre_canonical, "
+            "language, isbn, publisher, page_count, average_rating, "
+            "purchase_link, cover_image_url, description, description_source, "
+            "enriched_at, created_at, updated_at) VALUES ("
+            + ", ".join(sql_quote(c) for c in r)
+            + ");\n"
+        )
+    out("\n")
+
     out("COMMIT;\n")
     db.close()
 

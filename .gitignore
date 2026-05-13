@@ -9,6 +9,13 @@ mypka.db.README
 mypka.db.schema*.sql
 mypka.db.seed*.sql
 
+# Phase 3a books-hybrid: generated data dumps (regenerable from mypka.db
+# via `python migrate_books_to_hybrid.py --emit-d1`). Bulky, contain book
+# descriptions, no value in version control. schema-books.sql IS committed.
+migration-books.sql
+migration-notes-books.sql
+migration-people-authors.sql
+
 # PKM system docs that aren't part of the deployed app
 INDEX.md
 SOP/
