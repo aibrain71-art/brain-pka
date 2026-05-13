@@ -2683,6 +2683,31 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
                   display: inline-flex; align-items: center; justify-content: center;
                   transition: all .15s; line-height: 1; }
 .ai-desc-regen:hover { background: var(--accent); color: #fff; border-color: var(--accent); transform: rotate(180deg); }
+
+/* ── Diverses view (Modul-Landing + Sub-Container) ─────────────────── */
+#diverses-view { padding: 20px 28px; max-width: 1400px; margin: 0 auto; width: 100%; }
+.diverses-header { padding: 8px 4px 16px; }
+.diverses-title { font-size: 22px; font-weight: 600; color: var(--text); margin: 0 0 4px; }
+.diverses-subtitle { font-size: 13px; color: var(--text-2); margin: 0; }
+.diverses-tile-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; padding: 4px; }
+.diverses-tile { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px;
+                  padding: 20px; cursor: pointer; transition: transform .15s ease, border-color .15s ease, box-shadow .15s ease;
+                  text-align: left; display: flex; flex-direction: column; }
+.diverses-tile:hover { border-color: var(--accent); transform: translateY(-2px);
+                        box-shadow: 0 4px 16px rgba(0,0,0,.25); }
+.diverses-tile-icon { color: var(--accent); margin-bottom: 12px; display: inline-flex; }
+.diverses-tile-title { font-size: 16px; font-weight: 600; color: var(--text); margin: 0 0 6px; }
+.diverses-tile-subtitle { font-size: 13px; color: var(--text-2); margin: 0; line-height: 1.4; }
+.diverses-back-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px 6px 8px;
+                      margin: 4px 4px 18px; background: var(--surface-2); color: var(--text-2);
+                      border: 1px solid var(--border); border-radius: 8px; font-size: 13px; cursor: pointer;
+                      transition: color .15s ease, border-color .15s ease, background .15s ease; }
+.diverses-back-btn:hover { color: var(--accent); border-color: var(--accent); background: var(--surface-1); }
+.diverses-placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center;
+                         text-align: center; padding: 60px 20px; color: var(--text-2); }
+.diverses-placeholder-icon { color: var(--accent); opacity: .55; margin-bottom: 18px; }
+.diverses-placeholder-title { font-size: 18px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+.diverses-placeholder-sub { font-size: 13px; color: var(--text-2); }
 </style>
 </head>
 <body>
@@ -2756,6 +2781,10 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
     <div class="nav-item" id="nav-tasks" onclick="setView('tasks')" title="Aufgaben (Microsoft Planner)">
       <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
       <span>Aufgaben</span>
+    </div>
+    <div class="nav-item" id="nav-diverses" onclick="setView('diverses')" title="Diverses — Bücher, Blutdruck und weitere Module">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      <span>Diverses</span>
     </div>
     <div class="nav-item" id="nav-settings" onclick="openSettings()" title="Einstellungen">
       <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -3443,6 +3472,32 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
           <button class="fc-btn fc-btn-primary" id="task-save-btn" onclick="saveTaskFromModal()">Speichern</button>
         </div>
         <div id="task-modal-status" class="fc-modal-hint"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Diverses view — Modul-Landing-Grid + Sub-Container ─────── -->
+  <div id="diverses-view" style="display:none;flex:1;overflow:auto;flex-direction:column">
+    <!-- Landing: Tile-Grid mit allen Diverses-Modulen -->
+    <div id="diverses-landing">
+      <div class="diverses-header">
+        <h2 class="diverses-title">Diverses</h2>
+        <p class="diverses-subtitle">Themenmodule, die nicht in den Hauptbereich gehören</p>
+      </div>
+      <div class="diverses-tile-grid"></div>
+    </div>
+    <!-- Sub: Bücher (Phase 2 = Placeholder, Phase 3 = volle Library) -->
+    <div id="diverses-books" style="display:none">
+      <button class="diverses-back-btn" onclick="setView('diverses')" title="Zurück zur Diverses-Übersicht">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+        <span>Diverses</span>
+      </button>
+      <div class="diverses-placeholder">
+        <div class="diverses-placeholder-icon">
+          <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+        </div>
+        <div class="diverses-placeholder-title">Migration läuft noch — bald verfügbar</div>
+        <div class="diverses-placeholder-sub">Die Bücher-Bibliothek wird in Kürze integriert.</div>
       </div>
     </div>
   </div>
@@ -7784,14 +7839,25 @@ function setView(view, filter) {
   if (fcv) fcv.style.display = view === 'flashcards' ? 'block' : 'none';
   const tv = document.getElementById('tasks-view');
   if (tv) tv.style.display = view === 'tasks' ? 'flex' : 'none';
+  // Diverses view + sub-containers. `filter` arg doubles as sub-id ('books' etc.) when view === 'diverses'.
+  const dv = document.getElementById('diverses-view');
+  if (dv) dv.style.display = view === 'diverses' ? 'flex' : 'none';
+  if (view === 'diverses') {
+    const sub = filter || null;
+    const landing = document.getElementById('diverses-landing');
+    const books   = document.getElementById('diverses-books');
+    if (landing) landing.style.display = sub === 'books' ? 'none' : '';
+    if (books)   books.style.display   = sub === 'books' ? 'block' : 'none';
+  }
   // Topbar view buttons removed — left-sidebar nav owns the active state now.
   document.getElementById('vbtn-list')?.classList.toggle('active', view === 'list');
   document.getElementById('vbtn-graph')?.classList.toggle('active', view === 'graph');
   document.getElementById('vbtn-chat')?.classList.toggle('active', view === 'chat');
-  const navMap = { list: 'nav-all', graph: 'nav-graph', chat: 'nav-chat', flashcards: 'nav-flashcards', tasks: 'nav-tasks' };
+  const navMap = { list: 'nav-all', graph: 'nav-graph', chat: 'nav-chat', flashcards: 'nav-flashcards', tasks: 'nav-tasks', diverses: 'nav-diverses' };
   updateNavActive(navMap[view] || 'nav-all');
   if (view === 'flashcards' && typeof renderFcDeckList === 'function') renderFcDeckList();
   if (view === 'tasks' && typeof openTasksView === 'function') openTasksView();
+  if (view === 'diverses' && !filter && typeof renderDiversesLanding === 'function') renderDiversesLanding();
   document.getElementById('vbtn-settings')?.classList.toggle('visible', view === 'graph');
 
   // Sidebar swap: tags in list/graph view, chat history in chat view
@@ -7824,6 +7890,43 @@ function setView(view, filter) {
 function updateNavActive(id) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById(id)?.classList.add('active');
+}
+
+// ── Diverses module registry ──────────────────────────────────
+// Module-Liste für das Diverses-Landing. Neue Module hier eintragen — die
+// Tile wird automatisch gerendert. `action()` läuft beim Klick auf die Tile.
+const DIVERSES_MODULES = [
+  {
+    slug: 'books',
+    label: 'Bücher',
+    subtitle: '115 Bücher in deiner Bibliothek',
+    icon: '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>',
+    action: () => setView('diverses', 'books')
+  },
+  {
+    slug: 'blood-pressure',
+    label: 'Blutdruck',
+    subtitle: 'Werte protokollieren und Trend sehen',
+    icon: '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>',
+    action: () => { window.location.href = '/blood-pressure.html'; }
+  }
+];
+function renderDiversesLanding() {
+  const grid = document.querySelector('#diverses-landing .diverses-tile-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  DIVERSES_MODULES.forEach(mod => {
+    const tile = document.createElement('div');
+    tile.className = 'diverses-tile';
+    tile.dataset.slug = mod.slug;
+    tile.innerHTML = `
+      <div class="diverses-tile-icon">${mod.icon}</div>
+      <div class="diverses-tile-title">${mod.label}</div>
+      <div class="diverses-tile-subtitle">${mod.subtitle}</div>
+    `;
+    tile.addEventListener('click', () => { try { mod.action(); } catch (e) { console.error('Diverses module action failed:', mod.slug, e); } });
+    grid.appendChild(tile);
+  });
 }
 
 // ── Detail Panel ──────────────────────────────────────────────
