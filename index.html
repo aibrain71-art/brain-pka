@@ -2767,6 +2767,31 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
                      text-decoration: none; font-size: 13px; font-weight: 500; }
 .books-detail-link:hover { filter: brightness(1.1); }
 
+/* Phase 4b: camera capture button + spinner + toast */
+.books-camera-btn { display: inline-flex; align-items: center; gap: 8px; margin-top: 12px;
+                    padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border);
+                    background: var(--surface-2, #18203a); color: var(--text);
+                    font-size: 13px; font-weight: 500; cursor: pointer; }
+.books-camera-btn:hover { filter: brightness(1.1); }
+.books-camera-btn:disabled { opacity: 0.6; cursor: wait; }
+.books-camera-btn .books-camera-icon { font-size: 16px; line-height: 1; }
+.books-detail-cover.is-identifying { position: relative; }
+.books-detail-cover.is-identifying::after {
+  content: ''; position: absolute; inset: 0;
+  background: rgba(0,0,0,0.55) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'><circle cx='20' cy='20' r='16' fill='none' stroke='%23fff' stroke-width='3' stroke-dasharray='80' stroke-dashoffset='40'><animateTransform attributeName='transform' type='rotate' from='0 20 20' to='360 20 20' dur='1s' repeatCount='indefinite'/></circle></svg>") center / 40px no-repeat;
+  border-radius: 8px;
+}
+.books-toast { position: fixed; top: 20px; right: 20px; z-index: 10000;
+               padding: 12px 16px; border-radius: 8px;
+               background: var(--surface-1); color: var(--text);
+               border: 1px solid var(--border);
+               box-shadow: 0 6px 24px rgba(0,0,0,0.35);
+               font-size: 13px; max-width: 360px;
+               animation: booksToastSlideIn 220ms cubic-bezier(0.2, 0.7, 0.2, 1); }
+.books-toast.is-error { border-color: #c0392b; }
+.books-toast.is-ok    { border-color: #27ae60; }
+@keyframes booksToastSlideIn { from { transform: translateX(120%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
 /* Mobile fullscreen detail (phase 4c). Below 768px the dialog takes the whole
    viewport, slides up from the bottom, and gets a chunky close button. */
 @keyframes booksDetailSlideUp {
@@ -3641,6 +3666,13 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
             <dl class="books-detail-meta" id="books-detail-meta"></dl>
             <p class="books-detail-description" id="books-detail-description"></p>
             <a id="books-detail-link" class="books-detail-link" target="_blank" rel="noopener" hidden>Bei Amazon ansehen ↗</a>
+            <div style="margin-top:8px">
+              <button type="button" id="books-camera-btn" class="books-camera-btn">
+                <span class="books-camera-icon" aria-hidden="true">&#128247;</span>
+                <span>Cover per Foto erfassen</span>
+              </button>
+              <input type="file" id="books-camera-input" accept="image/*" capture="environment" hidden>
+            </div>
           </div>
         </div>
       </dialog>
@@ -8352,6 +8384,11 @@ function openBookDetail(nodeId) {
 
 function fillBookDetail(b) {
   if (!b) return;
+  // Phase 4b: remember the current book so the camera button knows which
+  // node_id to POST to. Stored on the dialog element so closeBookDetail
+  // can clear it (and so the camera handler can read it lazily).
+  const dlg = document.getElementById('books-detail');
+  if (dlg) dlg.dataset.nodeId = b.node_id || '';
   const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || ''; };
   setText('books-detail-title', b.title);
   setText('books-detail-author', b.author);
@@ -8397,8 +8434,94 @@ function fillBookDetail(b) {
 function closeBookDetail() {
   const d = document.getElementById('books-detail');
   if (!d) return;
+  if (d.dataset) d.dataset.nodeId = '';
   if (typeof d.close === 'function') d.close();
   else d.removeAttribute('open');
+}
+
+// ── Phase 4b: Toast helper (top-right, 4s auto-dismiss) ───────────────────
+function booksShowToast(message, variant) {
+  const t = document.createElement('div');
+  t.className = 'books-toast' + (variant === 'error' ? ' is-error' : variant === 'ok' ? ' is-ok' : '');
+  t.textContent = message;
+  document.body.appendChild(t);
+  setTimeout(() => { t.style.transition = 'opacity 240ms'; t.style.opacity = '0'; }, 3600);
+  setTimeout(() => { t.remove(); }, 4000);
+}
+
+// ── Phase 4b: Camera capture → /identify-cover ───────────────────────────
+async function booksFileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onerror = () => reject(new Error('Datei konnte nicht gelesen werden'));
+    fr.onload = () => resolve(String(fr.result || ''));
+    fr.readAsDataURL(file);
+  });
+}
+
+async function booksHandleCameraFile(file) {
+  const dlg = document.getElementById('books-detail');
+  const nodeId = dlg?.dataset?.nodeId || '';
+  if (!nodeId) {
+    booksShowToast('Kein Buch geöffnet — Cover kann nicht zugeordnet werden.', 'error');
+    return;
+  }
+  if (!file) return;
+  if (file.size > 8 * 1024 * 1024) {
+    booksShowToast('Foto zu gross (>8 MB). Bitte kleiner aufnehmen.', 'error');
+    return;
+  }
+
+  const cover = document.getElementById('books-detail-cover');
+  const btn = document.getElementById('books-camera-btn');
+  cover?.classList.add('is-identifying');
+  if (btn) btn.disabled = true;
+
+  try {
+    const dataUrl = await booksFileToDataUrl(file);
+    const res = await fetch('/api/books/' + encodeURIComponent(nodeId) + '/identify-cover', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: dataUrl }),
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok || !payload.ok) {
+      const msg = payload?.error || ('HTTP ' + res.status);
+      booksShowToast('Fehler: ' + msg, 'error');
+      return;
+    }
+
+    // Refresh the cover image in-place.
+    if (cover && payload.new_cover_url) {
+      const img = document.createElement('img');
+      img.alt = ''; img.referrerPolicy = 'no-referrer';
+      // Cache-bust so the browser actually reloads when the URL is identical.
+      img.src = payload.new_cover_url + (payload.new_cover_url.includes('?') ? '&' : '?') + 'v=' + Date.now();
+      cover.replaceChildren(img);
+    }
+
+    const sourceLabel = ({
+      amazon_isbn10: 'Amazon',
+      google_books: 'Google Books',
+      openlibrary: 'OpenLibrary',
+      'owner-photo': 'eigenes Foto',
+    })[payload.source] || payload.source || 'unbekannt';
+    booksShowToast(`Cover aktualisiert (Quelle: ${sourceLabel})`, 'ok');
+
+    // Best-effort: also patch the cached list entry so the grid reflects it on next render.
+    if (window.BOOKS_STATE && Array.isArray(BOOKS_STATE.all)) {
+      const row = BOOKS_STATE.all.find(x => x.node_id === nodeId);
+      if (row) row.cover_image_url = payload.new_cover_url;
+    }
+  } catch (e) {
+    booksShowToast('Netzwerkfehler: ' + (e?.message || e), 'error');
+  } finally {
+    cover?.classList.remove('is-identifying');
+    if (btn) btn.disabled = false;
+    // Reset the input so selecting the same file twice re-fires the change event.
+    const input = document.getElementById('books-camera-input');
+    if (input) input.value = '';
+  }
 }
 
 // One-time wire-up on first DOMContentLoaded (or immediately if late).
@@ -8425,6 +8548,15 @@ function wireBooksControls() {
   $('books-detail')?.addEventListener('click', (e) => {
     const d = e.currentTarget; const r = d.getBoundingClientRect();
     if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) closeBookDetail();
+  });
+  // Phase 4b: camera button → file input → /identify-cover
+  $('books-camera-btn')?.addEventListener('click', () => {
+    const input = $('books-camera-input');
+    if (input) input.click();
+  });
+  $('books-camera-input')?.addEventListener('change', (e) => {
+    const file = e.target?.files?.[0];
+    if (file) booksHandleCameraFile(file);
   });
   // Phase 4d: Grid <-> Cover-Wall toggle.
   $('books-view-grid')?.addEventListener('click', () => setBooksView('grid'));
