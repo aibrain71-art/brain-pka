@@ -4,6 +4,9 @@
 //
 // Lives in its own route file (not /api/books?id=…) so the response stays
 // flat: { ok, book } instead of a list wrapper, and the URL is bookmarkable.
+//
+// Phase 4b: moved from [node_id].js to [node_id]/index.js so the directory
+// can host the sibling identify-cover.js route. Logic unchanged.
 
 export async function onRequestGet({ env, params }) {
   if (!env.DB) {

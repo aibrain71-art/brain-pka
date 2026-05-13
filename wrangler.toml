@@ -14,3 +14,12 @@ pages_build_output_dir = "."
 binding = "DB"
 database_name = "larry-db"
 database_id = "9a27139f-af63-4fa2-8eb5-6c999ca86e7a"
+
+# Phase 4b: R2 bucket for owner-uploaded book cover photos. When the
+# camera-based identify-cover endpoint cannot match the photo against any
+# online candidate, it falls back to storing the resized owner photo here
+# and references it from books.cover_image_url. Bucket must be created
+# manually in the Cloudflare dashboard (Owner setup, not in code).
+[[r2_buckets]]
+binding = "COVERS"
+bucket_name = "brain-pka-covers"
