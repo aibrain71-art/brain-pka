@@ -45,6 +45,33 @@ D1_NOTES_OUT = HERE / "migration-notes-books.sql"   # shadow-notes data
 D1_PEOPLE_OUT = HERE / "migration-people-authors.sql"  # author people data
 
 
+# Phase 4c columns the enrich pipeline now writes. Added here (not in
+# enrich_books.py) so any owner-side migration helper produces the same DDL
+# regardless of which script ran first. Idempotent via PRAGMA-guarded loop.
+PHASE4C_COLUMNS: list[tuple[str, str]] = [
+    ("rating_count", "INTEGER"),
+    ("format", "TEXT"),
+    ("edition", "TEXT"),
+    ("series_name", "TEXT"),
+    ("series_position", "INTEGER"),
+    ("categories", "TEXT"),  # JSON-array
+]
+
+
+def ensure_phase4c_columns(db: sqlite3.Connection) -> list[str]:
+    """Add the phase-4c metadata columns to books if missing. Returns the list
+    of columns that were actually added (for logging)."""
+    cols = {row[1] for row in db.execute("PRAGMA table_info(books)").fetchall()}
+    added: list[str] = []
+    for name, typ in PHASE4C_COLUMNS:
+        if name not in cols:
+            db.execute(f"ALTER TABLE books ADD COLUMN {name} {typ}")
+            added.append(name)
+    if added:
+        db.commit()
+    return added
+
+
 # ─── helpers ──────────────────────────────────────────────────────
 
 # Order matters: longest/most-specific first so we don't fragment names.
@@ -156,6 +183,11 @@ def book_to_note(book: sqlite3.Row, author_slug_map: dict[str, str]) -> dict:
 
 def apply_local(db: sqlite3.Connection, dry_run: bool = False) -> dict:
     """Apply the hybrid migration to the local SQLite DB. Returns stats."""
+    # Make sure the phase-4c metadata columns exist before we read/write any
+    # books row. ALTERing on dry-run is fine — it's idempotent and the writes
+    # below are still gated on dry_run.
+    if not dry_run:
+        ensure_phase4c_columns(db)
     authors = collect_authors(db)
 
     if dry_run:
@@ -244,8 +276,13 @@ def emit_d1(db: sqlite3.Connection, stats: dict) -> dict:
     migration-*.sql files are data-only and gitignored."""
 
     # ── 1. schema-books.sql (committed)
-    schema_sql = """-- D1 schema for books table — Phase 3 hybrid model.
+    schema_sql = """-- D1 schema for books table — Phase 3 hybrid model + Phase 4c metadata.
 -- Run once before any books-related migration. Idempotent (IF NOT EXISTS).
+--
+-- Phase 4c added 6 extra metadata columns (rating_count, format, edition,
+-- series_name, series_position, categories). For a fresh D1 they ship in the
+-- CREATE TABLE below. For an existing D1 they are added via the ALTER
+-- statements at the bottom — each wrapped so re-runs are safe.
 
 CREATE TABLE IF NOT EXISTS books (
     node_id          TEXT PRIMARY KEY,
@@ -259,6 +296,12 @@ CREATE TABLE IF NOT EXISTS books (
     publisher        TEXT,
     page_count       INTEGER,
     average_rating   REAL,
+    rating_count     INTEGER,
+    format           TEXT,
+    edition          TEXT,
+    series_name      TEXT,
+    series_position  INTEGER,
+    categories       TEXT,
     purchase_link    TEXT,
     cover_image_url  TEXT,
     description      TEXT,
@@ -271,27 +314,47 @@ CREATE TABLE IF NOT EXISTS books (
 CREATE INDEX IF NOT EXISTS idx_books_genre_canonical ON books(genre_canonical);
 CREATE INDEX IF NOT EXISTS idx_books_language        ON books(language);
 CREATE INDEX IF NOT EXISTS idx_books_author          ON books(author);
+CREATE INDEX IF NOT EXISTS idx_books_series_name     ON books(series_name);
+
+-- Phase 4c additive ALTERs — needed when migrating an existing D1 instance
+-- that already has the phase-3 books table. D1 ignores duplicate-column
+-- errors per-statement, so the apply_books_via_api.py runner just keeps
+-- going. apply_books_via_api.py also catches and forgives the 'duplicate
+-- column' error code so repeated runs stay green.
+ALTER TABLE books ADD COLUMN rating_count INTEGER;
+ALTER TABLE books ADD COLUMN format TEXT;
+ALTER TABLE books ADD COLUMN edition TEXT;
+ALTER TABLE books ADD COLUMN series_name TEXT;
+ALTER TABLE books ADD COLUMN series_position INTEGER;
+ALTER TABLE books ADD COLUMN categories TEXT;
 """
     D1_SCHEMA_OUT.write_text(schema_sql, encoding="utf-8")
 
     # ── 2. migration-books.sql (data)
+    # Phase 4c added rating_count/format/edition/series_name/series_position/
+    # categories. Older local DBs may not have those columns yet — make sure
+    # the ALTERs ran (idempotent) before selecting.
+    ensure_phase4c_columns(db)
     rows = db.execute(
         "SELECT node_id, title, author, publication_year, genre, "
         "genre_canonical, language, isbn, publisher, page_count, "
-        "average_rating, purchase_link, cover_image_url, description, "
-        "description_source, enriched_at, created_at, updated_at FROM books"
+        "average_rating, rating_count, format, edition, series_name, "
+        "series_position, categories, purchase_link, cover_image_url, "
+        "description, description_source, enriched_at, created_at, updated_at "
+        "FROM books"
     ).fetchall()
 
     book_lines = [
         "-- Auto-generated by migrate_books_to_hybrid.py --emit-d1",
-        f"-- {len(rows)} books from mypka.db",
+        f"-- {len(rows)} books from mypka.db (Phase 4c schema)",
         "BEGIN TRANSACTION;",
     ]
     for r in rows:
         book_lines.append(
             "INSERT OR REPLACE INTO books "
             "(node_id, title, author, publication_year, genre, genre_canonical, "
-            "language, isbn, publisher, page_count, average_rating, "
+            "language, isbn, publisher, page_count, average_rating, rating_count, "
+            "format, edition, series_name, series_position, categories, "
             "purchase_link, cover_image_url, description, description_source, "
             "enriched_at, created_at, updated_at) VALUES ("
             + ", ".join(sql_quote(c) for c in r)
