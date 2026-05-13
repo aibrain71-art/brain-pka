@@ -24,7 +24,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 
-$dbName = 'brain-pka'
+$dbName = 'larry-db'
 $flag   = if ($Local) { '--local' } else { '--remote' }
 
 # Order: schema first, then reference data (people, books), then notes that
