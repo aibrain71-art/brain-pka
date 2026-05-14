@@ -4,6 +4,7 @@
   "private": true,
   "description": "Personal Knowledge Assistant — Cloudflare Pages app",
   "scripts": {
+    "build": "python build_sw.py",
     "test": "playwright test",
     "test:debug": "playwright test --debug=cli",
     "test:report": "playwright show-report",
