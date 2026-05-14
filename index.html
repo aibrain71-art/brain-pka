@@ -3667,7 +3667,7 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
             <p class="books-detail-description" id="books-detail-description"></p>
             <a id="books-detail-link" class="books-detail-link" target="_blank" rel="noopener" hidden>Bei Amazon ansehen ↗</a>
             <div style="margin-top:8px">
-              <button type="button" id="books-camera-btn" class="books-camera-btn">
+              <button type="button" id="books-camera-btn" class="books-camera-btn" title="Live-Kamera öffnen und Cover fotografieren">
                 <span class="books-camera-icon" aria-hidden="true">&#128247;</span>
                 <span>Cover per Foto erfassen</span>
               </button>
@@ -8459,17 +8459,20 @@ async function booksFileToDataUrl(file) {
   });
 }
 
-async function booksHandleCameraFile(file) {
-  const dlg = document.getElementById('books-detail');
-  const nodeId = dlg?.dataset?.nodeId || '';
+// Common POST path → /api/books/<id>/identify-cover. Used by BOTH the live-camera
+// modal (camera-live branch) and the legacy file-picker fallback. Takes a data
+// URL (JPEG/PNG) instead of a File so a canvas-captured frame can be uploaded
+// without an intermediate Blob → File hop.
+async function booksUploadCoverDataUrl(nodeId, dataUrl) {
   if (!nodeId) {
     booksShowToast('Kein Buch geöffnet — Cover kann nicht zugeordnet werden.', 'error');
-    return;
+    return false;
   }
-  if (!file) return;
-  if (file.size > 8 * 1024 * 1024) {
+  if (!dataUrl) return false;
+  // Rough size guard: data URLs are ~33 % larger than raw bytes. 11 MB string ≈ 8 MB binary.
+  if (dataUrl.length > 11 * 1024 * 1024) {
     booksShowToast('Foto zu gross (>8 MB). Bitte kleiner aufnehmen.', 'error');
-    return;
+    return false;
   }
 
   const cover = document.getElementById('books-detail-cover');
@@ -8478,7 +8481,6 @@ async function booksHandleCameraFile(file) {
   if (btn) btn.disabled = true;
 
   try {
-    const dataUrl = await booksFileToDataUrl(file);
     const res = await fetch('/api/books/' + encodeURIComponent(nodeId) + '/identify-cover', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -8488,7 +8490,7 @@ async function booksHandleCameraFile(file) {
     if (!res.ok || !payload.ok) {
       const msg = payload?.error || ('HTTP ' + res.status);
       booksShowToast('Fehler: ' + msg, 'error');
-      return;
+      return false;
     }
 
     // Refresh the cover image in-place.
@@ -8513,15 +8515,241 @@ async function booksHandleCameraFile(file) {
       const row = BOOKS_STATE.all.find(x => x.node_id === nodeId);
       if (row) row.cover_image_url = payload.new_cover_url;
     }
+    return true;
   } catch (e) {
     booksShowToast('Netzwerkfehler: ' + (e?.message || e), 'error');
+    return false;
   } finally {
     cover?.classList.remove('is-identifying');
     if (btn) btn.disabled = false;
+  }
+}
+
+// File-picker fallback path (kept for browsers without getUserMedia or when the
+// user picks the "Foto hochladen" link under the live preview).
+async function booksHandleCameraFile(file) {
+  const dlg = document.getElementById('books-detail');
+  const nodeId = dlg?.dataset?.nodeId || '';
+  if (!file) return;
+  if (file.size > 8 * 1024 * 1024) {
+    booksShowToast('Foto zu gross (>8 MB). Bitte kleiner aufnehmen.', 'error');
+    return;
+  }
+  try {
+    const dataUrl = await booksFileToDataUrl(file);
+    await booksUploadCoverDataUrl(nodeId, dataUrl);
+  } finally {
     // Reset the input so selecting the same file twice re-fires the change event.
     const input = document.getElementById('books-camera-input');
     if (input) input.value = '';
   }
+}
+
+// ── Phase 4c / camera-live: live getUserMedia camera for book covers ───────
+// Opens a modal with a live <video> preview, front/back toggle, capture →
+// canvas → data URL → /identify-cover. Falls back to the file-picker if the
+// browser exposes no MediaDevices API or denies permission.
+//
+// iOS-Safari quirks handled:
+//   - Stream is started inside the click handler (user gesture)
+//   - <video> uses autoplay + playsinline + muted (without muted, iOS blocks autoplay)
+//   - All tracks .stop()'d on close → camera LED + green dot turn off
+async function openBookCoverCamera(nodeId) {
+  if (!nodeId) {
+    booksShowToast('Kein Buch geöffnet — Cover kann nicht zugeordnet werden.', 'error');
+    return;
+  }
+  if (!navigator.mediaDevices?.getUserMedia) {
+    // Fallback: trigger the legacy file-picker path
+    booksShowToast('Kamera-API nicht verfügbar — wechsle zu Foto-Upload.', 'info');
+    document.getElementById('books-camera-input')?.click();
+    return;
+  }
+
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px';
+  const m = document.createElement('div');
+  m.style.cssText = 'background:var(--surface, #0f1424);color:var(--text, #e6e8ee);border:1px solid var(--border, #1f2740);border-radius:14px;max-width:600px;width:100%;max-height:96vh;overflow:auto;padding:18px;box-shadow:0 8px 32px rgba(0,0,0,.7);display:flex;flex-direction:column;gap:12px';
+  m.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div style="font-weight:600;font-size:15px">&#128247; Cover-Foto aufnehmen</div>
+      <button id="bcam-close" type="button" aria-label="Abbrechen" style="background:none;border:0;color:var(--text-2, #9aa3b8);font-size:22px;cursor:pointer;line-height:1">&times;</button>
+    </div>
+    <div id="bcam-stage" style="position:relative;background:#000;border-radius:10px;overflow:hidden;aspect-ratio:2/3;max-height:70vh;margin:0 auto;width:100%;max-width:480px">
+      <video id="bcam-video" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover;display:none"></video>
+      <canvas id="bcam-canvas" style="width:100%;height:100%;object-fit:contain;display:none;background:#000"></canvas>
+      <div id="bcam-status" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#aab;font-size:13px;text-align:center;padding:16px">Initialisiere Kamera…</div>
+    </div>
+    <div id="bcam-controls" style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+      <button id="bcam-shoot" type="button" style="background:var(--accent, #3aa0ff);color:#0c1015;border:0;padding:14px 28px;border-radius:30px;font-weight:700;font-size:15px;cursor:pointer;display:none;min-width:170px">&#128248; Aufnehmen</button>
+      <button id="bcam-switch" type="button" title="Front- / Rückkamera tauschen" style="background:var(--surface-2, #18203a);color:var(--text, #e6e8ee);border:1px solid var(--border, #1f2740);padding:14px 18px;border-radius:30px;cursor:pointer;display:none;font-size:14px">&#128260; Kamera wechseln</button>
+      <button id="bcam-retake" type="button" style="background:var(--surface-2, #18203a);color:var(--text, #e6e8ee);border:1px solid var(--border, #1f2740);padding:14px 22px;border-radius:30px;cursor:pointer;display:none;font-size:14px">&#8634; Nochmal</button>
+      <button id="bcam-use" type="button" style="background:#1f8c3a;color:#fff;border:0;padding:14px 26px;border-radius:30px;font-weight:700;cursor:pointer;display:none;font-size:14px">&#10003; Verwenden</button>
+    </div>
+    <div id="bcam-error" style="font-size:12px;color:#ef4444;text-align:center;display:none;padding:6px 4px"></div>
+    <div style="font-size:11px;color:var(--text-2, #9aa3b8);text-align:center;line-height:1.5">
+      Halte das Cover gut beleuchtet im Bildausschnitt. Larry vergleicht das Foto mit Amazon / Google Books / OpenLibrary und ersetzt das Cover.<br>
+      <a href="#" id="bcam-fallback" style="color:var(--accent, #3aa0ff);text-decoration:underline;cursor:pointer">Statt Kamera: Foto hochladen</a>
+    </div>
+  `;
+  overlay.appendChild(m);
+  document.body.appendChild(overlay);
+
+  const $ = (sel) => m.querySelector(sel);
+  const video    = $('#bcam-video');
+  const canvas   = $('#bcam-canvas');
+  const statusEl = $('#bcam-status');
+  const errBox   = $('#bcam-error');
+  const btnShoot = $('#bcam-shoot');
+  const btnSwitch = $('#bcam-switch');
+  const btnRetake = $('#bcam-retake');
+  const btnUse    = $('#bcam-use');
+  const btnClose  = $('#bcam-close');
+  const linkFallback = $('#bcam-fallback');
+
+  let currentStream = null;
+  let facing = 'environment';
+  let snapshotDataUrl = null;
+  let onEscape = null;
+
+  const stopCamera = () => {
+    if (currentStream) {
+      currentStream.getTracks().forEach(t => { try { t.stop(); } catch (_) {} });
+      currentStream = null;
+    }
+    if (video) {
+      try { video.pause(); } catch (_) {}
+      try { video.srcObject = null; } catch (_) {}
+    }
+  };
+
+  const close = () => {
+    stopCamera();
+    if (onEscape) document.removeEventListener('keydown', onEscape);
+    overlay.remove();
+  };
+
+  onEscape = (e) => { if (e.key === 'Escape') close(); };
+  document.addEventListener('keydown', onEscape);
+  btnClose.onclick = close;
+  // Click outside the inner panel closes the modal
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+
+  linkFallback.onclick = (e) => {
+    e.preventDefault();
+    close();
+    document.getElementById('books-camera-input')?.click();
+  };
+
+  async function startCamera(facingMode) {
+    stopCamera();
+    statusEl.style.display = '';
+    statusEl.textContent = 'Initialisiere Kamera…';
+    errBox.style.display = 'none';
+    video.style.display = 'none';
+    canvas.style.display = 'none';
+    btnShoot.style.display = 'none';
+    btnSwitch.style.display = 'none';
+    btnRetake.style.display = 'none';
+    btnUse.style.display = 'none';
+
+    try {
+      currentStream = await navigator.mediaDevices.getUserMedia({
+        // facingMode "ideal" gracefully falls back to the only camera on desktops.
+        video: { facingMode: { ideal: facingMode }, width: { ideal: 1920 }, height: { ideal: 1440 } },
+        audio: false,
+      });
+      video.srcObject = currentStream;
+      // iOS sometimes needs an explicit play() even with autoplay
+      try { await video.play(); } catch (_) {}
+      video.style.display = '';
+      canvas.style.display = 'none';
+      statusEl.style.display = 'none';
+      btnShoot.style.display = '';
+
+      // Show the front/back toggle only when >1 video input exists.
+      try {
+        const devs = await navigator.mediaDevices.enumerateDevices();
+        const cams = devs.filter(d => d.kind === 'videoinput');
+        if (cams.length > 1) btnSwitch.style.display = '';
+      } catch (_) {}
+    } catch (e) {
+      statusEl.style.display = 'none';
+      errBox.style.display = '';
+      const name = e?.name || '';
+      let msg;
+      if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+        msg = 'Kamera-Zugriff verweigert. Bitte in Browser-Einstellungen freigeben (Schloss-Icon in der Adressleiste → Kamera → Zulassen → Reload).';
+      } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+        msg = 'Keine Kamera gefunden.';
+      } else if (name === 'NotReadableError') {
+        msg = 'Kamera wird gerade von einem anderen Programm benutzt (Teams, Zoom, OBS?).';
+      } else if (name === 'OverconstrainedError') {
+        msg = 'Kamera unterstützt die angeforderten Einstellungen nicht.';
+      } else {
+        msg = 'Kamera-Fehler: ' + (e?.message || name || e);
+      }
+      errBox.textContent = msg;
+      booksShowToast(msg, 'error');
+      console.warn('[book-cover-camera]', e);
+    }
+  }
+
+  function flipCamera() {
+    facing = (facing === 'environment') ? 'user' : 'environment';
+    startCamera(facing);
+  }
+
+  function captureCover() {
+    if (!currentStream) return;
+    // Capture at the native resolution the camera is delivering. This is what
+    // /identify-cover gets — higher resolution = better Claude vision match.
+    const w = video.videoWidth || 1280;
+    const h = video.videoHeight || 1920;
+    canvas.width = w;
+    canvas.height = h;
+    canvas.getContext('2d').drawImage(video, 0, 0, w, h);
+    snapshotDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+    // Switch UI: hide live preview, show snapshot + confirm row.
+    video.style.display = 'none';
+    canvas.style.display = '';
+    btnShoot.style.display = 'none';
+    btnSwitch.style.display = 'none';
+    btnRetake.style.display = '';
+    btnUse.style.display = '';
+    // We deliberately keep currentStream live so "Nochmal" is instant.
+  }
+
+  btnSwitch.onclick = flipCamera;
+  btnShoot.onclick = captureCover;
+  btnRetake.onclick = () => {
+    snapshotDataUrl = null;
+    canvas.style.display = 'none';
+    video.style.display = '';
+    btnRetake.style.display = 'none';
+    btnUse.style.display = 'none';
+    btnShoot.style.display = '';
+    // Re-show the switch if we have multiple cams
+    (async () => {
+      try {
+        const devs = await navigator.mediaDevices.enumerateDevices();
+        const cams = devs.filter(d => d.kind === 'videoinput');
+        if (cams.length > 1) btnSwitch.style.display = '';
+      } catch (_) {}
+    })();
+  };
+  btnUse.onclick = async () => {
+    if (!snapshotDataUrl) return;
+    btnUse.disabled = true;
+    btnRetake.disabled = true;
+    const ok = await booksUploadCoverDataUrl(nodeId, snapshotDataUrl);
+    btnUse.disabled = false;
+    btnRetake.disabled = false;
+    if (ok) close();
+    // On failure leave the modal open so the user can retake.
+  };
+
+  await startCamera(facing);
 }
 
 // One-time wire-up on first DOMContentLoaded (or immediately if late).
@@ -8549,10 +8777,13 @@ function wireBooksControls() {
     const d = e.currentTarget; const r = d.getBoundingClientRect();
     if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) closeBookDetail();
   });
-  // Phase 4b: camera button → file input → /identify-cover
+  // camera-live: button now opens the live getUserMedia modal. The hidden
+  // file input is kept as a fallback path (used when getUserMedia is missing
+  // or the user clicks the "Foto hochladen"-Link inside the modal).
   $('books-camera-btn')?.addEventListener('click', () => {
-    const input = $('books-camera-input');
-    if (input) input.click();
+    const dlg = document.getElementById('books-detail');
+    const nodeId = dlg?.dataset?.nodeId || '';
+    openBookCoverCamera(nodeId);
   });
   $('books-camera-input')?.addEventListener('change', (e) => {
     const file = e.target?.files?.[0];
