@@ -855,15 +855,17 @@ body:has(#sidebar:not(.collapsed)) .list-subtitle .ls-count::after  { content: "
 .settings-group[data-section] { display: none; }
 .settings-group[data-section].section-active { display: block; }
 @media (max-width: 768px) {
-  /* On narrow screens, keep the vertical sidebar layout but make it span the
-     full width of the modal so each menu item gets a comfortable tap target.
-     The body sits below the menu, scrollable on its own. */
-  .settings-modal { max-width: 100%; max-height: calc(100vh - 100px); }
+  /* Fullscreen on mobile — no padding, no border-radius, edge-to-edge.
+     Matches the Books-Detail fullscreen pattern from Phase 4c. */
+  .settings-overlay { padding: 0; align-items: stretch; }
+  .settings-modal { max-width: 100vw; max-height: 100vh; width: 100vw; height: 100vh;
+                     border-radius: 0; border: none; box-shadow: none; }
   .settings-layout { flex-direction: column; }
   .settings-sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border);
                        padding: 10px 8px; display: flex; flex-direction: column; gap: 2px;
                        overflow-y: auto; max-height: 40vh; }
   .settings-nav-item { padding: 10px 14px; font-size: 13px; margin-bottom: 0; }
+  .settings-close { width: 36px; height: 36px; font-size: 22px; }
   .settings-nav-item span:not(.settings-nav-icon) { display: inline; }
   /* Stack pref rows vertically on mobile so the description text doesn't get
      squeezed to letter-per-line by the controls next to it. Use higher-specificity
