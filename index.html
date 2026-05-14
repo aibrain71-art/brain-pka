@@ -8616,8 +8616,10 @@ async function openBookCoverCamera(nodeId) {
     return;
   }
 
-  const overlay = document.createElement('div');
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px';
+  // Use <dialog>.showModal() so the camera modal lands in the HTML5 top-layer
+  // and isn't buried under the books-detail <dialog> regardless of z-index.
+  const overlay = document.createElement('dialog');
+  overlay.style.cssText = 'position:fixed;inset:0;width:100vw;height:100vh;max-width:100vw;max-height:100vh;margin:0;border:0;padding:16px;background:rgba(0,0,0,.88);display:flex;align-items:center;justify-content:center;color:inherit;';
   const m = document.createElement('div');
   m.style.cssText = 'background:var(--surface, #0f1424);color:var(--text, #e6e8ee);border:1px solid var(--border, #1f2740);border-radius:14px;max-width:600px;width:100%;max-height:96vh;overflow:auto;padding:18px;box-shadow:0 8px 32px rgba(0,0,0,.7);display:flex;flex-direction:column;gap:12px';
   m.innerHTML = `
@@ -8644,6 +8646,8 @@ async function openBookCoverCamera(nodeId) {
   `;
   overlay.appendChild(m);
   document.body.appendChild(overlay);
+  // Promote to HTML5 top-layer so it sits above the books-detail <dialog>.
+  try { overlay.showModal(); } catch (e) { /* fallback: still visible via inline display */ }
 
   const $ = (sel) => m.querySelector(sel);
   const video    = $('#bcam-video');
@@ -8676,6 +8680,8 @@ async function openBookCoverCamera(nodeId) {
   const close = () => {
     stopCamera();
     if (onEscape) document.removeEventListener('keydown', onEscape);
+    // Close the <dialog> before removing it from DOM (proper top-layer cleanup).
+    try { if (overlay.open) overlay.close(); } catch (e) { /* noop */ }
     overlay.remove();
   };
 
@@ -15290,6 +15296,20 @@ function sendVoiceText() {
   if (!inp) return;
   let raw = inp.value.trim();
   if (!raw) return;
+  // Doppel-Send Guard. Two paths can race into sendVoiceText() simultaneously:
+  //   (a) SpeechRecognition `final` event triggers flushSpeech() directly,
+  //   (b) the SILENCE_MS debounce timer still fires for the same text,
+  //   (c) the user taps the send button while (a)/(b) is in flight,
+  //   (d) Enter-key onkeydown + button onclick double-bind on some Android keyboards.
+  // Result was two parallel /api/chat → two parallel vaSpeak() → echo audio.
+  // Drop a 1.5s window where identical text is silently ignored.
+  const now = Date.now();
+  if (window._vaLastSent && window._vaLastSent.text === raw && (now - window._vaLastSent.at) < 1500) {
+    console.log('[Voice] sendVoiceText: blocked duplicate send within 1.5s');
+    inp.value = '';
+    return;
+  }
+  window._vaLastSent = { text: raw, at: now };
   inp.value = '';
   if (_vaWhisperFlow) raw = polishInput(raw);
   vaAddMsg('user', raw);
@@ -15528,8 +15548,47 @@ async function vaRespond(userText) {
 
 // ── Text-to-Speech ───────────────────────────────────────────
 //  Preference: ElevenLabs (if key + voice configured) → browser SpeechSynthesis
+//
+// Concurrency model (fixes the "echo" bug where one Larry reply produced two
+// overlapping audio streams): every vaSpeak() call increments a generation
+// token and registers its <audio> element in a global Set. A new call (or
+// vaStopSpeaking) tears down ALL previously-registered audios first, so two
+// parallel vaSpeak() invocations can NEVER result in two overlapping streams.
+// The generation token is re-checked AFTER the fetch resolves — if it's
+// stale, the late audio is dropped on the floor before play().
+window._vaAudioRegistry = window._vaAudioRegistry || new Set();
+window._vaSpeakGen = window._vaSpeakGen || 0;
+
+function vaHardStopAllAudio() {
+  // Tear down EVERY audio element we ever spawned, not just _vaActiveAudio.
+  // Defensive: if a previous vaSpeak got interrupted mid-await it may have
+  // left a stale element that the original _vaActiveAudio pointer no longer
+  // tracks. Without this loop, a stale audio could keep playing alongside
+  // the new one → the echo the owner reported.
+  for (const a of Array.from(window._vaAudioRegistry)) {
+    try {
+      a.onplay = null;
+      a.onended = null;
+      a.onerror = null;
+      a.pause();
+      if (a.src && a.src.startsWith('blob:')) {
+        try { URL.revokeObjectURL(a.src); } catch(_) {}
+      }
+      a.removeAttribute('src');
+      a.load && a.load();
+    } catch(_) {}
+    window._vaAudioRegistry.delete(a);
+  }
+  _vaActiveAudio = null;
+  _vaIsSpeaking = false;
+}
+
 async function vaSpeak(text) {
   if (!text) return;
+  // Bump generation FIRST so any in-flight vaSpeak from the previous turn
+  // recognises it has been superseded when its fetch resolves.
+  const myGen = ++window._vaSpeakGen;
+  vaHardStopAllAudio();
   vaStopSpeaking();
   // ElevenLabs-only — no browser TTS fallback. The vaSpeakElevenLabs path
   // tries the Cloudflare /api/tts proxy first (no localStorage key needed)
@@ -15542,8 +15601,11 @@ async function vaSpeak(text) {
     vaMaybeAutoListen();
     return;
   }
-  const result = await vaSpeakElevenLabs(text, voiceId);
+  const result = await vaSpeakElevenLabs(text, voiceId, myGen);
   if (result === true) return;
+  // If we were superseded by a newer vaSpeak, swallow the error silently —
+  // the newer call owns the UI now.
+  if (myGen !== window._vaSpeakGen) return;
   vaSetStatus('⚠️ ElevenLabs fehlgeschlagen: ' + (result || 'unbekannter Fehler') + '. Stimme/Key prüfen.');
   // Still trigger auto-listen so the conversation can continue even if
   // Larry's voice didn't play — the user can read his reply in the chat.
@@ -15591,12 +15653,27 @@ async function _elevenTTSFetch(text, voiceId) {
   });
 }
 
-async function vaSpeakElevenLabs(text, voiceIdOverride) {
+async function vaSpeakElevenLabs(text, voiceIdOverride, myGen) {
   const voiceId = voiceIdOverride || ELEVEN_VOICE_ID;
   if (!voiceId) return 'keine Stimmen-ID';
+  // If called directly (without a gen from vaSpeak), still mint one so the
+  // stale-check logic works the same way.
+  if (typeof myGen !== 'number') {
+    myGen = ++window._vaSpeakGen;
+  }
   try {
     vaSetStatus('Generiere Stimme via ElevenLabs…');
     const res = await _elevenTTSFetch(text, voiceId);
+    // After the network round-trip, check if we were superseded by a newer
+    // vaSpeak. If so, drop the audio on the floor BEFORE allocating a blob
+    // URL or creating an <audio> element. Without this guard, two near-
+    // simultaneous vaSpeak() calls would each create their own audio and
+    // both call .play() → the echo bug.
+    if (myGen !== window._vaSpeakGen) {
+      console.log('[Voice] vaSpeakElevenLabs gen', myGen, 'superseded by', window._vaSpeakGen, '— dropping audio');
+      try { res.body?.cancel?.(); } catch(_) {}
+      return true;  // pretend success so the caller doesn't show an error
+    }
     if (!res.ok) {
       const body = await res.text().catch(() => '');
       console.warn('ElevenLabs ' + res.status, body);
@@ -15617,8 +15694,19 @@ async function vaSpeakElevenLabs(text, voiceIdOverride) {
       return hint;
     }
     const blob = await res.blob();
+    // Second stale-check after the blob is materialised — the user may have
+    // tapped to cancel, or another vaSpeak may have started during the
+    // blob() download. Drop on the floor before creating the <audio>.
+    if (myGen !== window._vaSpeakGen) {
+      console.log('[Voice] vaSpeakElevenLabs gen', myGen, 'superseded post-blob — dropping');
+      return true;
+    }
     const url  = URL.createObjectURL(blob);
     const a = new Audio(url);
+    // Register every audio element in the global set so vaHardStopAllAudio
+    // can find and stop it even if our local pointer is overwritten by a
+    // racing vaSpeak. This is the core fix for the echo bug.
+    window._vaAudioRegistry.add(a);
     // Apply user-selected speech speed BEFORE play() — set on the element
     // so the browser also pitch-corrects ("preservesPitch" defaults to true
     // on Chromium-based browsers, which we run on).
@@ -15649,6 +15737,7 @@ async function vaSpeakElevenLabs(text, voiceIdOverride) {
       vaSetBubbleState(null);
       vaSetStatus('Bereit');
       URL.revokeObjectURL(url);
+      window._vaAudioRegistry.delete(a);
       if (_vaActiveAudio === a) _vaActiveAudio = null;
       // Voice-triggered navigation (e.g. "open the cookbook") — fires
       // AFTER the TTS confirmation finishes so the user hears Larry
@@ -15666,8 +15755,18 @@ async function vaSpeakElevenLabs(text, voiceIdOverride) {
       vaStopBargeInWatcher();
       vaSetBubbleState(null);
       URL.revokeObjectURL(url);
+      window._vaAudioRegistry.delete(a);
       if (_vaActiveAudio === a) _vaActiveAudio = null;
     };
+    // Final stale-check immediately before play() — the microtask between
+    // wiring the handlers and actually starting playback could still let a
+    // racing vaSpeak supersede us.
+    if (myGen !== window._vaSpeakGen) {
+      console.log('[Voice] vaSpeakElevenLabs gen', myGen, 'superseded pre-play — dropping');
+      window._vaAudioRegistry.delete(a);
+      try { URL.revokeObjectURL(url); } catch(_) {}
+      return true;
+    }
     await a.play();
     return true;
   } catch (e) {
