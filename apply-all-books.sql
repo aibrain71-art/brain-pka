@@ -24,16 +24,16 @@ CREATE TABLE IF NOT EXISTS books (
     created_at       TEXT DEFAULT (datetime('now')),
     updated_at       TEXT DEFAULT (datetime('now'))
 );
-CREATE INDEX IF NOT EXISTS idx_books_genre_canonical ON books(genre_canonical);
-CREATE INDEX IF NOT EXISTS idx_books_language        ON books(language);
-CREATE INDEX IF NOT EXISTS idx_books_author          ON books(author);
-CREATE INDEX IF NOT EXISTS idx_books_series_name     ON books(series_name);
 ALTER TABLE books ADD COLUMN rating_count INTEGER;
 ALTER TABLE books ADD COLUMN format TEXT;
 ALTER TABLE books ADD COLUMN edition TEXT;
 ALTER TABLE books ADD COLUMN series_name TEXT;
 ALTER TABLE books ADD COLUMN series_position INTEGER;
 ALTER TABLE books ADD COLUMN categories TEXT;
+CREATE INDEX IF NOT EXISTS idx_books_genre_canonical ON books(genre_canonical);
+CREATE INDEX IF NOT EXISTS idx_books_language        ON books(language);
+CREATE INDEX IF NOT EXISTS idx_books_author          ON books(author);
+CREATE INDEX IF NOT EXISTS idx_books_series_name     ON books(series_name);
 BEGIN TRANSACTION;
 INSERT OR IGNORE INTO people (slug, full_name, role_context) VALUES ('albert-uderzo', 'Albert Uderzo', 'Author');
 INSERT OR IGNORE INTO people (slug, full_name, role_context) VALUES ('anja-weber', 'Anja Weber', 'Author');
