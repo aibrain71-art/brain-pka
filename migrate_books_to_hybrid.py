@@ -166,15 +166,13 @@ def book_to_note(book: sqlite3.Row, author_slug_map: dict[str, str]) -> dict:
 
     # Every book-note carries three topic tags:
     #   - "buch"             — universal container (links all 114 books in graph)
-    #   - "genre"            — universal genre container (links all genre tags)
-    #   - "genre-<slug>"     — specific genre with prefix (visually distinct in tag sidebar)
+    #   - "genre"            — universal genre container
+    #   - "<specific-genre>" — the specific genre slug (e.g. "comics", "thriller")
     topic_slugs: list[str] = ["buch", "genre"]
     if book["genre_canonical"]:
         gslug = slugify(book["genre_canonical"])
-        if gslug:
-            prefixed = f"genre-{gslug}"
-            if prefixed not in topic_slugs:
-                topic_slugs.append(prefixed)
+        if gslug and gslug not in topic_slugs:
+            topic_slugs.append(gslug)
 
     return {
         "slug": f"book-{book['node_id']}",
