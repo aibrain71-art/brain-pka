@@ -12925,6 +12925,15 @@ function initGraph() {
       document.getElementById('graph-tooltip').style.opacity = '0';
       return;
     }
+    // If a detail panel is open AND we're switching to a different node,
+    // close the stale detail panel so the user sees the new node's tooltip
+    // clearly without overlap (Owner-requested behaviour 2026-05-14).
+    if (_pinnedNode && _pinnedNode !== clicked) {
+      const detailEl = document.getElementById('detail-panel');
+      if (detailEl && detailEl.classList.contains('open')) {
+        try { closeDetail(); } catch (e) { /* noop */ }
+      }
+    }
     // Pin the clicked node — tooltip stays visible right next to it,
     // and the node itself stops drifting (fx/fy fixed on the simulation).
     pinNode(clicked);
