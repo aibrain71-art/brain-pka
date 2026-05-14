@@ -49,9 +49,3 @@ ALTER TABLE books ADD COLUMN edition TEXT;
 ALTER TABLE books ADD COLUMN series_name TEXT;
 ALTER TABLE books ADD COLUMN series_position INTEGER;
 ALTER TABLE books ADD COLUMN categories TEXT;
-
--- Phase 4b: camera-based cover identification rate-limit. Stores the
--- Unix-epoch (seconds) of the most recent /identify-cover call so the
--- endpoint can throttle to max 1 call/minute per book without an extra
--- KV/Durable-Object dependency.
-ALTER TABLE books ADD COLUMN last_identify_ts INTEGER;

@@ -8206,8 +8206,8 @@ function applyBooksFilters() {
   }
   const copy = out.slice();
   switch (f.sort) {
-    case 'title-asc':  copy.sort((a, b) => (a.title || '').localeCompare(b.title || '', 'de')); break;
-    case 'title-desc': copy.sort((a, b) => (b.title || '').localeCompare(a.title || '', 'de')); break;
+    case 'title-asc':  copy.sort((a, b) => (a.title || '').localeCompare(b.title || '', 'de', { numeric: true, sensitivity: 'base' })); break;
+    case 'title-desc': copy.sort((a, b) => (b.title || '').localeCompare(a.title || '', 'de', { numeric: true, sensitivity: 'base' })); break;
     case 'year-desc':  copy.sort((a, b) => (b.publication_year || -Infinity) - (a.publication_year || -Infinity)); break;
     case 'year-asc':   copy.sort((a, b) => (a.publication_year ||  Infinity) - (b.publication_year ||  Infinity)); break;
     case 'rating-desc':copy.sort((a, b) => (b.average_rating ?? -1) - (a.average_rating ?? -1)); break;
