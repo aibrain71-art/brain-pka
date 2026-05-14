@@ -1,7 +1,12 @@
 // PKA Service Worker — gives the app offline-cache + PWA-install capability.
 // Cache-first for our own static files, network-first for everything else
 // (Wikipedia / ElevenLabs / YouTube thumbnails) so live data stays fresh.
-const VERSION = 'pka-v120';
+//
+// VERSION is stamped at deploy-time by build_sw.py (replaces the SW-VERSION
+// placeholder with the Cloudflare Pages commit SHA, fallback to a UTC
+// timestamp for local builds). Do NOT hand-edit the version below — just
+// push to main and a new SW version is generated automatically.
+const VERSION = '__SW_VERSION__';
 const CORE = [
   './',
   './index.html',
