@@ -311,22 +311,20 @@ CREATE TABLE IF NOT EXISTS books (
     updated_at       TEXT DEFAULT (datetime('now'))
 );
 
-CREATE INDEX IF NOT EXISTS idx_books_genre_canonical ON books(genre_canonical);
-CREATE INDEX IF NOT EXISTS idx_books_language        ON books(language);
-CREATE INDEX IF NOT EXISTS idx_books_author          ON books(author);
-CREATE INDEX IF NOT EXISTS idx_books_series_name     ON books(series_name);
-
--- Phase 4c additive ALTERs — needed when migrating an existing D1 instance
--- that already has the phase-3 books table. D1 ignores duplicate-column
--- errors per-statement, so the apply_books_via_api.py runner just keeps
--- going. apply_books_via_api.py also catches and forgives the 'duplicate
--- column' error code so repeated runs stay green.
+-- Phase 4c additive ALTERs — MUST run BEFORE CREATE INDEX on series_name
+-- so existing Phase-3 D1 instances get the column added first.
+-- apply_books_via_api.py catches & forgives 'duplicate column' on re-runs.
 ALTER TABLE books ADD COLUMN rating_count INTEGER;
 ALTER TABLE books ADD COLUMN format TEXT;
 ALTER TABLE books ADD COLUMN edition TEXT;
 ALTER TABLE books ADD COLUMN series_name TEXT;
 ALTER TABLE books ADD COLUMN series_position INTEGER;
 ALTER TABLE books ADD COLUMN categories TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_books_genre_canonical ON books(genre_canonical);
+CREATE INDEX IF NOT EXISTS idx_books_language        ON books(language);
+CREATE INDEX IF NOT EXISTS idx_books_author          ON books(author);
+CREATE INDEX IF NOT EXISTS idx_books_series_name     ON books(series_name);
 """
     D1_SCHEMA_OUT.write_text(schema_sql, encoding="utf-8")
 

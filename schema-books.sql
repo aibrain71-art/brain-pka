@@ -33,9 +33,9 @@ CREATE TABLE IF NOT EXISTS books (
     updated_at       TEXT DEFAULT (datetime('now'))
 );
 
--- Phase 4c additive ALTERs — must run BEFORE the CREATE INDEX on series_name
--- so existing Phase-3 D1 instances get the column added first. apply_books_via_api.py
--- catches and forgives the 'duplicate column' error for re-runs.
+-- Phase 4c additive ALTERs — MUST run BEFORE CREATE INDEX on series_name
+-- so existing Phase-3 D1 instances get the column added first.
+-- apply_books_via_api.py catches & forgives 'duplicate column' on re-runs.
 ALTER TABLE books ADD COLUMN rating_count INTEGER;
 ALTER TABLE books ADD COLUMN format TEXT;
 ALTER TABLE books ADD COLUMN edition TEXT;
