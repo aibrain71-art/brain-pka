@@ -14772,6 +14772,14 @@ function vaStartListening() {
   const SILENCE_MS = 1400;
   const flushSpeech = () => {
     if (window._vaSilenceTimer) { clearTimeout(window._vaSilenceTimer); window._vaSilenceTimer = null; }
+    // Idempotency guard: SpeechRecognition can fire flushSpeech twice for
+    // the same utterance — once on `final` from onresult, once when the
+    // SILENCE_MS debounce expires moments later. Without this latch the
+    // same text gets sent twice → two Larry responses → two vaSpeak() →
+    // echo audio. The latch self-clears after 1.5s.
+    if (window._vaFlushing) return;
+    window._vaFlushing = true;
+    setTimeout(() => { window._vaFlushing = false; }, 1500);
     const inp = document.getElementById('va-text-input');
     const txt = (inp?.value || '').trim();
     if (txt) {
@@ -15776,7 +15784,16 @@ async function vaSpeakElevenLabs(text, voiceIdOverride, myGen) {
 }
 function vaStopSpeaking() {
   if ('speechSynthesis' in window) speechSynthesis.cancel();
-  if (_vaActiveAudio) { try { _vaActiveAudio.pause(); } catch(_) {} _vaActiveAudio = null; }
+  // Stop every registered audio, not just _vaActiveAudio. This is what
+  // makes barge-in actually silence a stale audio whose pointer was
+  // already overwritten by a racing vaSpeak. Also bumps the gen token
+  // so any in-flight vaSpeak that resolves after this is dropped.
+  window._vaSpeakGen = (window._vaSpeakGen || 0) + 1;
+  if (typeof vaHardStopAllAudio === 'function') {
+    vaHardStopAllAudio();
+  } else {
+    if (_vaActiveAudio) { try { _vaActiveAudio.pause(); } catch(_) {} _vaActiveAudio = null; }
+  }
   if (typeof vaStopBargeInWatcher === 'function') vaStopBargeInWatcher();
   _vaIsSpeaking = false;
   vaSetBubbleState(null);
