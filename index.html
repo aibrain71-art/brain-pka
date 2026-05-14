@@ -5602,15 +5602,26 @@ function showTranscriptUnavailableDialog(url, data) {
 }
 
 // Mobile share-target handler. When the PWA's manifest declares share_target,
-// the OS share-sheet navigates to "/?share=1&url=...&text=...". We check
-// these params on load and run the import flow.
+// the OS share-sheet navigates to "/?share=1&url=...&text=...&title=...".
+// We check those params on load and run the existing /api/import-link flow,
+// which auto-detects YouTube URLs and builds a YouTube-style note with
+// transcript-tab + clickable timestamps + cover image.
+//
+// History (why this is the *only* share-target handler in the codebase):
+// Earlier prototypes had a second handler near the bottom of this file
+// reading ?share_title=…&share_text=…&share_url=…, and a service-worker
+// (sw.js) doing POST multipart/form-data. None of those names match the
+// current manifest (title / text / url, GET). The current handler is the
+// canonical pipeline — do NOT re-introduce a parallel one.
 (function handleShareTarget() {
   try {
     const params = new URLSearchParams(location.search);
     if (params.get('share') !== '1') return;
-    // The URL may come in 'url' param (when receiving a structured share),
-    // or in 'text' (Android often puts the link in text). Pick the first
-    // valid URL we can find.
+
+    // The URL may come in 'url' (structured share) or in 'text' / 'title'
+    // (many Android apps — including the YouTube app on some versions —
+    // put the link in 'text' instead). Pick the first valid URL we can
+    // find across all three fields.
     const candidates = [params.get('url'), params.get('text'), params.get('title')]
       .filter(Boolean);
     let target = null;
@@ -5618,11 +5629,48 @@ function showTranscriptUnavailableDialog(url, data) {
       const m = c.match(/https?:\/\/\S+/);
       if (m) { target = m[0]; break; }
     }
-    if (!target) return;
+    console.log('[share-target] received', {
+      url: params.get('url'),
+      text: params.get('text'),
+      title: params.get('title'),
+      resolvedTarget: target,
+    });
+    if (!target) {
+      // No URL anywhere — show a toast so the user knows the share arrived
+      // but couldn't be parsed (instead of silently doing nothing, which was
+      // the original "nothing happens" bug).
+      const t = document.createElement('div');
+      t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:9999;background:#3a1f1f;color:#fff;border:1px solid #5b2a2a;padding:14px 18px;border-radius:10px;font-size:13px;box-shadow:0 4px 16px rgba(0,0,0,.4);max-width:90vw';
+      t.textContent = 'Teilen empfangen, aber keine URL gefunden — bitte erneut mit Link teilen.';
+      document.body.appendChild(t);
+      setTimeout(() => t.remove(), 6000);
+      history.replaceState(null, '', location.pathname);
+      return;
+    }
     // Clean URL from search so a refresh doesn't re-import
     history.replaceState(null, '', location.pathname);
-    // Give the rest of the app a beat to initialise before showing the toast
-    setTimeout(() => importLinkFlow(target), 800);
+
+    // importLinkFlow lives further down in this file but is hoisted into the
+    // global scope. On a cold-launch from a share-target intent, the PWA's
+    // standalone window may still be parsing the rest of this script when
+    // this IIFE runs — wait for the function to be defined (with a hard
+    // 10-second timeout) before invoking it. This is the fix for the
+    // "share opens the app but no note appears" bug: previously a fixed
+    // 800ms setTimeout fired even if importLinkFlow wasn't ready yet, and
+    // the resulting ReferenceError was swallowed by the outer try/catch.
+    const fire = () => {
+      if (typeof importLinkFlow === 'function') {
+        try { importLinkFlow(target); } catch (e) { console.warn('[share-target] importLinkFlow threw:', e); }
+        return true;
+      }
+      return false;
+    };
+    if (fire()) return;
+    let tries = 0;
+    const iv = setInterval(() => {
+      tries++;
+      if (fire() || tries > 50) clearInterval(iv);  // 50 × 200ms = 10s
+    }, 200);
   } catch (e) { console.warn('share-target handler failed:', e); }
 })();
 
@@ -17069,35 +17117,14 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-// If the app was launched via a share-target intent (e.g. user taps "Share"
-// in the YouTube app on Android and picks PKA), the URL will carry the
-// shared data as query params: ?share_title=…&share_text=…&share_url=…
-// We intercept that here and open a "create entry from share" flow.
-(function handleShareTarget() {
-  try {
-    const params = new URLSearchParams(window.location.search);
-    const title = params.get('share_title');
-    const text  = params.get('share_text');
-    const url   = params.get('share_url') || (text && /^https?:\/\//.test(text) ? text : null);
-    if (!title && !text && !url) return;
-    // Defer so the rest of the app finishes booting first
-    setTimeout(() => onSharedContent({ title: title || '', text: text || '', url: url || '' }), 200);
-    // Clean the URL so refreshing doesn't re-trigger
-    if (history.replaceState) history.replaceState({}, '', location.pathname);
-  } catch (e) { console.warn('Share intent parse failed:', e); }
-})();
-
-// Stub for handling shared content. Hook this up to your real "create entry"
-// pipeline — for now it shows a banner so you can verify shares are arriving.
-function onSharedContent({ title, text, url }) {
-  const summary = [title, text, url].filter(Boolean).join('  •  ');
-  console.log('[PKA share-target]', { title, text, url });
-  // Pre-fill the search field so the share is at least visible somewhere
-  const searchInp = document.getElementById('search');
-  if (searchInp) searchInp.value = url || text || title;
-  alert('Geteilt mit PKA:\n\n' + summary
-        + '\n\n(In Produktion würde Larry den Link analysieren und einen neuen Eintrag erstellen.)');
-}
+// NOTE: An earlier prototype here listened for ?share_title=&share_text=&share_url=
+// and called an onSharedContent() stub that just alert()-ed the payload.
+// Those param names never matched the manifest (which uses title/text/url) so
+// the handler ran into the ground and the stub alert never fired in production.
+// The canonical share-target pipeline now lives in a single IIFE near the
+// top of this file ("Mobile share-target handler"), reads ?share=1 plus
+// title/text/url, and dispatches to importLinkFlow → /api/import-link.
+// Do NOT add a second share handler here.
 
 // ── Note fullscreen reader (text-only, scrollable, X-close) ───────────
 // Triggered by double-click on a card in the list. Garden cards are
