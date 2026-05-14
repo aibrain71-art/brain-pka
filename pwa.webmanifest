@@ -15,7 +15,7 @@
     { "src": "./icon-512.png",  "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ],
   "share_target": {
-    "action": "./?share=1",
+    "action": "/?share=1",
     "method": "GET",
     "enctype": "application/x-www-form-urlencoded",
     "params": {
