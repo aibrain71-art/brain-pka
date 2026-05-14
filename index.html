@@ -15593,11 +15593,11 @@ function vaHardStopAllAudio() {
 
 async function vaSpeak(text) {
   if (!text) return;
-  // Bump generation FIRST so any in-flight vaSpeak from the previous turn
-  // recognises it has been superseded when its fetch resolves.
-  const myGen = ++window._vaSpeakGen;
+  // Stop any in-flight audio FIRST (this bumps _vaSpeakGen internally), then
+  // claim our own generation token so we don't self-cancel.
   vaHardStopAllAudio();
   vaStopSpeaking();
+  const myGen = ++window._vaSpeakGen;
   // ElevenLabs-only — no browser TTS fallback. The vaSpeakElevenLabs path
   // tries the Cloudflare /api/tts proxy first (no localStorage key needed)
   // and falls back to direct browser → ElevenLabs only if proxy is down.
