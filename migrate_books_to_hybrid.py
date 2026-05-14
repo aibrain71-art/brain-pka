@@ -55,6 +55,7 @@ PHASE4C_COLUMNS: list[tuple[str, str]] = [
     ("series_name", "TEXT"),
     ("series_position", "INTEGER"),
     ("categories", "TEXT"),  # JSON-array
+    ("last_identify_ts", "INTEGER"),  # phase-4b camera rate-limit (unix epoch seconds)
 ]
 
 
@@ -302,6 +303,7 @@ CREATE TABLE IF NOT EXISTS books (
     series_name      TEXT,
     series_position  INTEGER,
     categories       TEXT,
+    last_identify_ts INTEGER,
     purchase_link    TEXT,
     cover_image_url  TEXT,
     description      TEXT,
@@ -320,6 +322,7 @@ ALTER TABLE books ADD COLUMN edition TEXT;
 ALTER TABLE books ADD COLUMN series_name TEXT;
 ALTER TABLE books ADD COLUMN series_position INTEGER;
 ALTER TABLE books ADD COLUMN categories TEXT;
+ALTER TABLE books ADD COLUMN last_identify_ts INTEGER;
 
 CREATE INDEX IF NOT EXISTS idx_books_genre_canonical ON books(genre_canonical);
 CREATE INDEX IF NOT EXISTS idx_books_language        ON books(language);
