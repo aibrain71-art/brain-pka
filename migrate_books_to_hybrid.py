@@ -164,10 +164,12 @@ def book_to_note(book: sqlite3.Row, author_slug_map: dict[str, str]) -> dict:
             if slug:
                 author_slugs.append(slug)
 
-    topic_slugs: list[str] = []
+    # Every book-note carries the universal "buch" tag so it shows up under
+    # that topic in brain-pka's tag sidebar — alongside its specific genre.
+    topic_slugs: list[str] = ["buch"]
     if book["genre_canonical"]:
         gslug = slugify(book["genre_canonical"])
-        if gslug:
+        if gslug and gslug not in topic_slugs:
             topic_slugs.append(gslug)
 
     return {
