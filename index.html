@@ -3061,11 +3061,6 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
 
 <!-- ── Main area ───────────────────────────── -->
 <div id="main">
-  <!-- Mobile-only fullscreen close button (✕). Hidden on desktop and when
-       no view is in fullscreen mode. See CSS rule .mobile-view-close. -->
-  <button class="mobile-view-close" id="mobile-view-close"
-          onclick="closeMobileFullscreenView()"
-          aria-label="Zurück zur Übersicht" title="Zurück zur Übersicht">✕</button>
   <!-- List view -->
   <div id="list-view">
     <div id="list-toolbar-host"></div>
@@ -3804,6 +3799,13 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
   </div>
 </div>
 </div><!-- shell -->
+
+<!-- Mobile-only fullscreen close button (✕). Direct child of <body> so the
+     slide-up transform on #main doesn't drag the button off-screen during
+     the animation. Hidden on desktop and when no view is fullscreen-active. -->
+<button class="mobile-view-close" id="mobile-view-close"
+        onclick="closeMobileFullscreenView()"
+        aria-label="Zurück zur Übersicht" title="Zurück zur Übersicht">✕</button>
 
 <!-- ── Settings modal ─────────────────────────────────────── -->
 <div id="settings-overlay" class="settings-overlay">
