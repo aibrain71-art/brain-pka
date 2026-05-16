@@ -3077,6 +3077,17 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
 
 <!-- ── Main area ───────────────────────────── -->
 <div id="main">
+  <!-- Mobile-only header bar — hidden by default. Shown when a view is in
+       mobile-fullscreen-active mode. Sits as the first flex child of #main
+       so it slides up + down with the rest of the view as one piece. The
+       title is set dynamically by activateMobileFullscreenView(viewKey). -->
+  <div id="mobile-view-header" role="banner">
+    <span class="mvh-title" id="mobile-view-title">Notes</span>
+    <button class="mvh-close" id="mobile-view-close"
+            onclick="closeMobileFullscreenView()"
+            aria-label="Zurück zur Übersicht" title="Zurück zur Übersicht">✕</button>
+  </div>
+
   <!-- List view -->
   <div id="list-view">
     <div id="list-toolbar-host"></div>
@@ -3816,12 +3827,8 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
 </div>
 </div><!-- shell -->
 
-<!-- Mobile-only fullscreen close button (✕). Direct child of <body> so the
-     slide-up transform on #main doesn't drag the button off-screen during
-     the animation. Hidden on desktop and when no view is fullscreen-active. -->
-<button class="mobile-view-close" id="mobile-view-close"
-        onclick="closeMobileFullscreenView()"
-        aria-label="Zurück zur Übersicht" title="Zurück zur Übersicht">✕</button>
+<!-- (Mobile-fullscreen close button moved into #mobile-view-header inside #main —
+     see line ~3053. The header-bar slides with the view as one piece.) -->
 
 <!-- ── Settings modal ─────────────────────────────────────── -->
 <div id="settings-overlay" class="settings-overlay">
