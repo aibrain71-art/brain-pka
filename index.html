@@ -15520,44 +15520,78 @@ async function vaRespond(userText) {
   const systemPrompt = [
     personaPrompt,
     '',
-    `WICHTIG: Antworte AUSSCHLIESSLICH auf ${voiceLangName}.`,
-    'Antworte sehr knapp und gesprächig — die Antwort wird laut vorgelesen.',
-    'Maximal 2–3 kurze Sätze, kein Markdown, keine Aufzählungen, keine Überschriften.',
+    '## 🛠 DEINE TOOLS — DU DARFST und MUSST sie nutzen',
     '',
-    '## Tools — du hast Zugriff auf das persönliche Wissensbank-System:',
-    '- create_note(title, body, note_type?, tags?) — bei „neue Notiz…", „merk dir…", „schreib auf…", „notiere…".',
-    '- search_notes(query) / list_recent_notes — bei „was war meine Notiz zu…", „letzte Notizen".',
-    '- delete_note(id) — NUR nach expliziter Bestätigung.',
-    '- create_journal(title, body, mood?) — bei Tagebucheinträgen („heute habe ich…").',
-    '- search_journal / list_recent_journal — Rückblick auf Tage.',
-    '- create_task(title, priority?, due_date?) — bei TODO-Items.',
-    '- list_open_tasks / complete_task(id) — TODO-Verwaltung.',
-    '- create_idea(title, body?) — halbgare Ideen.',
-    '- list_ideas / search_people — Orientierung.',
-    '- create_recipe(title, servings, total_minutes, equipment[], ingredients[], steps[], ...) — wenn der User ein Rezept diktiert („Rezept Bolognese für 4 Personen, du brauchst…"). Extrahiere ALLE strukturierten Felder aus dem Diktat — Portionen, Zeit, Zutaten als Liste, Schritte als Liste, Geräte, Nährwerte falls erwähnt. Bestätige kurz „Rezept gespeichert, Sir."',
-    '- promote_note_to_recipe(id, ingredients[], steps[], …) — wenn der User sagt „mach die letzte Notiz zum Rezept", „nimm Notiz X als Rezept", „pack das ins Kochbuch". WORKFLOW: erst list_recent_notes oder search_notes aufrufen → den passenden Eintrag finden + Body lesen → DARAUS selbst Zutaten/Schritte/Portionen/Zeit extrahieren → promote_note_to_recipe mit allen Feldern aufrufen. Bestätige „Notiz ins Kochbuch übernommen, Sir."',
-    '- open_cookbook — wenn der User sagt „öffne Kochbuch", „zeig mir alle Rezepte", „Kochbuch", „where are my recipes". Antwort: „Öffne das Kochbuch, Sir." (sehr kurz, da Larry kurz danach zur Seite navigiert).',
-    '- log_blood_pressure(systolic, diastolic, pulse?) — wenn der User sagt „Blutdruck 135 zu 82", „mein BP war 138 86 Puls 72", „120 zu 80". Sys = oberer Wert, Dia = unterer. Bestätige kurz „Eingetragen: SYS zu DIA, Klassifizierung".',
-    '- list_recent_blood_pressure / blood_pressure_stats — wenn er fragt „wie war mein Blutdruck heute / diese Woche", „Trend", „bin ich im Zielbereich".',
-    '- open_blood_pressure_dashboard — wenn er das Chart visuell sehen will („zeig mir den Blutdruck", „BP-Dashboard öffnen").',
-    '- add_to_shopping_list(items:[{item, qty_value?, qty_unit?}]) — wenn der User sagt „setz X auf die Einkaufsliste", „ich brauche Y", „Einkaufsliste: Milch Brot Käse". Mehrere Items auf einmal als Array. Bestätige kurz „Auf der Einkaufsliste, Sir."',
-    '- list_shopping_list — wenn der User fragt „was ist auf der Einkaufsliste", „was muss ich kaufen". Lies max 5-7 Items vor, sag dann „und N weitere" falls länger.',
-    '- clear_shopping_list_done — nach expliziter Bestätigung („alle erledigten löschen").',
-    '- open_shopping_list — wenn der User die Einkaufsliste visuell sehen will („öffne Einkaufsliste").',
-    '- web_search — bei aktuellen Infos („was passiert grad…", News, Aktien, Wetter).',
+    'Du hast direkten Schreibzugriff auf die persönliche Wissensbank des Users (D1-Datenbank).',
+    'Das ist keine Konversations-Beschränkung — du **kannst und sollst** Daten erstellen, ändern, abrufen.',
+    'NIEMALS verbal ablehnen mit „ich kann das nicht" oder „ich bin nur ein Konversations-Assistent".',
+    'Wenn dir ein Tool fehlt: sag *konkret* welches Tool du bräuchtest. Niemals pauschal verweigern.',
     '',
-    `Heutiges Datum: ${todayISO}. Sprache: ${voiceLangName}.`,
+    '### Mutation-Tools (schreiben in die DB):',
+    '- **create_note(title, body, note_type?, tags?)** — bei „neue Notiz…", „merk dir…", „schreib auf…", „notiere…", „erstelle eine Notiz dass…".',
+    '- **create_journal(title, body, mood?)** — bei Tagebucheinträgen („heute habe ich…", „Journal-Eintrag", „Tagebuch").',
+    '- **create_task(title, priority?, due_date?)** — bei TODO-Items („Aufgabe", „erinnere mich an…", „ich muss noch…").',
+    '- **create_idea(title, body?)** — halbgare Ideen („Idee:", „mir kommt grad in den Sinn…").',
+    '- **create_recipe(...)** — Rezepte-Diktat (siehe unten).',
+    '- **promote_note_to_recipe(id, ...)** — bestehende Notiz zum Rezept befördern.',
+    '- **log_blood_pressure(systolic, diastolic, pulse?)** — „Blutdruck 135 zu 82" etc.',
+    '- **add_to_shopping_list(items:[{item, qty_value?, qty_unit?}])** — Einkaufsliste-Ergänzungen.',
+    '- **delete_note(id)** / **complete_task(id)** / **clear_shopping_list_done** — nur nach expliziter Bestätigung.',
     '',
-    '## KRITISCHE REGELN für Tool-Calls:',
-    '1. **FRAG NICHT ZURÜCK** wenn der User eine Notiz/Aufgabe/Idee diktiert. Extrahiere Titel + Body SELBST.',
-    '2. **Titel** = die ersten 3-6 Worte als prägnante Überschrift (z.B. „Heute war ein produktiver Tag mit Cloudflare" → Titel: „Produktiver Tag mit Cloudflare", Body: voller Satz).',
-    '3. **Body** = der ganze diktierte Inhalt 1:1 (nur Filler-Wörter wie „ähm" raus).',
-    '4. Wenn völlig unklar was gemeint ist → FRAG nach, sonst direkt das Tool aufrufen.',
-    '5. Nach jeder Mutation (create/delete) IMMER kurz bestätigen: „Notiert, Sir." / „Aufgenommen." / „Gelöscht."',
-    '6. Bei leerer Suche: ehrlich sagen, NICHT halluzinieren.',
-    '7. Wenn der User „neue Notiz: <Text>" sagt → SOFORT create_note aufrufen, NICHT fragen.',
+    '### Lese-Tools:',
+    '- **search_notes / list_recent_notes** — „was war meine Notiz zu…", „letzte Notizen".',
+    '- **search_journal / list_recent_journal** — Tagebuch-Rückblick.',
+    '- **list_open_tasks** — offene TODOs.',
+    '- **list_ideas / search_people** — Orientierung.',
+    '- **list_recent_blood_pressure / blood_pressure_stats** — BP-Trends.',
+    '- **list_shopping_list** — Einkaufsliste (max 5-7 vorlesen, dann „und N weitere").',
+    '- **web_search** — aktuelle externe Infos (News, Wetter, Aktien).',
     '',
-    'Falls KEIN Tool nötig — stütze dich auf die folgenden Notizen aus dem persönlichen Wissensgarten:',
+    '### Navigations-Tools (öffnen Seiten im Browser):',
+    '- **open_cookbook** — „öffne Kochbuch", „zeig mir alle Rezepte". Antwort: „Öffne das Kochbuch, Sir."',
+    '- **open_blood_pressure_dashboard** — BP-Chart visuell.',
+    '- **open_shopping_list** — Einkaufsliste visuell.',
+    '',
+    '## 📝 PFLICHT: REDIGIEREN VOR DEM SPEICHERN',
+    '',
+    'Wenn der User dir Inhalt für eine Notiz, Aufgabe, Journal oder Idee DIKTIERT:',
+    '1. **Redigiere den Diktat-Text in saubere Sätze** — Punktuation setzen, Filler-Wörter („ähm", „weisst du", „also") raus, Wiederholungen glätten, Grammatik in Ordnung bringen.',
+    '2. **Inhalt nie verfälschen** — nur säubern, nicht inhaltlich ändern, nichts hinzufügen.',
+    '3. **Titel** = 3-6 Worte als prägnante Überschrift, abgeleitet aus dem Inhalt (z.B. „Heute war ein produktiver Tag mit Cloudflare" → Titel: „Produktiver Tag mit Cloudflare").',
+    '4. **Body** = der redigierte volle Inhalt.',
+    '5. Dann SOFORT das passende create_*-Tool aufrufen.',
+    '',
+    'Beispiel: User sagt „äh Larry erstell mir eine Notiz dass ähm der Müll heute rausgebracht werden muss"',
+    '→ Titel: „Müll heute rausbringen", Body: „Der Müll muss heute rausgebracht werden.", create_note aufrufen.',
+    '',
+    '## 🎙 STIMM-AUSGABE-REGELN',
+    '',
+    `Antworte AUSSCHLIESSLICH auf ${voiceLangName}. Heutiges Datum: ${todayISO}.`,
+    'Die Antwort wird laut vorgelesen — also sehr knapp und gesprächig, max. 2-3 kurze Sätze, kein Markdown, keine Aufzählungen, keine Überschriften.',
+    '',
+    'Nach jeder DB-Mutation IMMER kurz verbal bestätigen WAS gespeichert wurde:',
+    '- nach create_note → „Notiz erstellt: <Titel>, Sir." oder „Notiert: <Titel>."',
+    '- nach create_task → „Aufgabe aufgenommen: <Titel>." (mit Priorität wenn gesetzt)',
+    '- nach create_journal → „Tagebuch-Eintrag gespeichert: <Titel>."',
+    '- nach create_idea → „Idee aufgenommen: <Titel>."',
+    '- nach add_to_shopping_list → „Auf der Einkaufsliste: <Items>."',
+    '- nach log_blood_pressure → „Eingetragen: SYS zu DIA, <Klassifizierung>."',
+    '- nach delete_* / complete_* → „Gelöscht." / „Erledigt."',
+    '',
+    'Wenn ein Tool-Call fehlschlägt (tool_result.ok === false): sag **verbal** „Fehler beim Speichern: <Grund>"  — niemals so tun als wärst du gar nicht zuständig.',
+    '',
+    '## ❌ ABSOLUT VERBOTEN',
+    '',
+    '- „Ich kann das nicht in der Datenbank speichern" → FALSCH. Du KANNST, ruf create_note auf.',
+    '- „Ich bin nur ein Konversations-Assistent" → FALSCH. Du bist ein voll-funktionaler Assistent mit DB-Zugriff.',
+    '- Rückfragen wenn der Inhalt klar ist → FALSCH. Direkt speichern.',
+    '- Halluzinieren bei leerer Suche → ehrlich „Nichts gefunden" sagen.',
+    '',
+    'Nur fragen wenn etwas WIRKLICH unklar ist (z.B. „Notiz" ohne Inhalt → „Welcher Inhalt, Sir?").',
+    '',
+    '## 📚 GROUNDING — wenn KEIN Tool nötig ist',
+    '',
+    'Stütze dich auf die folgenden Notizen aus dem persönlichen Wissensgarten:',
     '',
     groundingText,
   ].join('\n');
@@ -15743,12 +15777,21 @@ async function vaSpeak(text) {
 // Attempt the server-side proxy first (Cloudflare /api/tts — key stays
 // server-side), fall back to a direct browser → ElevenLabs call when the
 // proxy isn't deployed or its env var isn't configured. Returns a Response.
-async function _elevenTTSFetch(text, voiceId) {
+//
+// streamMode === true: request the /stream variant of ElevenLabs for
+// chunked audio (first audio byte in ~200-400 ms vs ~1-2 s buffered).
+async function _elevenTTSFetch(text, voiceId, streamMode) {
+  const bodyJson = {
+    text,
+    voiceId,
+    modelId: ELEVEN_MODEL,
+    ...(streamMode ? { stream: true, optimize_streaming_latency: 3 } : {}),
+  };
   try {
     const res = await fetch('/api/tts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, voiceId, modelId: ELEVEN_MODEL }),
+      body: JSON.stringify(bodyJson),
     });
     // 200 = success, ANY non-404/405/500-misconfig = real upstream response.
     // Only 404 (function not deployed) and 500-with-env-missing fall through.
@@ -15764,7 +15807,11 @@ async function _elevenTTSFetch(text, voiceId) {
   } catch (_) { /* network error → try direct */ }
   // Direct browser → ElevenLabs (requires user's localStorage key)
   if (!ELEVEN_KEY) throw new Error('Kein /api/tts Proxy & kein lokaler ELEVENLABS-Key');
-  return fetch(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}`, {
+  const directBase = `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}`;
+  const directUrl = streamMode
+    ? `${directBase}/stream?output_format=mp3_44100_128&optimize_streaming_latency=3`
+    : `${directBase}?output_format=mp3_44100_128`;
+  return fetch(directUrl, {
     method: 'POST',
     headers: {
       'xi-api-key': ELEVEN_KEY,
@@ -15779,6 +15826,170 @@ async function _elevenTTSFetch(text, voiceId) {
   });
 }
 
+// MediaSource-based streaming playback. Returns the <audio> element on
+// success, or null if MSE isn't supported / fails to source-open. Caller
+// is responsible for play() + registering in _vaAudioRegistry.
+//
+// Why MSE: HTMLAudioElement won't progressively play a ReadableStream
+// directly. MediaSource exposes a SourceBuffer we feed MP3 frames into as
+// they arrive — playback can begin after the first ~few frames buffer,
+// well before the network response completes.
+//
+// staleCheck: () => boolean. Called between chunks. If it returns true,
+// the stream is cancelled (race-condition guard — see vaSpeak's myGen).
+function _mseCanPlayMp3() {
+  return typeof window !== 'undefined'
+    && 'MediaSource' in window
+    && typeof window.MediaSource.isTypeSupported === 'function'
+    && window.MediaSource.isTypeSupported('audio/mpeg');
+}
+
+async function _playStreamingMP3(response, staleCheck) {
+  if (!_mseCanPlayMp3()) return null;
+  if (!response.body || typeof response.body.getReader !== 'function') return null;
+
+  const mediaSource = new MediaSource();
+  const url = URL.createObjectURL(mediaSource);
+  const audio = new Audio(url);
+  // Streaming chunks have no Content-Length — without this, some Chromium
+  // builds delay autoplay until they "know" total duration. Force-eager.
+  audio.preload = 'auto';
+
+  // Wait for the source to be open before we can attach a SourceBuffer.
+  // 'sourceopen' fires once the <audio> attaches to this MediaSource.
+  const opened = new Promise((resolve, reject) => {
+    const onOpen = () => { mediaSource.removeEventListener('sourceopen', onOpen); resolve(); };
+    mediaSource.addEventListener('sourceopen', onOpen);
+    // Safety: if sourceopen doesn't fire in 2 s (Safari quirk or some
+    // adblockers), reject so the caller falls back to blob playback.
+    setTimeout(() => reject(new Error('MediaSource sourceopen timeout')), 2000);
+  });
+
+  // Trigger the open by setting audio.src (already done via constructor)
+  // — for MSE, just touching the element is enough. Wait.
+  try { await opened; } catch (e) {
+    URL.revokeObjectURL(url);
+    return null;
+  }
+
+  let sourceBuffer;
+  try {
+    sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg');
+  } catch (e) {
+    console.warn('[Voice] MSE addSourceBuffer failed:', e);
+    URL.revokeObjectURL(url);
+    return null;
+  }
+
+  const reader = response.body.getReader();
+  // Serial append loop: SourceBuffer.appendBuffer is async (fires
+  // 'updateend' when done). Two appends back-to-back throw. We queue.
+  const pending = [];
+  let drained = false;
+  let aborted = false;
+  function pumpQueue() {
+    if (aborted || sourceBuffer.updating || pending.length === 0) return;
+    const chunk = pending.shift();
+    try { sourceBuffer.appendBuffer(chunk); }
+    catch (e) { console.warn('[Voice] appendBuffer threw:', e); aborted = true; }
+  }
+  sourceBuffer.addEventListener('updateend', () => {
+    if (aborted) return;
+    if (pending.length > 0) pumpQueue();
+    else if (drained && mediaSource.readyState === 'open') {
+      // No more chunks expected — close the MediaSource so 'ended' fires
+      // on the <audio> when playback hits the buffer tail.
+      try { mediaSource.endOfStream(); } catch (_) {}
+    }
+  });
+
+  // Drive the reader in the background — we do NOT await this loop
+  // before returning the audio element. Playback can begin while the
+  // tail of the stream is still arriving (that's the whole point).
+  (async () => {
+    try {
+      while (true) {
+        if (staleCheck && staleCheck()) {
+          aborted = true;
+          try { await reader.cancel(); } catch (_) {}
+          try { mediaSource.endOfStream(); } catch (_) {}
+          return;
+        }
+        const { done, value } = await reader.read();
+        if (done) { drained = true; pumpQueue(); return; }
+        pending.push(value);
+        pumpQueue();
+      }
+    } catch (e) {
+      console.warn('[Voice] streaming reader failed:', e);
+      aborted = true;
+      try { mediaSource.endOfStream('network'); } catch (_) {}
+    }
+  })();
+
+  // Audio element cleanup: revoke the MediaSource URL when playback
+  // ends or errors. The caller's onended/onerror still fires too.
+  const cleanup = () => {
+    aborted = true;
+    try { reader.cancel(); } catch (_) {}
+    try { URL.revokeObjectURL(url); } catch (_) {}
+  };
+  audio.addEventListener('ended', cleanup, { once: true });
+  audio.addEventListener('error', cleanup, { once: true });
+
+  return audio;
+}
+
+// Wire the standard lifecycle handlers (onplay/onended/onerror + speech
+// rate + registry) onto an <audio> element built by either the streaming
+// or buffered path. Pulled out so both paths share identical semantics.
+//
+// blobUrl: optional — only set on the buffered path so onended can revoke
+//          the URL. Streaming path manages its MediaSource URL internally.
+function _vaAttachAudioLifecycle(a, blobUrl) {
+  window._vaAudioRegistry.add(a);
+  try { a.playbackRate = getSpeechRate(); } catch(_) {}
+  _vaActiveAudio = a;
+  a.onplay = () => {
+    _vaIsSpeaking = true;
+    vaSetBubbleState('speaking');
+    vaSetStatus('Spricht… (einfach rein reden zum Unterbrechen)');
+    if (typeof vaStartBargeInWatcher === 'function') {
+      vaStartBargeInWatcher(() => {
+        console.log('[BargeIn] user interrupted Larry — stopping TTS, opening mic');
+        vaStopSpeaking();
+        setTimeout(() => {
+          if (!_vaIsListening && !_vaPaused && _vaConvActive) vaStartListening();
+        }, 100);
+      });
+    }
+  };
+  a.onended = () => {
+    _vaIsSpeaking = false;
+    vaStopBargeInWatcher();
+    vaSetBubbleState(null);
+    vaSetStatus('Bereit');
+    if (blobUrl) { try { URL.revokeObjectURL(blobUrl); } catch(_) {} }
+    window._vaAudioRegistry.delete(a);
+    if (_vaActiveAudio === a) _vaActiveAudio = null;
+    if (window._vaPendingNavigate) {
+      const target = window._vaPendingNavigate;
+      window._vaPendingNavigate = null;
+      setTimeout(() => { window.location.href = target; }, 300);
+      return;
+    }
+    vaMaybeAutoListen();
+  };
+  a.onerror = () => {
+    _vaIsSpeaking = false;
+    vaStopBargeInWatcher();
+    vaSetBubbleState(null);
+    if (blobUrl) { try { URL.revokeObjectURL(blobUrl); } catch(_) {} }
+    window._vaAudioRegistry.delete(a);
+    if (_vaActiveAudio === a) _vaActiveAudio = null;
+  };
+}
+
 async function vaSpeakElevenLabs(text, voiceIdOverride, myGen) {
   const voiceId = voiceIdOverride || ELEVEN_VOICE_ID;
   if (!voiceId) return 'keine Stimmen-ID';
@@ -15787,15 +15998,20 @@ async function vaSpeakElevenLabs(text, voiceIdOverride, myGen) {
   if (typeof myGen !== 'number') {
     myGen = ++window._vaSpeakGen;
   }
+  const staleCheck = () => myGen !== window._vaSpeakGen;
+  // Streaming preferred on browsers that support MediaSource audio/mpeg —
+  // Chrome/Edge/Firefox. Safari pre-15.4 lacks MSE-audio support; we fall
+  // back to buffered automatically when MSE rejects the source-open.
+  const wantStream = _mseCanPlayMp3();
   try {
     vaSetStatus('Generiere Stimme via ElevenLabs…');
-    const res = await _elevenTTSFetch(text, voiceId);
+    const res = await _elevenTTSFetch(text, voiceId, wantStream);
     // After the network round-trip, check if we were superseded by a newer
     // vaSpeak. If so, drop the audio on the floor BEFORE allocating a blob
     // URL or creating an <audio> element. Without this guard, two near-
     // simultaneous vaSpeak() calls would each create their own audio and
     // both call .play() → the echo bug.
-    if (myGen !== window._vaSpeakGen) {
+    if (staleCheck()) {
       console.log('[Voice] vaSpeakElevenLabs gen', myGen, 'superseded by', window._vaSpeakGen, '— dropping audio');
       try { res.body?.cancel?.(); } catch(_) {}
       return true;  // pretend success so the caller doesn't show an error
@@ -15803,7 +16019,6 @@ async function vaSpeakElevenLabs(text, voiceIdOverride, myGen) {
     if (!res.ok) {
       const body = await res.text().catch(() => '');
       console.warn('ElevenLabs ' + res.status, body);
-      // Map common HTTP status codes to readable hints
       let hint = `HTTP ${res.status}`;
       if (res.status === 401) hint = 'Key ungültig (401)';
       else if (res.status === 403) hint = 'Key ohne Berechtigung (403)';
@@ -15811,7 +16026,6 @@ async function vaSpeakElevenLabs(text, voiceIdOverride, myGen) {
       else if (res.status === 422) hint = 'Ungültige Anfrage (422) — Stimme/Modell prüfen';
       else if (res.status === 429) hint = 'Rate-Limit / Quota erschöpft (429)';
       else if (res.status >= 500) hint = `Server-Fehler ${res.status}`;
-      // Try to pull a useful detail message out of the response body
       try {
         const j = JSON.parse(body);
         if (j?.detail?.message) hint += ': ' + j.detail.message;
@@ -15819,78 +16033,57 @@ async function vaSpeakElevenLabs(text, voiceIdOverride, myGen) {
       } catch (_) {}
       return hint;
     }
-    const blob = await res.blob();
-    // Second stale-check after the blob is materialised — the user may have
-    // tapped to cancel, or another vaSpeak may have started during the
-    // blob() download. Drop on the floor before creating the <audio>.
-    if (myGen !== window._vaSpeakGen) {
-      console.log('[Voice] vaSpeakElevenLabs gen', myGen, 'superseded post-blob — dropping');
-      return true;
+
+    // ── Streaming path ────────────────────────────────────────────
+    // _playStreamingMP3 returns the <audio> element on success or null
+    // when MSE refused / sourceopen timed out. On null we fall through
+    // to the buffered path with the remaining response — but res.body
+    // has already been consumed by getReader(), so we can't reuse it.
+    // Instead the streaming helper internally only consumes if it
+    // commits, and otherwise leaves the body untouched.
+    let a = null;
+    let blobUrl = null;
+    if (wantStream) {
+      a = await _playStreamingMP3(res, staleCheck).catch(err => {
+        console.warn('[Voice] streaming playback failed, falling back to buffered:', err);
+        return null;
+      });
     }
-    const url  = URL.createObjectURL(blob);
-    const a = new Audio(url);
-    // Register every audio element in the global set so vaHardStopAllAudio
-    // can find and stop it even if our local pointer is overwritten by a
-    // racing vaSpeak. This is the core fix for the echo bug.
-    window._vaAudioRegistry.add(a);
-    // Apply user-selected speech speed BEFORE play() — set on the element
-    // so the browser also pitch-corrects ("preservesPitch" defaults to true
-    // on Chromium-based browsers, which we run on).
-    try { a.playbackRate = getSpeechRate(); } catch(_) {}
-    _vaActiveAudio = a;
-    a.onplay  = () => {
-      _vaIsSpeaking = true;
-      vaSetBubbleState('speaking');
-      vaSetStatus('Spricht… (einfach rein reden zum Unterbrechen)');
-      // Start barge-in watcher: sustained user speech → vaStopSpeaking
-      // → onerror's vaMaybeAutoListen path re-opens the main mic so
-      // the interrupting utterance gets captured.
-      if (typeof vaStartBargeInWatcher === 'function') {
-        vaStartBargeInWatcher(() => {
-          console.log('[BargeIn] user interrupted Larry — stopping TTS, opening mic');
-          vaStopSpeaking();
-          // Brief delay so the audio stream actually releases before the
-          // main recognition grabs the mic — avoids capture conflicts.
-          setTimeout(() => {
-            if (!_vaIsListening && !_vaPaused && _vaConvActive) vaStartListening();
-          }, 100);
-        });
+
+    if (!a) {
+      // ── Buffered fallback ───────────────────────────────────────
+      // Either MSE wasn't supported, or streaming committed-then-failed
+      // before we got a usable audio element. Re-fetch in buffered mode
+      // (no `stream` flag) so we don't end up with a half-consumed body.
+      let buffRes = res;
+      // If streaming was requested AND the body might have been read,
+      // re-issue the request without the stream flag for safety.
+      if (wantStream) {
+        try { res.body?.cancel?.(); } catch(_) {}
+        if (staleCheck()) return true;
+        buffRes = await _elevenTTSFetch(text, voiceId, false);
+        if (staleCheck()) { try { buffRes.body?.cancel?.(); } catch(_) {} return true; }
+        if (!buffRes.ok) return `HTTP ${buffRes.status} (Fallback)`;
       }
-    };
-    a.onended = () => {
-      _vaIsSpeaking = false;
-      vaStopBargeInWatcher();
-      vaSetBubbleState(null);
-      vaSetStatus('Bereit');
-      URL.revokeObjectURL(url);
-      window._vaAudioRegistry.delete(a);
-      if (_vaActiveAudio === a) _vaActiveAudio = null;
-      // Voice-triggered navigation (e.g. "open the cookbook") — fires
-      // AFTER the TTS confirmation finishes so the user hears Larry
-      // say "ich öffne…" before the page changes.
-      if (window._vaPendingNavigate) {
-        const target = window._vaPendingNavigate;
-        window._vaPendingNavigate = null;
-        setTimeout(() => { window.location.href = target; }, 300);
-        return;  // skip vaMaybeAutoListen — page is about to navigate
+      const blob = await buffRes.blob();
+      if (staleCheck()) {
+        console.log('[Voice] vaSpeakElevenLabs gen', myGen, 'superseded post-blob — dropping');
+        return true;
       }
-      vaMaybeAutoListen();
-    };
-    a.onerror = () => {
-      _vaIsSpeaking = false;
-      vaStopBargeInWatcher();
-      vaSetBubbleState(null);
-      URL.revokeObjectURL(url);
-      window._vaAudioRegistry.delete(a);
-      if (_vaActiveAudio === a) _vaActiveAudio = null;
-    };
+      blobUrl = URL.createObjectURL(blob);
+      a = new Audio(blobUrl);
+    }
+
+    _vaAttachAudioLifecycle(a, blobUrl);
+
     // Final stale-check immediately before play() — the microtask between
     // wiring the handlers and actually starting playback could still let a
     // racing vaSpeak supersede us.
-    if (myGen !== window._vaSpeakGen) {
+    if (staleCheck()) {
       console.log('[Voice] vaSpeakElevenLabs gen', myGen, 'superseded pre-play — dropping');
       window._vaAudioRegistry.delete(a);
-      try { URL.revokeObjectURL(url); } catch(_) {}
+      if (blobUrl) { try { URL.revokeObjectURL(blobUrl); } catch(_) {} }
+      try { a.pause(); a.removeAttribute('src'); a.load && a.load(); } catch(_) {}
       return true;
     }
     await a.play();
