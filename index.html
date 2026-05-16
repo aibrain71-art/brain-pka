@@ -5065,12 +5065,15 @@ function openSettings() {
   // Restore the last-active section (or default to appearance on first open).
   setSettingsSection(localStorage.getItem('settingsActiveSection') || 'appearance');
   document.getElementById('settings-overlay').classList.add('visible');
-  // Mobile: settings is one of the 5 sidebar entries — slide it up fullscreen
-  // and hide the sidebar launcher. The settings overlay has its own ✕ in the
-  // head (line 3731); we wire closeSettings() below to drop the body class
-  // too so the launcher reappears.
-  if (typeof activateMobileFullscreenView === 'function') {
-    activateMobileFullscreenView();
+  // Mobile: the settings overlay (z-index 200) sits on top of #main and is
+  // already 100vw/100vh on mobile. It has its own unified .settings-head
+  // (CSS at line ~868) styled to match the #mobile-view-header bar (same
+  // 52px height + 44×44 ✕). We do NOT activate the body fullscreen class
+  // here — #main's z-index 240 would otherwise cover the overlay. The
+  // topbar already disappears because the settings overlay paints over it.
+  // We do lock body scroll for parity with the other fullscreen views.
+  if (typeof isMobileViewport === 'function' && isMobileViewport()) {
+    document.body.style.overflow = 'hidden';
   }
 }
 
@@ -8314,13 +8317,32 @@ function renderCardList(entries) {
 function isMobileViewport() {
   return window.matchMedia('(max-width: 768px)').matches;
 }
+// Title mapping for the mobile-fullscreen header bar. Keys are setView()
+// view keys; values are the human-facing titles shown at top-left of the
+// bar. Sub-views (e.g. diverses → books) override at the call site.
+const MOBILE_VIEW_TITLES = {
+  list:       'Notes',
+  graph:      'Wissensgraph',
+  flashcards: 'Lernkasten',
+  chat:       'Chat',
+  tasks:      'Aufgaben',
+  diverses:   'Diverses',
+  settings:   'Einstellungen'
+};
 // Activate fullscreen view: hides the sidebar (launcher), shows the
 // chosen view as a 100% slide-up sheet on mobile. No-op on desktop.
-function activateMobileFullscreenView() {
+// `viewKey` selects the title to render in the header bar.
+function activateMobileFullscreenView(viewKey) {
   if (!isMobileViewport()) return;
   document.body.classList.add('mobile-fullscreen-active');
   // Lock background scroll so the launcher behind doesn't move.
   document.body.style.overflow = 'hidden';
+  // Set the header-bar title. Fallback keeps the prior label if no key
+  // was passed (e.g. legacy callers).
+  const titleEl = document.getElementById('mobile-view-title');
+  if (titleEl && viewKey && MOBILE_VIEW_TITLES[viewKey]) {
+    titleEl.textContent = MOBILE_VIEW_TITLES[viewKey];
+  }
 }
 // Close the fullscreen view and return to the sidebar launcher.
 // Called by the ✕ button. On desktop this is a no-op (button hidden).
@@ -8357,8 +8379,9 @@ function setView(view, filter) {
   if (!isDesktop) closeDetail();
   // Mobile fullscreen: every sidebar entry that lands here (list, graph,
   // tasks, diverses, chat, flashcards) opens its view as a 100% fullscreen
-  // slide-up sheet. The launcher (sidebar) disappears behind it.
-  activateMobileFullscreenView();
+  // slide-up sheet. The launcher (sidebar) disappears behind it. The view
+  // key drives which title shows in the header bar.
+  activateMobileFullscreenView(view);
   // Leaving graph view → stop the neuron animation loop (saves CPU)
   if (currentView === 'graph' && view !== 'graph') stopNeuronAnim();
   currentView = view;
