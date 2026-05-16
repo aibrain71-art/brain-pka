@@ -4963,6 +4963,14 @@ function setSettingsSection(section) {
   // Scroll the body back to top whenever you flip sections.
   const body = document.querySelector('.settings-body');
   if (body) body.scrollTop = 0;
+  // Bug-fix (voice-bug-batch-3fix): When the user navigates to the Voice tab,
+  // re-trigger updateElevenSettings(). It's idempotent (only loads if cache
+  // is empty, in-flight promise reused otherwise) and guarantees the voice
+  // dropdown is populated even if the initial openSettings call happened
+  // before the user clicked over to this section.
+  if (section === 'voice' && typeof updateElevenSettings === 'function') {
+    updateElevenSettings();
+  }
 }
 // Sync the ElevenLabs voice dropdown with persisted state. The Settings UI
 // has been simplified to ONLY show the voice dropdown + a Test button —
@@ -4986,14 +4994,25 @@ function updateElevenSettings() {
   }
   v.value = ELEVEN_VOICE_ID || '';
   updateElevenStatusLine();
-  // Eagerly load voices via the Cloudflare /api/voices proxy. listElevenLabsVoices
-  // tries the proxy first (no localStorage key needed) and falls back to direct
-  // call only if the proxy is unreachable AND a local key exists.
-  if (!window._cachedElevenVoices) {
+  // Bug-fix (voice-bug-batch-3fix): Always kick the loader when the cache is
+  // not yet populated — even if an in-flight load is already running. The
+  // hardened vaEnsureVoicesLoaded() now reuses the in-flight promise, so a
+  // second caller from here will await the SAME promise and get the real
+  // voice list when it resolves. The `.then` below then re-renders the
+  // dropdown with actual voices instead of leaving "⏳ Stimmen werden
+  // geladen…" stuck forever (the original race-condition root cause).
+  // The old guard `if (!window._cachedElevenVoices)` matched undefined/null
+  // AND empty array (length 0); both cases benefit from a retry-load.
+  const cached = window._cachedElevenVoices;
+  if (!cached || cached.length === 0) {
     vaEnsureVoicesLoaded().then(() => {
       // Re-render dropdown with the freshly loaded voices
       rebuildElevenSettingsDropdown(v);
       v.value = ELEVEN_VOICE_ID || '';
+      updateElevenStatusLine();
+    }).catch(err => {
+      console.warn('[updateElevenSettings] voice load failed:', err);
+      rebuildElevenSettingsDropdown(v);
       updateElevenStatusLine();
     });
   }
@@ -5224,6 +5243,10 @@ async function onLoadVoicesManual() {
   window._cachedElevenVoices = null;
   window._elevenLoadState = 'idle';
   window._elevenLoadError = '';
+  // Bug-fix (voice-bug-batch-3fix): also clear the in-flight promise slot so
+  // the new vaEnsureVoicesLoaded call below actually re-fetches instead of
+  // awaiting a stale promise that resolved to [] from a prior failure.
+  window._elevenLoadPromise = null;
   try {
     await vaEnsureVoicesLoaded();
   } catch (_) { /* error state handled by rebuildElevenSettingsDropdown */ }
@@ -14170,28 +14193,51 @@ function updatePersonaSwitcher() {
 // Eagerly load (and cache) the ElevenLabs voices list. Idempotent: returns
 // the cached list when already loaded; tracks loading + error state on
 // window so updatePersonaSwitcher can show progress in the dropdown.
+//
+// Bug-fix (voice-bug-batch-3fix): Previously, when a second caller entered
+// while a first load was already in flight, the second caller saw
+// `_elevenLoadState === 'loading'` and returned `[]` SYNCHRONOUSLY. Any
+// `.then(() => rebuildElevenSettingsDropdown(...))` chained on that empty
+// return rendered the dropdown with the still-empty cache — i.e. the
+// "⏳ Stimmen werden geladen…" placeholder — and never re-rendered when
+// the original in-flight load eventually resolved. Owner reported this as
+// "Settings voice dropdown stays empty even though /api/voices works".
+//
+// Fix: cache the in-flight Promise on `window._elevenLoadPromise`. Every
+// caller — whether first or concurrent — `await`s the SAME promise and
+// receives the resolved voice list. Re-renders of the Settings/persona
+// dropdowns happen after that await, with the cache actually populated.
 async function vaEnsureVoicesLoaded() {
   // Don't bail when ELEVEN_KEY is empty — the Cloudflare proxy /api/voices
   // can supply the list using its server-side secret. listElevenLabsVoices
   // tries the proxy first and only falls back to direct (which needs key).
   if (window._cachedElevenVoices?.length) return window._cachedElevenVoices;
-  if (window._elevenLoadState === 'loading') return [];
+  // Concurrent caller: reuse the in-flight promise instead of returning [].
+  if (window._elevenLoadPromise) return window._elevenLoadPromise;
   window._elevenLoadState = 'loading';
   window._elevenLoadError = '';
   if (typeof updatePersonaSwitcher === 'function') updatePersonaSwitcher();
-  try {
-    const vs = await listElevenLabsVoices();
-    window._cachedElevenVoices = vs || [];
-    window._elevenLoadState = 'loaded';
-    if (typeof updatePersonaSwitcher === 'function') updatePersonaSwitcher();
-    if (typeof renderPersonasList === 'function') renderPersonasList();
-    return window._cachedElevenVoices;
-  } catch (e) {
-    window._elevenLoadState = 'error';
-    window._elevenLoadError = e?.message || String(e);
-    if (typeof updatePersonaSwitcher === 'function') updatePersonaSwitcher();
-    return [];
-  }
+  window._elevenLoadPromise = (async () => {
+    try {
+      const vs = await listElevenLabsVoices();
+      window._cachedElevenVoices = vs || [];
+      window._elevenLoadState = 'loaded';
+      if (typeof updatePersonaSwitcher === 'function') updatePersonaSwitcher();
+      if (typeof renderPersonasList === 'function') renderPersonasList();
+      return window._cachedElevenVoices;
+    } catch (e) {
+      window._elevenLoadState = 'error';
+      window._elevenLoadError = e?.message || String(e);
+      console.warn('[vaEnsureVoicesLoaded] failed:', e);
+      if (typeof updatePersonaSwitcher === 'function') updatePersonaSwitcher();
+      return [];
+    } finally {
+      // Clear the in-flight slot so a future caller can re-attempt (e.g.
+      // the "Stimmen laden" button after a transient network failure).
+      window._elevenLoadPromise = null;
+    }
+  })();
+  return window._elevenLoadPromise;
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -14833,9 +14879,19 @@ function vaStartListening() {
     }
     // Reset the silence timer on every recognised chunk; if no new chunk
     // arrives for SILENCE_MS the accumulated text is sent as if final.
+    //
+    // Bug-fix (voice-bug-batch-3fix): Removed eager `if (final.trim()) flushSpeech();`
+    // that used to fire here. Chrome/Edge SpeechRecognition emits isFinal=true
+    // on individual phrases mid-sentence (after even tiny pauses), not only at
+    // the end of an utterance. Example: user says "Erstelle mir eine Notiz zum
+    // Thema X" — Chrome marks "Erstelle mir" final after a 200ms pause, the
+    // eager-flush fires, recognition stops, Larry gets a fragmented sentence
+    // and replies "incomplete". By relying ONLY on the SILENCE_MS debounce we
+    // guarantee the user always has 1.4s of pause-tolerance before flush.
+    // Trade-off: very short commands (e.g. "Stopp") now wait the full 1.4s
+    // before being sent. Owner accepted this trade-off; see commit message.
     if (window._vaSilenceTimer) clearTimeout(window._vaSilenceTimer);
     window._vaSilenceTimer = setTimeout(flushSpeech, SILENCE_MS);
-    if (final.trim()) flushSpeech();
   };
   _vaRecognition.onerror = (e) => {
     window._vaSRDiag.error++;
@@ -15633,6 +15689,15 @@ function vaHardStopAllAudio() {
   _vaIsSpeaking = false;
 }
 
+// Hardcoded final-fallback voice — the ElevenLabs premade "Rachel" voice.
+// Available in EVERY ElevenLabs account by default (premade catalog, never
+// removed). Used as the last-resort voice when neither the active persona
+// nor the global ELEVEN_VOICE_ID is set AND the cached voice list is empty
+// (e.g. /api/voices hasn't completed yet on a cold bubble-open). Picked
+// because it's a stable, universally-available ID that's been in the
+// ElevenLabs premade library since launch.
+const VA_FALLBACK_VOICE_ID = '21m00Tcm4TlvDq8ikWAM';  // "Rachel" (premade)
+
 async function vaSpeak(text) {
   if (!text) return;
   // Stop any in-flight audio FIRST (this bumps _vaSpeakGen internally), then
@@ -15645,11 +15710,27 @@ async function vaSpeak(text) {
   // and falls back to direct browser → ElevenLabs only if proxy is down.
   // We DON'T pre-check ELEVEN_KEY here because the proxy works without it.
   const persona = getActivePersona();
-  const voiceId = (persona && persona.voiceId) || ELEVEN_VOICE_ID;
+  let voiceId = (persona && persona.voiceId) || ELEVEN_VOICE_ID;
+  // Bug-fix (voice-bug-batch-3fix): When neither persona nor global voice ID
+  // is set, fall back to a sensible default instead of returning silently.
+  // Order of preference:
+  //   1) First voice from the loaded ElevenLabs voice cache (matches what
+  //      the Settings dropdown would show), if available.
+  //   2) Hardcoded "Rachel" premade voice — always present in any account.
+  // This lets Larry speak the greeting even on a fresh device where the
+  // user hasn't picked a voice yet. The status toast that previously made
+  // this silent now also fires through console.warn so the diagnosis path
+  // is visible in DevTools even when the toast is overwritten.
   if (!voiceId) {
-    vaSetStatus('⚠️ Keine ElevenLabs-Stimme gewählt. Settings öffnen → Stimme aus Dropdown wählen.');
-    vaMaybeAutoListen();
-    return;
+    const cached = window._cachedElevenVoices || [];
+    const fallback = (cached[0] && cached[0].id) || VA_FALLBACK_VOICE_ID;
+    console.warn('[vaSpeak] No voice configured on persona or globally — falling back to', fallback,
+      '(cache size:', cached.length, ', persona:', persona?.name || 'none', ')');
+    voiceId = fallback;
+    // Status line: visible AND persistent enough to spot. We do NOT auto-
+    // overwrite this with a different status until a real new state arrives,
+    // because Owner reported the previous warning toast disappeared too fast.
+    vaSetStatus('ℹ️ Stimme nicht gesetzt — nutze Fallback (Settings → Stimme wählen, dann persistiert).');
   }
   const result = await vaSpeakElevenLabs(text, voiceId, myGen);
   if (result === true) return;
