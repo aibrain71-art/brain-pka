@@ -2886,22 +2886,10 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
 .mobile-view-close:hover, .mobile-view-close:active { filter: brightness(1.2); }
 
 @media (max-width: 768px) {
-  /* Launcher mode: sidebar fills the viewport, main is hidden until a view
-     is launched. The topbar stays at the top of the launcher (search +
-     mode chips are still useful as quick filters once a view is open). */
-  body:not(.mobile-fullscreen-active) #main { display: none; }
-  body:not(.mobile-fullscreen-active) #sidebar { width: 100% !important; }
-  body:not(.mobile-fullscreen-active) #sidebar.collapsed { width: 100% !important; }
-  body:not(.mobile-fullscreen-active) #sidebar.collapsed .nav-item { padding: 12px 16px; justify-content: flex-start; gap: 12px; }
-  body:not(.mobile-fullscreen-active) #sidebar.collapsed .nav-item span { display: inline; }
-  body:not(.mobile-fullscreen-active) #sidebar.collapsed .sidebar-logo .logo-text { display: inline; }
-  /* Give the launcher nav items more breathing room — they're the primary
-     entry points. Larger touch targets, slightly bigger icons. */
-  body:not(.mobile-fullscreen-active) .nav-item {
-    padding: 14px 16px; font-size: 15px; gap: 14px;
-    border-radius: 10px;
-  }
-  body:not(.mobile-fullscreen-active) .nav-item svg { width: 20px; height: 20px; }
+  /* Mobile boot: sidebar stays in its normal left-docked position (existing
+     mobile layout from prior versions). Owner explicitly wanted NO launcher-
+     mode — main content stays visible by default. Only the icon-tap → slide-
+     up-to-fullscreen behavior was requested. */
 
   /* Fullscreen-active mode: main covers 100% of the viewport, sidebar
      is fully hidden, view slides up from the bottom. */
