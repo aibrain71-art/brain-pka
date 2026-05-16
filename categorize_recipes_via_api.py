@@ -144,29 +144,66 @@ def print_tooling_help_and_exit() -> None:
     sys.exit(2)
 
 
-def parse_index(text: str) -> list[tuple[int, int, str]]:
-    """Parse text into (start_num, end_num, category_name) tuples.
+# Owner's cookbook category page-ranges (from brain-pka.pages.dev/cookbook#library).
+# When two ranges overlap (e.g. Eintöpfe inside Nebenmahlzeiten), the smaller
+# (more specific) range wins — see _page_to_category().
+CATEGORY_PAGE_RANGES: list[tuple[int, int, str]] = [
+    (52, 60,   "Getränke"),
+    (64, 88,   "Suppen"),
+    (92, 104,  "Saucen"),
+    (108, 145, "Fleisch"),
+    (150, 159, "Fischgerichte"),
+    (164, 186, "Stärkebeilage"),
+    (190, 202, "Gemüse"),
+    (208, 225, "Salate"),
+    (230, 284, "Nebenmahlzeiten"),
+    (268, 279, "Eintöpfe"),                   # overlaps Nebenmahlzeiten — smaller wins
+    (284, 307, "Teige und Süssspeisen"),
+    (312, 331, "MVS Fleischgerichte"),
+    (336, 343, "MVS Stärkebeilagen"),
+    (348, 356, "MVS Gemüse"),
+    (360, 370, "MVS Nebenmahlzeiten"),
+    (374, 384, "MVS Eintöpfe"),
+]
 
-    Tolerates dashes (-, en-dash, em-dash), optional colon/period after
-    the second number, and arbitrary whitespace. Strips trailing page-numbers
-    in the category name (e.g. "Getraenke ........ 12" -> "Getraenke").
+
+def _page_to_category(page: int) -> str | None:
+    """Find the most-specific category for a given page number."""
+    best: tuple[int, str] | None = None  # (range_size, name)
+    for start, end, name in CATEGORY_PAGE_RANGES:
+        if start <= page <= end:
+            size = end - start
+            if best is None or size < best[0]:
+                best = (size, name)
+    return best[1] if best else None
+
+
+# Alphabetical-index entry, e.g.
+# "Rindfleisch Stroganoff . . . . . . . 136 . . . . . . . R0419"
+_INDEX_ENTRY_RE = re.compile(r".+?\s+(\d{1,4})\s+[\s.]+R(\d{4})\s*$")
+
+
+def parse_index(text: str) -> list[tuple[int, int, str]]:
+    """Parse the alphabetical recipe index into (num, num, category) tuples.
+
+    The book's index lists "<title>  <page>  R<NNNN>" one recipe per line.
+    We derive each recipe's category from its page number via
+    CATEGORY_PAGE_RANGES (owner-supplied). The (num, num, cat) tuple shape
+    is kept so build_recipe_num_to_category() works unchanged.
     """
     out: list[tuple[int, int, str]] = []
     for raw in text.splitlines():
         line = raw.strip()
         if not line:
             continue
-        m = INDEX_RANGE_RE.match(line)
+        m = _INDEX_ENTRY_RE.match(line)
         if not m:
             continue
-        a, b, cat_raw = int(m.group(1)), int(m.group(2)), m.group(3)
-        # Strip trailing dot-leaders and page-numbers: "Getraenke ........ 12"
-        cat = re.sub(r"[\.\s]{2,}\d+\s*$", "", cat_raw).strip()
-        # Also drop a lone trailing page number with no leaders
-        cat = re.sub(r"\s+\d{1,4}\s*$", "", cat).strip()
-        if not cat:
-            continue
-        out.append((a, b, cat))
+        page = int(m.group(1))
+        rnum = int(m.group(2))
+        cat = _page_to_category(page)
+        if cat:
+            out.append((rnum, rnum, cat))
     return out
 
 
