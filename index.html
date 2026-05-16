@@ -6977,12 +6977,66 @@ async function saveNoteEditor() {
   }
 }
 
-// ── Note hard-delete (X button on card) ───────────────────────
-async function deleteNoteCard(entry) {
-  const numericId = parseInt(String(entry.id).replace('d1-note-', ''), 10);
-  if (!confirm(`Notiz „${entry.title}" wirklich löschen?`)) return;
+// ── Entry hard-delete (X button on card) ──────────────────────
+// Generalized from the original Notes-only deleteNoteCard (PR #3).
+// Routes to the right /api/<entity>/:id endpoint based on the
+// d1-<type>- prefix of entry.id, with entity-specific confirm copy.
+// Supported types: note (incl. recipe), task, journal, idea.
+// All four delete endpoints follow the same DELETE → {ok:true} shape.
+const ENTRY_DELETE_CONFIG = {
+  note:    { endpoint: 'notes',   label: 'Notiz' },
+  task:    { endpoint: 'tasks',   label: 'Aufgabe' },
+  journal: { endpoint: 'journal', label: 'Journal-Eintrag' },
+  idea:    { endpoint: 'ideas',   label: 'Idee' },
+  // recipe → routes through /api/notes (recipes live in notes table)
+  recipe:  { endpoint: 'notes',   label: 'Rezept' },
+};
+
+function entryDeleteKind(entry) {
+  // Recipe notes carry .recipeData and route to the recipe variant
+  // (different confirm copy, same notes endpoint).
+  if (entry.recipeData) return 'recipe';
+  const id = String(entry.id || '');
+  if (id.startsWith('d1-note-'))    return 'note';
+  if (id.startsWith('d1-task-'))    return 'task';
+  if (id.startsWith('d1-journal-')) return 'journal';
+  if (id.startsWith('d1-idea-'))    return 'idea';
+  return null;
+}
+
+function entryConfirmText(kind, entry) {
+  // Title can already be prefixed (☐/✅ for tasks, 📖 for bookmarks).
+  // Strip leading status icons from tasks for a cleaner prompt.
+  const rawTitle = String(entry.title || '').replace(/^(☐|✅)\s+/, '').replace(/\s+\[(URGENT|hoch)\]$/, '');
+  if (kind === 'journal') {
+    const d = entry.date || '';
+    if (rawTitle && rawTitle.trim()) {
+      return `Journal-Eintrag „${rawTitle}" vom ${d} wirklich löschen?`;
+    }
+    return `Journal-Eintrag vom ${d} wirklich löschen?`;
+  }
+  const label = ENTRY_DELETE_CONFIG[kind]?.label || 'Eintrag';
+  return `${label} „${rawTitle}" wirklich löschen?`;
+}
+
+async function deleteEntryCard(entry) {
+  const kind = entryDeleteKind(entry);
+  if (!kind) {
+    booksShowToast('Unbekannter Eintrags-Typ – kann nicht gelöscht werden.', 'error');
+    return;
+  }
+  const cfg = ENTRY_DELETE_CONFIG[kind];
+  // Strip the d1-<type>- prefix to get the numeric D1 row id.
+  // For recipes the prefix is still d1-note- (recipes live in notes).
+  const prefix = entry.recipeData ? 'd1-note-' : `d1-${kind}-`;
+  const numericId = parseInt(String(entry.id).replace(prefix, ''), 10);
+  if (!Number.isInteger(numericId) || numericId <= 0) {
+    booksShowToast('Ungültige Eintrags-ID.', 'error');
+    return;
+  }
+  if (!confirm(entryConfirmText(kind, entry))) return;
   try {
-    const r = await fetch(`/api/notes/${numericId}`, { method: 'DELETE' });
+    const r = await fetch(`/api/${cfg.endpoint}/${numericId}`, { method: 'DELETE' });
     if (!r.ok) {
       const data = await r.json().catch(() => ({}));
       booksShowToast('Löschen fehlgeschlagen: ' + (data.error || ('HTTP ' + r.status)), 'error');
@@ -6991,7 +7045,7 @@ async function deleteNoteCard(entry) {
     // Remove from in-memory state
     const idx = ENTRIES.findIndex(e => e.id === entry.id);
     if (idx !== -1) ENTRIES.splice(idx, 1);
-    // Close detail panel if it was open for this note
+    // Close detail panel if it was open for this entry
     if (selectedEntryId === entry.id) closeDetail();
     // Re-render list and, if the graph is active, rebuild it too
     applyFilters();
@@ -7000,6 +7054,10 @@ async function deleteNoteCard(entry) {
     booksShowToast('Löschen fehlgeschlagen: ' + (err.message || err), 'error');
   }
 }
+
+// Back-compat shim: older code may still reference the original
+// Notes-only helper. Route every call through the generalized fn.
+async function deleteNoteCard(entry) { return deleteEntryCard(entry); }
 
 // ── Live camera capture modal ──────────────────────────────────
 // Kamera-tile: opens a modal with a live <video> preview from the
@@ -8075,16 +8133,18 @@ function renderCardList(entries) {
           <div class="card-summary-small">${escapeHtml(effectivePreview(e))}</div>
           ${additionalTags ? `<div class="card-extra-tags">${additionalTags}</div>` : ''}
         </div>`;
-      // Delete X — only for D1 notes (notes table). Excluded:
-      //   - garden cards (own ID space, no 'd1-note-' prefix anyway)
-      //   - journal/task/idea entries (different prefix: d1-journal-/d1-task-/d1-idea-)
-      //   - recipe notes (own viewer + own UX; per spec, NUR Notes)
-      if (String(e.id).startsWith('d1-note-') && !e.recipeData) {
+      // Delete X — for every D1-backed entry that has a DELETE endpoint:
+      // notes (incl. recipes), tasks, journal, ideas. The kind helper
+      // returns null for everything else (garden, books, etc.), which
+      // automatically suppresses the button there.
+      const _delKind = entryDeleteKind(e);
+      if (_delKind) {
+        const _delLabel = ENTRY_DELETE_CONFIG[_delKind]?.label || 'Eintrag';
         const delBtn = document.createElement('button');
         delBtn.className = 'card-delete-btn';
-        delBtn.title = 'Notiz löschen';
+        delBtn.title = _delLabel + ' löschen';
         delBtn.textContent = '✕';
-        delBtn.addEventListener('click', (ev) => { ev.stopPropagation(); deleteNoteCard(e); });
+        delBtn.addEventListener('click', (ev) => { ev.stopPropagation(); deleteEntryCard(e); });
         card.appendChild(delBtn);
       }
       card.addEventListener('click', () => openDetail(e));
