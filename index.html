@@ -14943,9 +14943,26 @@ function vaStartListening() {
     window._vaSRDiag.lastErrorAt = Date.now();
     console.warn('[SR] onerror', e.error, e, vaSRDiagSummary());
     // Map common Web Speech API errors to actionable messages.
+    //
+    // Bug #25 fix (voice-mic-routing-fix): `no-speech` is a NORMAL recurring
+    // event whenever the user pauses to think. Each one ends the current SR
+    // instance and was previously calling vaStopListening() — which set
+    // _vaRecognition=null and never re-opened the mic unless Larry spoke
+    // again. After ~5-10 cycles Chrome's internal silence timer also gave
+    // up entirely. Result: owner pauses 30s → mic is dead → first words
+    // after the pause are lost. Now we let `onend` fire naturally and the
+    // onend handler restarts SR as long as the conversation is active.
+    // We mark this as "benign — onend will restart" via a flag so onend
+    // knows it's not a manual stop.
     if (e.error === 'no-speech' || e.error === 'aborted') {
-      // benign — user just hasn't spoken yet OR we stopped manually. No status spam.
-    } else if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+      // benign — user just hasn't spoken yet OR we stopped manually.
+      // Do NOT call vaStopListening; onend fires automatically after this
+      // event and the onend handler decides whether to restart.
+      window._vaSRBenignError = e.error;
+      return;
+    }
+    // Fatal errors — abort the restart loop and surface the cause.
+    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
       vaSetStatus('🚫 Mikrofon-Berechtigung fehlt. Klick aufs Schloss-Icon links neben der URL → Mikrofon → Zulassen → Tab neu laden.');
     } else if (e.error === 'audio-capture') {
       vaSetStatus('🚫 Kein Mikrofon gefunden / blockiert (audio-capture). Anderes Programm hat das Mikro exklusiv (Wispr Flow, Teams, Zoom)? Schliessen + Tab neu laden.');
@@ -14956,6 +14973,8 @@ function vaStartListening() {
     } else if (e.error) {
       vaSetStatus('⚠️ Spracherkennung-Fehler: ' + e.error);
     }
+    // Fatal error — flag it so onend knows NOT to restart automatically.
+    window._vaSRFatalError = e.error || 'unknown';
     vaStopListening();
   };
   _vaRecognition.onend = () => {
@@ -14964,10 +14983,66 @@ function vaStartListening() {
     _vaIsListening = false;
     vaSetBubbleState(null);
     _vaRecognition = null;
-    // Don't auto-restart here. continuous=true means onend = something
-    // explicit (vaStopListening, error, browser timeout). If we're still
-    // in an active conversation and not paused, the next vaSpeak end-hook
-    // will call vaMaybeAutoListen and reopen the mic ONCE.
+    //
+    // Bug #25 fix (voice-mic-routing-fix): If the conversation is still
+    // active and we're not paused / not speaking, automatically reopen the
+    // mic — UNBOUNDED, no try-counter. The browser's SpeechRecognition
+    // instance dies after each silence period (`no-speech` or its internal
+    // timeout) and we treat that as completely normal: just spin up a new
+    // instance. The fatal-error flag set by onerror is the ONLY thing that
+    // stops this loop, so genuine permission/audio-capture failures don't
+    // become infinite restart spam.
+    //
+    // Owner-facing contract: bubble stays open + mic stays live for as long
+    // as the bubble is visible, regardless of how long the owner pauses.
+    const fatal = window._vaSRFatalError;
+    window._vaSRFatalError = null;
+    const benign = window._vaSRBenignError;
+    window._vaSRBenignError = null;
+    const manualStop = window._vaSRManualStop;
+    window._vaSRManualStop = false;
+
+    if (fatal) {
+      // Don't restart — onerror already showed the diagnostic status. Bail.
+      if (!_vaPaused) {
+        vaSetStatus(_vaConvActive ? 'Mikrofon-Fehler: siehe oben.' : 'Bereit.');
+      }
+      return;
+    }
+
+    if (manualStop) {
+      // vaStopListening was called intentionally (flushSpeech → sendVoiceText,
+      // pause, close, barge-in). Don't restart here — the calling code owns
+      // the next-state decision (e.g. vaSpeak's onended hook will call
+      // vaMaybeAutoListen after Larry finishes speaking).
+      if (!_vaPaused && !_vaIsSpeaking) {
+        vaSetStatus(_vaConvActive ? 'Bereit. Klick auf die Bubble um zu pausieren.' : 'Bereit.');
+      }
+      return;
+    }
+
+    // Auto-restart path. Conditions: conversation active, not paused, Larry
+    // not currently speaking (the TTS-end hook handles that case), bubble
+    // still visible.
+    const va = document.getElementById('voice-assistant');
+    const bubbleVisible = va && va.classList.contains('visible');
+    if (_vaConvActive && !_vaPaused && !_vaIsSpeaking && bubbleVisible) {
+      // Short delay prevents tight loops on certain Chrome builds that
+      // fire onend immediately if SR is restarted synchronously in the
+      // same tick. 250ms is comfortable and imperceptible to the owner.
+      setTimeout(() => {
+        if (_vaConvActive && !_vaPaused && !_vaIsSpeaking && !_vaIsListening) {
+          // Friendly status if this is a recurring silence-restart cycle so
+          // the owner SEES that Larry is still patiently listening.
+          if (benign === 'no-speech') {
+            vaSetStatus('🎙 Bereit — sprich wann du willst.');
+          }
+          vaStartListening();
+        }
+      }, 250);
+      return;
+    }
+
     if (!_vaPaused && !_vaIsSpeaking) {
       vaSetStatus(_vaConvActive ? 'Bereit. Klick auf die Bubble um zu pausieren.' : 'Bereit.');
     }
@@ -14977,6 +15052,12 @@ function vaStartListening() {
 }
 function vaStopListening() {
   if (window._vaSilenceTimer) { clearTimeout(window._vaSilenceTimer); window._vaSilenceTimer = null; }
+  // Bug #25 fix (voice-mic-routing-fix): flag this as an INTENTIONAL stop so
+  // the onend handler knows NOT to auto-restart the mic. Without this flag,
+  // every manual stop (flushSpeech → sendVoiceText, pause, close, barge-in)
+  // would race onend into restarting the mic while vaRespond is still
+  // generating Larry's reply, which then plays over the freshly-opened SR.
+  window._vaSRManualStop = true;
   if (_vaRecognition) {
     try { _vaRecognition.stop(); } catch(_) {}
     _vaRecognition = null;
@@ -15581,6 +15662,61 @@ async function vaRespond(userText) {
     '- **log_blood_pressure(systolic, diastolic, pulse?)** — „Blutdruck 135 zu 82" etc.',
     '- **add_to_shopping_list(items:[{item, qty_value?, qty_unit?}])** — Einkaufsliste-Ergänzungen.',
     '- **delete_note(id)** / **complete_task(id)** / **clear_shopping_list_done** — nur nach expliziter Bestätigung.',
+    '',
+    '## 🎯 TOOL-DISAMBIGUATION — wähle das RICHTIGE Tool nach Trigger-Wörtern',
+    '',
+    'Das ist die wichtigste Routing-Regel. Falsches Tool = Aufgabe landet im falschen Topf.',
+    '**Lies die Trigger-Wörter des Users — sie sagen DIR welches Tool gemeint ist.**',
+    '',
+    '### → create_task — wenn der User eine ABZUARBEITENDE SACHE meint',
+    'Trigger-Wörter: „Aufgabe", „Task", „ToDo", „erledigen", „Reminder", „Erinnerung",',
+    '„zu tun", „erinnere mich an…", „ich muss noch…", „vereinbaren", „organisieren", „besorgen".',
+    'Beispiele:',
+    '  - User: „Aufgabe: Steuererklärung diese Woche"',
+    '    → Titel: „Steuererklärung", priority: 3, due_date: <Sonntag dieser Woche YYYY-MM-DD>',
+    '    → create_task aufrufen',
+    '  - User: „ToDo: morgen Zahnarzt-Termin vereinbaren"',
+    '    → Titel: „Zahnarzt-Termin vereinbaren", due_date: <morgen YYYY-MM-DD>',
+    '    → create_task aufrufen',
+    '',
+    '### → create_note — wenn der User sich etwas MERKEN/FESTHALTEN will (kein TODO)',
+    'Trigger-Wörter: „Notiz", „notieren", „merken", „merk dir", „festhalten", „Info",',
+    '„schreib auf", „halt fest", „dokumentier".',
+    'Beispiele:',
+    '  - User: „Notiz dass der Müll heute raus muss"',
+    '    → Titel: „Müll heute rausbringen", body: „Der Müll muss heute rausgebracht werden."',
+    '    → create_note aufrufen',
+    '  - User: „Merk dir dass ich übermorgen Geburtstag habe"',
+    '    → Titel: „Geburtstag übermorgen", body: „Ich habe übermorgen Geburtstag."',
+    '    → create_note aufrufen',
+    '',
+    '### → create_journal — wenn der User REFLEKTIERT (Tagesrückblick, Gefühle)',
+    'Trigger-Wörter: „Journal", „Tagebuch", „Eintrag", „Reflexion", „Tagesrückblick",',
+    '„heute war…", „heute habe ich…", „mir geht es…".',
+    'Beispiele:',
+    '  - User: „Journal-Eintrag: heute war ein guter Tag, ich habe viel geschafft"',
+    '    → Titel: „Guter Tag mit viel geschafft", body: redigiert + ausformuliert, mood: „positive"',
+    '    → create_journal aufrufen',
+    '',
+    '### → create_idea — wenn der User einen EINFALL/KONZEPT teilt',
+    'Trigger-Wörter: „Idee", „Brainstorm", „Gedanke", „Einfall", „Konzept", „mir kommt grad in den Sinn".',
+    'Beispiele:',
+    '  - User: „Idee: App-Feature für XY"',
+    '    → Titel: „App-Feature XY", body: redigiert',
+    '    → create_idea aufrufen',
+    '',
+    '### ⚠ Fallback-Regel bei AMBIGUITÄT',
+    '',
+    'Wenn der User KEIN Trigger-Wort nennt:',
+    '- Wenn der Inhalt eine **klar abzuarbeitende Sache** ist (z.B. „morgen Müll rausbringen") → create_task.',
+    '- Wenn der Inhalt eine **Reflexion über den Tag/Gefühle** ist → create_journal.',
+    '- Wenn der Inhalt **reine Information zum Merken** ist → create_note.',
+    '- Wenn der Inhalt **kreativ/explorativ** ist → create_idea.',
+    '- Im echten Zweifel (z.B. „heute war anstrengend" — könnte Reflexion ODER Lamento sein):',
+    '  **kurz nachfragen** „Soll das eine Notiz, Aufgabe, Journal-Eintrag oder Idee werden?"',
+    '',
+    '**VERBOTEN: create_journal als generischer Default.** Wenn der User „Aufgabe" sagt, NIEMALS',
+    'create_journal aufrufen — auch nicht „weil sich das wie eine Reflexion anfühlt". Trigger-Wort gewinnt.',
     '',
     '### Lese-Tools:',
     '- **search_notes / list_recent_notes** — „was war meine Notiz zu…", „letzte Notizen".',
