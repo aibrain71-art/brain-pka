@@ -14881,7 +14881,7 @@ function vaStartListening() {
   // fire isFinal events in continuous mode, leaving the user's words stuck
   // in the input field forever. Hoisted to window so vaStopListening can
   // cancel it when closing the mic for any reason (pause, close, TTS).
-  const SILENCE_MS = 1400;
+  const SILENCE_MS = 2500;
   const flushSpeech = () => {
     if (window._vaSilenceTimer) { clearTimeout(window._vaSilenceTimer); window._vaSilenceTimer = null; }
     // Idempotency guard: SpeechRecognition can fire flushSpeech twice for
