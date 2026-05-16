@@ -2855,6 +2855,83 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
 @media (max-width: 1024px) { .books-wall { grid-template-columns: repeat(3, 1fr); } }
 @media (max-width: 600px)  { .books-wall { grid-template-columns: repeat(2, 1fr); gap: 10px; } }
 .books-wall-empty { padding: 60px 20px; text-align: center; color: var(--text-2); }
+
+/* ── Mobile fullscreen sidebar views (Owner request 2026-05-16) ───────
+   On mobile (≤768px), the sidebar acts as a launcher: it's the only
+   thing visible. Tapping any of the 5 main sidebar entries (Alle/Notes,
+   Wissensgraph, Aufgaben, Diverses, Einstellungen) opens the matching
+   view 100% fullscreen with a slide-up animation. A chunky ✕ button
+   in the top-right closes the view and returns to the launcher.
+   Desktop layout (>768px) is unchanged.
+   Pattern mirrors the Phase-4c books-detail fullscreen + slide-up. */
+@keyframes mobileViewSlideUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+/* Close button — hidden by default; shown on mobile when a view is fullscreen.
+   Floating top-right, 44×44 touch target, sits above everything in #main. */
+.mobile-view-close {
+  display: none;
+  position: fixed; top: 10px; right: 10px;
+  width: 44px; height: 44px; min-width: 44px; min-height: 44px;
+  border-radius: 12px;
+  background: var(--surface-2, #18203a); color: var(--text);
+  border: 1px solid var(--border-2);
+  font-size: 22px; line-height: 1;
+  align-items: center; justify-content: center;
+  z-index: 250; cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0,0,0,.35);
+  -webkit-tap-highlight-color: transparent;
+}
+.mobile-view-close:hover, .mobile-view-close:active { filter: brightness(1.2); }
+
+@media (max-width: 768px) {
+  /* Launcher mode: sidebar fills the viewport, main is hidden until a view
+     is launched. The topbar stays at the top of the launcher (search +
+     mode chips are still useful as quick filters once a view is open). */
+  body:not(.mobile-fullscreen-active) #main { display: none; }
+  body:not(.mobile-fullscreen-active) #sidebar { width: 100% !important; }
+  body:not(.mobile-fullscreen-active) #sidebar.collapsed { width: 100% !important; }
+  body:not(.mobile-fullscreen-active) #sidebar.collapsed .nav-item { padding: 12px 16px; justify-content: flex-start; gap: 12px; }
+  body:not(.mobile-fullscreen-active) #sidebar.collapsed .nav-item span { display: inline; }
+  body:not(.mobile-fullscreen-active) #sidebar.collapsed .sidebar-logo .logo-text { display: inline; }
+  /* Give the launcher nav items more breathing room — they're the primary
+     entry points. Larger touch targets, slightly bigger icons. */
+  body:not(.mobile-fullscreen-active) .nav-item {
+    padding: 14px 16px; font-size: 15px; gap: 14px;
+    border-radius: 10px;
+  }
+  body:not(.mobile-fullscreen-active) .nav-item svg { width: 20px; height: 20px; }
+
+  /* Fullscreen-active mode: main covers 100% of the viewport, sidebar
+     is fully hidden, view slides up from the bottom. */
+  body.mobile-fullscreen-active #sidebar { display: none; }
+  body.mobile-fullscreen-active #shell { display: block; }
+  body.mobile-fullscreen-active #main {
+    position: fixed; inset: 0;
+    width: 100vw; height: 100dvh; max-height: 100dvh;
+    z-index: 240; background: var(--bg);
+    animation: mobileViewSlideUp 260ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+  /* The topbar lives above #shell — when a view is in fullscreen, hide
+     the topbar so the view truly owns the full viewport. */
+  body.mobile-fullscreen-active #topbar { display: none; }
+  /* Show the close button only when a fullscreen view is active. */
+  body.mobile-fullscreen-active .mobile-view-close { display: inline-flex; }
+
+  /* Settings overlay — already had a fullscreen mobile pattern from
+     Phase 4c. Add the slide-up animation so it matches the other views.
+     The overlay's own ✕ button is kept (line 3731 of HTML). */
+  .settings-overlay.visible .settings-modal {
+    animation: mobileViewSlideUp 260ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+  /* Ensure the settings ✕ in the head is a chunky touch target on mobile.
+     Existing rule at line 879 already bumps it to 36×36 — bump to 44×44. */
+  .settings-modal .settings-close {
+    width: 44px; height: 44px; min-width: 44px; min-height: 44px;
+    font-size: 22px;
+  }
+}
 </style>
 </head>
 <body>
