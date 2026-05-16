@@ -3907,6 +3907,16 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
         </div>
         <div class="settings-pref-row">
           <div class="settings-pref-text">
+            <div class="settings-pref-title">Barge-In (Unterbrechen durch Reinreden)</div>
+            <div class="settings-pref-sub">Hört während Larry spricht zusätzlich aufs Mikrofon und stoppt die Wiedergabe, sobald du reinredest. Empfohlen NUR mit Headset / Kopfhörer — über Laptop-Lautsprecher hört das Mikro Larry selbst und schneidet ihn mitten im Satz ab. Aus: Larry spricht jeden Satz zu Ende; du kannst trotzdem jederzeit auf die Bubble tippen, um ihn zu pausieren.</div>
+          </div>
+          <label class="settings-toggle">
+            <input type="checkbox" id="pref-va-barge-in" onchange="setPref('vaBargeIn', this.checked)">
+            <span class="settings-toggle-slider"></span>
+          </label>
+        </div>
+        <div class="settings-pref-row">
+          <div class="settings-pref-text">
             <div class="settings-pref-title">Chat-Timelines</div>
             <div class="settings-pref-sub">Zwei senkrechte Zeitachsen am Rand des Sprach-Chats: blauer pulsierender Punkt für Larry (links), weisser Punkt für deine Nachricht (rechts).</div>
           </div>
@@ -4534,6 +4544,10 @@ const PREF_DEFAULTS = {
   vaStartSound:    true,         // JARVIS-style boot chime before greeting
   vaStartSoundType:'jarvis',     // none | jarvis | machine | lockin | spaceship | ping
   vaUseBrowserMic: true,         // when false, no mic permission prompt + no auto-listen
+  vaBargeIn:       false,        // off by default: laptop-speaker echo defeats acoustic barge-in
+                                 // (Larry's own voice leaks into the mic → he kills himself
+                                 // mid-sentence → half-sentence playback + mode flapping).
+                                 // Turn ON only when using a headset / wired earphones.
 };
 
 // Apply the voice-chat-timelines visibility preference. Toggles a class
@@ -4605,6 +4619,7 @@ function syncPreferenceControls() {
   sel('pref-search-lang',      'searchLang');
   tog('pref-va-timelines',     'vaTimelines');
   tog('pref-va-use-browser-mic', 'vaUseBrowserMic');
+  tog('pref-va-barge-in',      'vaBargeIn');
   tog('pref-va-start-sound',   'vaStartSound');
   // Rebuild the sound dropdown FIRST so custom-sound options exist before
   // we sync the selected value (otherwise the value can't be applied).
@@ -14786,7 +14801,10 @@ function vaStartListening() {
     // echo audio. The latch self-clears after 1.5s.
     if (window._vaFlushing) return;
     window._vaFlushing = true;
-    setTimeout(() => { window._vaFlushing = false; }, 1500);
+    // 800ms is long enough to absorb the final + silence-debounce double-
+    // fire on the same utterance but short enough not to swallow a fast
+    // follow-up question. Was 1500ms — that blocked quick user follow-ups.
+    setTimeout(() => { window._vaFlushing = false; }, 800);
     const inp = document.getElementById('va-text-input');
     const txt = (inp?.value || '').trim();
     if (txt) {
@@ -14964,6 +14982,11 @@ let _vaBargeInArmed = false;  // becomes true ~600ms after start to avoid trigge
 async function vaStartBargeInWatcher(onBargeIn) {
   if (_vaBargeInStream) return;  // already running
   if (!navigator.mediaDevices?.getUserMedia) return;
+  // Gate behind the vaBargeIn pref. Off by default: laptop-speaker echo
+  // defeats acoustic barge-in (Larry's own voice leaks through the mic →
+  // he stops himself mid-sentence → "halbe Sätze" + mode flapping). Owner
+  // can switch it on in Settings when using a headset.
+  if (typeof getPref === 'function' && !getPref('vaBargeIn')) return;
   try {
     _vaBargeInStream = await navigator.mediaDevices.getUserMedia({
       audio: {
@@ -14982,16 +15005,20 @@ async function vaStartBargeInWatcher(onBargeIn) {
     source.connect(analyser);
     const buf = new Uint8Array(analyser.frequencyBinCount);
 
-    // Grace period: ignore the first ~600ms so the residual echo of
-    // Larry's first words doesn't auto-stop him.
-    setTimeout(() => { _vaBargeInArmed = true; }, 600);
+    // Grace period: ignore the first ~1500ms so the residual echo of
+    // Larry's first words doesn't auto-stop him. Raised from 600ms — the
+    // old window was too short on laptops with active speakers.
+    setTimeout(() => { _vaBargeInArmed = true; }, 1500);
     _vaBargeInArmed = false;
 
     // Sliding-window detector: count consecutive frames above threshold.
-    // Threshold of 30 (out of 255) is well above background noise but
-    // below echo-canceled TTS bleed (~10-15 range on most laptops).
-    const THRESHOLD = 35;
-    const MIN_FRAMES = 12;  // ~200ms @ 60fps — enough to filter out clicks
+    // Raised THRESHOLD 35→70 and MIN_FRAMES 12→24 (~400ms). With laptop
+    // speakers + echoCancellation, TTS bleed routinely hits avg 25–45,
+    // which used to false-trigger the watcher and clip Larry mid-word.
+    // 70 + 400ms sustained energy filters that out reliably while still
+    // catching genuine user speech (which clears 80+ easily over 400ms).
+    const THRESHOLD = 70;
+    const MIN_FRAMES = 24;  // ~400ms @ 60fps — filters out TTS echo bursts
     let consecutive = 0;
 
     const tick = () => {
@@ -15097,13 +15124,17 @@ function vaMaybeAutoListen() {
   }
   if (_vaIsListening || _vaIsSpeaking) return;
   if (_vaAutoListenTimer) clearTimeout(_vaAutoListenTimer);
+  // 650ms: the audio pipeline + speaker output need a beat to fully release
+  // after onended fires. Opening the mic too eagerly (was 450ms) means the
+  // tail-end of Larry's audio still bleeds into the new recognition stream
+  // and SpeechRecognition catches Larry's last syllable as "user speech".
   _vaAutoListenTimer = setTimeout(() => {
     _vaAutoListenTimer = null;
     if (_vaPaused || !_vaConvActive || _vaIsListening || _vaIsSpeaking) return;
     const va = document.getElementById('voice-assistant');
     if (!va || !va.classList.contains('visible')) return;
     vaStartListening();
-  }, 450);
+  }, 650);
 }
 
 // ── WhisperFlow polish — clean filler words, capitalize, punctuate ──
@@ -15319,8 +15350,12 @@ function sendVoiceText() {
   // Result was two parallel /api/chat → two parallel vaSpeak() → echo audio.
   // Drop a 1.5s window where identical text is silently ignored.
   const now = Date.now();
-  if (window._vaLastSent && window._vaLastSent.text === raw && (now - window._vaLastSent.at) < 1500) {
-    console.log('[Voice] sendVoiceText: blocked duplicate send within 1.5s');
+  // 800ms window: enough to catch (a)+(b)+(c)+(d) double-fires on the SAME
+  // utterance, but short enough that a real fast follow-up with identical
+  // wording (e.g. "ja", "weiter", "nochmal") still goes through. Was 1500ms
+  // — that ate legitimate quick follow-ups and felt like "Larry ignores me".
+  if (window._vaLastSent && window._vaLastSent.text === raw && (now - window._vaLastSent.at) < 800) {
+    console.log('[Voice] sendVoiceText: blocked duplicate send within 0.8s');
     inp.value = '';
     return;
   }
