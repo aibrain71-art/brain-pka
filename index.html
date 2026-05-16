@@ -8075,8 +8075,11 @@ function renderCardList(entries) {
           <div class="card-summary-small">${escapeHtml(effectivePreview(e))}</div>
           ${additionalTags ? `<div class="card-extra-tags">${additionalTags}</div>` : ''}
         </div>`;
-      // Delete X — only for D1 notes (not garden, journal, ideas)
-      if (String(e.id).startsWith('d1-note-')) {
+      // Delete X — only for D1 notes (notes table). Excluded:
+      //   - garden cards (own ID space, no 'd1-note-' prefix anyway)
+      //   - journal/task/idea entries (different prefix: d1-journal-/d1-task-/d1-idea-)
+      //   - recipe notes (own viewer + own UX; per spec, NUR Notes)
+      if (String(e.id).startsWith('d1-note-') && !e.recipeData) {
         const delBtn = document.createElement('button');
         delBtn.className = 'card-delete-btn';
         delBtn.title = 'Notiz löschen';
