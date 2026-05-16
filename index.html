@@ -2860,15 +2860,14 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
    On mobile (≤768px), the sidebar stays docked left in normal layout.
    Tapping any of the main sidebar entries (Alle/Notes, Wissensgraph,
    Lernkasten, Chat, Aufgaben, Diverses, Einstellungen) opens the matching
-   view 100% fullscreen with a slide-up animation. A header bar at the
+   view 100% fullscreen with a slide-up transition. A header bar at the
    top of the view holds the view title (left) + ✕ (right). The bar
    slides up *with* the view as one piece — no overlay frame-jumps.
    Desktop layout (>768px) is unchanged.
-   Pattern mirrors the Phase-4c books-detail fullscreen + slide-up. */
-@keyframes mobileViewSlideUp {
-  from { transform: translateY(100%); opacity: 0; }
-  to   { transform: translateY(0);    opacity: 1; }
-}
+   Pattern mirrors the Phase-4c books-detail fullscreen + slide-up.
+   We use a TRANSITION (not @keyframes animation) so the final rest
+   state is the natural CSS state — no fill-mode pitfalls and the
+   behavior is reliable in test/preview environments. */
 /* Header bar — hidden by default; shown on mobile when a view is fullscreen.
    Lives inside #main so it slides up + down together with the view content.
    Sticky positioning keeps it pinned to the top during inner scrolling. */
@@ -2913,11 +2912,15 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
      is fully hidden, view slides up from the bottom. */
   body.mobile-fullscreen-active #sidebar { display: none; }
   body.mobile-fullscreen-active #shell { display: block; }
+  /* #main is positioned fixed when fullscreen-active. The slide-up is
+     painted by activateMobileFullscreenView() via an inline transform
+     transition (starting at translateY(100%), then translateY(0) on
+     the next frame). Doing it inline avoids cascading-class race
+     conditions in throttled rAF environments. */
   body.mobile-fullscreen-active #main {
     position: fixed; inset: 0;
     width: 100vw; height: 100dvh; max-height: 100dvh;
     z-index: 240; background: var(--bg);
-    animation: mobileViewSlideUp 260ms cubic-bezier(0.2, 0.7, 0.2, 1);
     overflow: hidden;
   }
   /* The topbar lives above #shell — when a view is in fullscreen, hide
@@ -2926,11 +2929,11 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
   /* Show the unified header bar when a fullscreen view is active. */
   body.mobile-fullscreen-active #mobile-view-header { display: flex; }
 
-  /* Settings overlay — unified visual: matches the slide-up animation +
-     header style of the other views. The overlay's existing ✕ in
-     .settings-head is restyled below to match the .mvh-close target. */
-  .settings-overlay.visible .settings-modal {
-    animation: mobileViewSlideUp 260ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  /* Settings overlay slides up via inline-style transition applied by
+     openSettings() — same approach as #main. We just give the modal a
+     transition rule here so the inline transform change animates. */
+  .settings-overlay .settings-modal {
+    transition: transform 260ms cubic-bezier(0.2, 0.7, 0.2, 1);
   }
   /* Unify the settings head with the mobile-view header bar (same height,
      same padding, same colors). On mobile only. */
@@ -5071,9 +5074,22 @@ function openSettings() {
   // 52px height + 44×44 ✕). We do NOT activate the body fullscreen class
   // here — #main's z-index 240 would otherwise cover the overlay. The
   // topbar already disappears because the settings overlay paints over it.
-  // We do lock body scroll for parity with the other fullscreen views.
+  // We lock body scroll + slide the modal up via inline-style transition
+  // for parity with the other fullscreen views.
   if (typeof isMobileViewport === 'function' && isMobileViewport()) {
     document.body.style.overflow = 'hidden';
+    const modal = document.querySelector('#settings-overlay .settings-modal');
+    if (modal) {
+      modal.style.transition = 'none';
+      modal.style.transform = 'translateY(100%)';
+      void modal.offsetHeight;
+      modal.style.transition = 'transform 260ms cubic-bezier(0.2, 0.7, 0.2, 1)';
+      modal.style.transform = 'translateY(0)';
+      setTimeout(() => {
+        modal.style.transition = '';
+        modal.style.transform = '';
+      }, 320);
+    }
   }
 }
 
@@ -8334,26 +8350,67 @@ const MOBILE_VIEW_TITLES = {
 // `viewKey` selects the title to render in the header bar.
 function activateMobileFullscreenView(viewKey) {
   if (!isMobileViewport()) return;
-  document.body.classList.add('mobile-fullscreen-active');
-  // Lock background scroll so the launcher behind doesn't move.
-  document.body.style.overflow = 'hidden';
-  // Set the header-bar title. Fallback keeps the prior label if no key
-  // was passed (e.g. legacy callers).
+  // Set the header-bar title BEFORE flipping the active class so the user
+  // never sees the old label flash for a frame.
   const titleEl = document.getElementById('mobile-view-title');
   if (titleEl && viewKey && MOBILE_VIEW_TITLES[viewKey]) {
     titleEl.textContent = MOBILE_VIEW_TITLES[viewKey];
   }
+  // If already fullscreen (e.g. switching between sidebar views), don't
+  // replay the slide-up — just keep the layout and let the caller swap
+  // the inner view content.
+  if (document.body.classList.contains('mobile-fullscreen-active')) return;
+  document.body.classList.add('mobile-fullscreen-active');
+  // Slide-up via inline-style transition. The CSS for #main provides the
+  // transition timing; we set the initial transform here, force a reflow,
+  // and then clear it so the browser animates from translateY(100%) →
+  // translateY(0). Inline styles dodge cascading-class race conditions
+  // in throttled-rAF environments (e.g. background tabs, headless previews).
+  const main = document.getElementById('main');
+  main.style.transition = 'none';
+  main.style.transform = 'translateY(100%)';
+  // Force layout flush so the browser registers translateY(100%) before
+  // the transition target is applied (otherwise the change is coalesced).
+  void main.offsetHeight;
+  main.style.transition = 'transform 260ms cubic-bezier(0.2, 0.7, 0.2, 1)';
+  main.style.transform = 'translateY(0)';
+  // Belt-and-suspenders: in environments where the transition never fires
+  // (paused compositor in test previews), clear the inline transform after
+  // the duration so the rest state is reliably correct.
+  setTimeout(() => {
+    if (document.body.classList.contains('mobile-fullscreen-active')) {
+      main.style.transition = '';
+      main.style.transform = '';
+    }
+  }, 320);
+  // Lock background scroll so the launcher behind doesn't move.
+  document.body.style.overflow = 'hidden';
 }
 // Close the fullscreen view and return to the sidebar launcher.
 // Called by the ✕ button. On desktop this is a no-op (button hidden).
 function closeMobileFullscreenView() {
-  document.body.classList.remove('mobile-fullscreen-active');
-  document.body.style.overflow = '';
   // If the settings overlay was the fullscreen target, close it too.
   const sov = document.getElementById('settings-overlay');
   if (sov && sov.classList.contains('visible')) {
     sov.classList.remove('visible');
+    const sm = sov.querySelector('.settings-modal');
+    if (sm) sm.style.transform = '';
   }
+  if (!document.body.classList.contains('mobile-fullscreen-active')) {
+    document.body.style.overflow = '';
+    return;
+  }
+  // Slide-DOWN: apply translateY(100%) inline; once the transition ends,
+  // drop the active class so the layout resets cleanly.
+  const main = document.getElementById('main');
+  main.style.transition = 'transform 260ms cubic-bezier(0.2, 0.7, 0.2, 1)';
+  main.style.transform = 'translateY(100%)';
+  setTimeout(() => {
+    document.body.classList.remove('mobile-fullscreen-active');
+    document.body.style.overflow = '';
+    main.style.transition = '';
+    main.style.transform = '';
+  }, 260);
 }
 // ESC also returns to launcher when a mobile-fullscreen view is open.
 document.addEventListener('keydown', e => {
