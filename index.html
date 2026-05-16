@@ -3061,6 +3061,11 @@ body.view-graph.has-detail.detail-collapsed .graph-legend         { right: 56px;
 
 <!-- ── Main area ───────────────────────────── -->
 <div id="main">
+  <!-- Mobile-only fullscreen close button (✕). Hidden on desktop and when
+       no view is in fullscreen mode. See CSS rule .mobile-view-close. -->
+  <button class="mobile-view-close" id="mobile-view-close"
+          onclick="closeMobileFullscreenView()"
+          aria-label="Zurück zur Übersicht" title="Zurück zur Übersicht">✕</button>
   <!-- List view -->
   <div id="list-view">
     <div id="list-toolbar-host"></div>
@@ -5035,6 +5040,13 @@ function openSettings() {
   // Restore the last-active section (or default to appearance on first open).
   setSettingsSection(localStorage.getItem('settingsActiveSection') || 'appearance');
   document.getElementById('settings-overlay').classList.add('visible');
+  // Mobile: settings is one of the 5 sidebar entries — slide it up fullscreen
+  // and hide the sidebar launcher. The settings overlay has its own ✕ in the
+  // head (line 3731); we wire closeSettings() below to drop the body class
+  // too so the launcher reappears.
+  if (typeof activateMobileFullscreenView === 'function') {
+    activateMobileFullscreenView();
+  }
 }
 
 // Switch which settings section is visible. The sidebar nav-item gets the
@@ -5499,6 +5511,11 @@ async function onLoadElevenVoices() {
 }
 function closeSettings() {
   document.getElementById('settings-overlay').classList.remove('visible');
+  // Mobile: returning from Settings drops the fullscreen state too, so the
+  // sidebar launcher comes back into view. On desktop this class is never
+  // set, so removing it is a no-op.
+  document.body.classList.remove('mobile-fullscreen-active');
+  document.body.style.overflow = '';
 }
 // ESC closes the modal too
 document.addEventListener('keydown', e => {
@@ -8267,6 +8284,45 @@ function renderCardList(entries) {
 }
 
 // ── Views ─────────────────────────────────────────────────────
+// ── Mobile fullscreen helpers (Owner request 2026-05-16) ─────────
+// Detect mobile viewport (kept in sync with the CSS @media breakpoint).
+function isMobileViewport() {
+  return window.matchMedia('(max-width: 768px)').matches;
+}
+// Activate fullscreen view: hides the sidebar (launcher), shows the
+// chosen view as a 100% slide-up sheet on mobile. No-op on desktop.
+function activateMobileFullscreenView() {
+  if (!isMobileViewport()) return;
+  document.body.classList.add('mobile-fullscreen-active');
+  // Lock background scroll so the launcher behind doesn't move.
+  document.body.style.overflow = 'hidden';
+}
+// Close the fullscreen view and return to the sidebar launcher.
+// Called by the ✕ button. On desktop this is a no-op (button hidden).
+function closeMobileFullscreenView() {
+  document.body.classList.remove('mobile-fullscreen-active');
+  document.body.style.overflow = '';
+  // If the settings overlay was the fullscreen target, close it too.
+  const sov = document.getElementById('settings-overlay');
+  if (sov && sov.classList.contains('visible')) {
+    sov.classList.remove('visible');
+  }
+}
+// ESC also returns to launcher when a mobile-fullscreen view is open.
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.body.classList.contains('mobile-fullscreen-active')) {
+    closeMobileFullscreenView();
+  }
+});
+// If the viewport crosses the breakpoint (rotate phone, resize devtools),
+// drop the fullscreen state so the desktop layout reappears cleanly.
+window.addEventListener('resize', () => {
+  if (!isMobileViewport() && document.body.classList.contains('mobile-fullscreen-active')) {
+    document.body.classList.remove('mobile-fullscreen-active');
+    document.body.style.overflow = '';
+  }
+});
+
 function setView(view, filter) {
   // On mobile, close the right-side detail panel on view switches — screen
   // real-estate is too tight to keep two contexts visible. On desktop, leave
@@ -8274,6 +8330,10 @@ function setView(view, filter) {
   // explicitly click the close/collapse button.
   const isDesktop = window.matchMedia('(min-width: 769px) and (hover: hover)').matches;
   if (!isDesktop) closeDetail();
+  // Mobile fullscreen: every sidebar entry that lands here (list, graph,
+  // tasks, diverses, chat, flashcards) opens its view as a 100% fullscreen
+  // slide-up sheet. The launcher (sidebar) disappears behind it.
+  activateMobileFullscreenView();
   // Leaving graph view → stop the neuron animation loop (saves CPU)
   if (currentView === 'graph' && view !== 'graph') stopNeuronAnim();
   currentView = view;
