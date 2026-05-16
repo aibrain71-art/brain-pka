@@ -684,6 +684,14 @@ body:has(#sidebar:not(.collapsed)) .list-subtitle .ls-count::after  { content: "
 .card-item:hover { border-color: var(--card-tint, var(--border-2));
                    background: color-mix(in srgb, var(--card-tint, transparent) 20%, var(--surface-2));
                    transform: translateY(-1px); box-shadow: 0 4px 20px rgba(0,0,0,.3); }
+.card-delete-btn { position: absolute; top: 6px; right: 7px;
+                   width: 28px; height: 28px;
+                   display: flex; align-items: center; justify-content: center;
+                   border-radius: 50%; font-size: 14px; line-height: 1;
+                   color: var(--text-3); opacity: 0;
+                   transition: opacity .15s, background .15s, color .15s; }
+.card-item:hover .card-delete-btn { opacity: 0.45; }
+.card-delete-btn:hover { opacity: 1 !important; background: var(--error-dim); color: var(--error); }
 
 /* Left stack: the SQUARE date-badge stacked on top of the single most-important
    tag for the entry. Both sit at the start of every card. */
@@ -6969,6 +6977,30 @@ async function saveNoteEditor() {
   }
 }
 
+// ── Note hard-delete (X button on card) ───────────────────────
+async function deleteNoteCard(entry) {
+  const numericId = parseInt(String(entry.id).replace('d1-note-', ''), 10);
+  if (!confirm(`Notiz „${entry.title}" wirklich löschen?`)) return;
+  try {
+    const r = await fetch(`/api/notes/${numericId}`, { method: 'DELETE' });
+    if (!r.ok) {
+      const data = await r.json().catch(() => ({}));
+      booksShowToast('Löschen fehlgeschlagen: ' + (data.error || ('HTTP ' + r.status)), 'error');
+      return;
+    }
+    // Remove from in-memory state
+    const idx = ENTRIES.findIndex(e => e.id === entry.id);
+    if (idx !== -1) ENTRIES.splice(idx, 1);
+    // Close detail panel if it was open for this note
+    if (selectedEntryId === entry.id) closeDetail();
+    // Re-render list and, if the graph is active, rebuild it too
+    applyFilters();
+    if (currentView === 'graph') rebuildGraphHidden();
+  } catch (err) {
+    booksShowToast('Löschen fehlgeschlagen: ' + (err.message || err), 'error');
+  }
+}
+
 // ── Live camera capture modal ──────────────────────────────────
 // Kamera-tile: opens a modal with a live <video> preview from the
 // user's camera (rear on mobile, webcam on desktop), a capture button
@@ -8043,6 +8075,15 @@ function renderCardList(entries) {
           <div class="card-summary-small">${escapeHtml(effectivePreview(e))}</div>
           ${additionalTags ? `<div class="card-extra-tags">${additionalTags}</div>` : ''}
         </div>`;
+      // Delete X — only for D1 notes (not garden, journal, ideas)
+      if (String(e.id).startsWith('d1-note-')) {
+        const delBtn = document.createElement('button');
+        delBtn.className = 'card-delete-btn';
+        delBtn.title = 'Notiz löschen';
+        delBtn.textContent = '✕';
+        delBtn.addEventListener('click', (ev) => { ev.stopPropagation(); deleteNoteCard(e); });
+        card.appendChild(delBtn);
+      }
       card.addEventListener('click', () => openDetail(e));
       // Doppelklick auf Nicht-Garden-Karten → Vollbild-Reader (Notiztext only).
       // Garden-Karten lassen wir bewusst aus — für die ist das rechte Detail-
