@@ -15712,20 +15712,15 @@ async function vaSpeak(text) {
   const persona = getActivePersona();
   let voiceId = (persona && persona.voiceId) || ELEVEN_VOICE_ID;
   // Bug-fix (voice-bug-batch-3fix): When neither persona nor global voice ID
-  // is set, fall back to a sensible default instead of returning silently.
-  // Order of preference:
-  //   1) First voice from the loaded ElevenLabs voice cache (matches what
-  //      the Settings dropdown would show), if available.
-  //   2) Hardcoded "Rachel" premade voice — always present in any account.
-  // This lets Larry speak the greeting even on a fresh device where the
-  // user hasn't picked a voice yet. The status toast that previously made
-  // this silent now also fires through console.warn so the diagnosis path
-  // is visible in DevTools even when the toast is overwritten.
+  // is set, fall back to the hardcoded "Rachel" premade voice — predictable
+  // default that's always present in any ElevenLabs account. Owner chose this
+  // over cache[0] (Option B) so the first-time voice is deterministic, not
+  // whatever ElevenLabs happens to return first. User can override anytime
+  // via Settings → Stimme.
   if (!voiceId) {
-    const cached = window._cachedElevenVoices || [];
-    const fallback = (cached[0] && cached[0].id) || VA_FALLBACK_VOICE_ID;
+    const fallback = VA_FALLBACK_VOICE_ID;
     console.warn('[vaSpeak] No voice configured on persona or globally — falling back to', fallback,
-      '(cache size:', cached.length, ', persona:', persona?.name || 'none', ')');
+      '(persona:', persona?.name || 'none', ')');
     voiceId = fallback;
     // Status line: visible AND persistent enough to spot. We do NOT auto-
     // overwrite this with a different status until a real new state arrives,
