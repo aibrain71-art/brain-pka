@@ -144,38 +144,33 @@ def print_tooling_help_and_exit() -> None:
     sys.exit(2)
 
 
-# Owner's cookbook category page-ranges (from brain-pka.pages.dev/cookbook#library).
-# When two ranges overlap (e.g. Eintöpfe inside Nebenmahlzeiten), the smaller
-# (more specific) range wins — see _page_to_category().
-CATEGORY_PAGE_RANGES: list[tuple[int, int, str]] = [
-    (52, 60,   "Getränke"),
-    (64, 88,   "Suppen"),
-    (92, 104,  "Saucen"),
-    (108, 145, "Fleisch"),
-    (150, 159, "Fischgerichte"),
-    (164, 186, "Stärkebeilage"),
-    (190, 202, "Gemüse"),
-    (208, 225, "Salate"),
-    (230, 284, "Nebenmahlzeiten"),
-    (268, 279, "Eintöpfe"),                   # overlaps Nebenmahlzeiten — smaller wins
-    (284, 307, "Teige und Süssspeisen"),
-    (312, 331, "MVS Fleischgerichte"),
-    (336, 343, "MVS Stärkebeilagen"),
-    (348, 356, "MVS Gemüse"),
-    (360, 370, "MVS Nebenmahlzeiten"),
-    (374, 384, "MVS Eintöpfe"),
-]
+# Owner-supplied recipe-number prefix → category map.
+# Each prefix groups 100 R-numbers: R01XX = Getränke, R02XX = Suppen, etc.
+# Categories without an MVS counterpart in owner's library are simply omitted.
+R_PREFIX_TO_CATEGORY: dict[int, str] = {
+    1:  "Getränke",
+    2:  "Suppen",
+    3:  "Saucen",
+    4:  "Fleisch",
+    5:  "Fischgerichte",
+    6:  "Stärkebeilage",
+    7:  "Gemüse",
+    8:  "Salate",
+    9:  "Nebenmahlzeiten",
+    10: "Eintöpfe",
+    11: "Teige und Süssspeisen",
+    24: "MVS Fleischgerichte",
+    26: "MVS Stärkebeilagen",   # gap (R25 = MVS Fischgerichte, doesn't exist per owner)
+    27: "MVS Gemüse",
+    29: "MVS Nebenmahlzeiten",
+    30: "MVS Eintöpfe",
+}
 
 
-def _page_to_category(page: int) -> str | None:
-    """Find the most-specific category for a given page number."""
-    best: tuple[int, str] | None = None  # (range_size, name)
-    for start, end, name in CATEGORY_PAGE_RANGES:
-        if start <= page <= end:
-            size = end - start
-            if best is None or size < best[0]:
-                best = (size, name)
-    return best[1] if best else None
+def _num_to_category(num: int) -> str | None:
+    """Map an R-number (e.g. 419, 2412) to its category via its prefix."""
+    prefix = num // 100
+    return R_PREFIX_TO_CATEGORY.get(prefix)
 
 
 # Alphabetical-index entry, e.g.
@@ -186,10 +181,11 @@ _INDEX_ENTRY_RE = re.compile(r".+?\s+(\d{1,4})\s+[\s.]+R(\d{4})\s*$")
 def parse_index(text: str) -> list[tuple[int, int, str]]:
     """Parse the alphabetical recipe index into (num, num, category) tuples.
 
-    The book's index lists "<title>  <page>  R<NNNN>" one recipe per line.
-    We derive each recipe's category from its page number via
-    CATEGORY_PAGE_RANGES (owner-supplied). The (num, num, cat) tuple shape
-    is kept so build_recipe_num_to_category() works unchanged.
+    Each line in the index looks like "<title>  <page>  R<NNNN>". We only
+    need the R-number — its 2-digit prefix dictates the category via
+    R_PREFIX_TO_CATEGORY (page numbers are A6-format and not reliable).
+    The (num, num, cat) tuple shape is kept so build_recipe_num_to_category()
+    works unchanged.
     """
     out: list[tuple[int, int, str]] = []
     for raw in text.splitlines():
@@ -199,9 +195,8 @@ def parse_index(text: str) -> list[tuple[int, int, str]]:
         m = _INDEX_ENTRY_RE.match(line)
         if not m:
             continue
-        page = int(m.group(1))
         rnum = int(m.group(2))
-        cat = _page_to_category(page)
+        cat = _num_to_category(rnum)
         if cat:
             out.append((rnum, rnum, cat))
     return out
